@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
@@ -48,8 +48,8 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
                   color="primary"
                   onClick={() => addToCart({
                     ...item, quantity: 1, type: 'promotion',
-                    image: '',
-                    category: ''
+                    image: item.image || '',
+                    category:''
                   })}
                 >
                   Adicionar ao Carrinho
@@ -64,7 +64,7 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -92,6 +92,20 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       clientId,
       promotionItems: data.promotionItems || [],
     },
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 

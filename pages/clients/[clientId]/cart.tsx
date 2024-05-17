@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
@@ -36,7 +36,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
         {cart.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={`${item.id}-${item.type}`}>
             <CustomCard>
-            <CardMedia
+              <CardMedia
                 component="img"
                 height="140"
                 image={item.image}
@@ -100,7 +100,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -111,10 +111,37 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
+  const fs = require('fs');
+  const path = `./data/${clientId}.json`;
+
+  if (!fs.existsSync(path)) {
+    console.error(`Arquivo JSON não encontrado: ${path}`);
+    return {
+      notFound: true,
+    };
+  }
+
+  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+
   return {
     props: {
       clientId,
+      initialCartItems: data.cartItems || [],
     },
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 

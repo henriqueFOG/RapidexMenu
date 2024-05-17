@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
@@ -66,7 +66,7 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -94,6 +94,20 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       clientId,
       initialMenuItems: data.menuItems || [],
     },
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 

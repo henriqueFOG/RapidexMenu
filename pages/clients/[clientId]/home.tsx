@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import BottomNav from '@/components/BottomNav';
 
 interface HomeProps {
@@ -14,7 +14,7 @@ const Home: React.FC<HomeProps> = ({ clientId }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -28,6 +28,20 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     props: {
       clientId: params.clientId as string,
     },
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 
