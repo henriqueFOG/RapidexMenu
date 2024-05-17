@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { TextField, Button, Container } from '@mui/material';
+import { TextField, Button, Container, Typography, Box } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
+import Image from 'next/image';
 
 const ClientLogin = () => {
   const [username, setUsername] = useState('');
@@ -21,26 +22,35 @@ const ClientLogin = () => {
   };
 
   return (
-    <Container>
-      <h1>Login do Cliente {clientId}</h1>
-      <TextField
-        label="Usuário"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        fullWidth
-        margin="normal"
-      />
-      <TextField
-        label="Senha"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        fullWidth
-        margin="normal"
-      />
-      <Button onClick={handleLogin} variant="contained" color="primary">
-        Entrar
-      </Button>
+    <Container maxWidth="sm">
+      <Box display="flex" flexDirection="column" alignItems="center" mt={8}>
+        <Box mb={4}>
+          <Image src="/logo.png" alt="Logo" width={100} height={100} />
+        </Box>
+        <Typography variant="h4" gutterBottom>
+          Login do Cliente {clientId}
+        </Typography>
+        <TextField
+          label="Usuário"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          fullWidth
+          margin="normal"
+          variant="outlined"
+        />
+        <TextField
+          label="Senha"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          fullWidth
+          margin="normal"
+          variant="outlined"
+        />
+        <Button onClick={handleLogin} variant="contained" color="primary" size="large" style={{ marginTop: '20px' }}>
+          Entrar
+        </Button>
+      </Box>
     </Container>
   );
 };
