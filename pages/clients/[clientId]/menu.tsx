@@ -81,7 +81,7 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
                   <Button
                     size="small"
                     variant="contained"
-                    color="primary"
+                    color="secondary"
                     onClick={() => handleAddToCart(item)}
                   >
                     Adicionar ao Carrinho

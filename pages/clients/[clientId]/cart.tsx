@@ -98,7 +98,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
                     <CustomButton
                       size="small"
                       variant="contained"
-                      color="secondary"
+                      color="warning"
                       onClick={() => handleRemove(item.id, item.type)}
                     >
                       Remover

@@ -80,7 +80,7 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
                   <Button
                     size="small"
                     variant="contained"
-                    color="primary"
+                    color="secondary"
                     onClick={() => handleAddToCart(item)}
                   >
                     Adicionar ao Carrinho
