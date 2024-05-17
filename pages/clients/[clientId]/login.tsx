@@ -71,7 +71,7 @@ const ClientLogin = () => {
           <Image src="/rapidex.png" alt="Logo" width={200} height={200} />
         </Box>
         <Typography variant="h4" gutterBottom>
-          Login do Cliente {clientId}
+          {clientId}
         </Typography>
         <CustomTextField
           label="Usuário"

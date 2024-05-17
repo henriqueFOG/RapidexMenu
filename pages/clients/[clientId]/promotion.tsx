@@ -1,9 +1,17 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert } from '@mui/material';
+import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { PromotionItem } from '@/mockData';
 import { useState } from 'react';
+
+
+const StyledTypography = styled(Typography)({
+  fontWeight: 'bold',
+  color: '#3f51b5',
+  textAlign: 'center',
+  marginBottom: '20px',
+});
 
 interface PromotionProps {
   clientId: string;
@@ -33,9 +41,17 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
       <Container>
-        <Typography variant="h4" gutterBottom>
-          Promoções do Cliente {clientId}
-        </Typography>
+      <StyledTypography 
+            variant="h4" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 'bold', 
+              color: 'purple', 
+              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+            }}
+          >
+          Promoções {clientId}
+        </StyledTypography>
         <Grid container spacing={3}>
           {promotionItems.map((item) => (
             <Grid item xs={12} sm={6} md={4} key={item.id}>
