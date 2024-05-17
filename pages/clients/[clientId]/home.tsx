@@ -1,5 +1,6 @@
-import { GetStaticProps, GetStaticPaths } from 'next';
+import { Container, Typography, Box, Grid } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
+import { GetServerSideProps } from 'next';
 
 interface HomeProps {
   clientId: string;
@@ -7,14 +8,18 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ clientId }) => {
   return (
-    <div>
-      <h2>Home do Cliente {clientId}</h2>
-      <BottomNav clientId={clientId} />
-    </div>
+    <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
+      <Container>
+        <Typography variant="h4" gutterBottom>
+          Home do Cliente {clientId}
+        </Typography>
+        <BottomNav clientId={clientId} />
+      </Container>
+    </Box>
   );
 };
 
-export const getStaticProps: GetStaticProps = async (context) => {
+export const getServerSideProps: GetServerSideProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -28,20 +33,6 @@ export const getStaticProps: GetStaticProps = async (context) => {
     props: {
       clientId: params.clientId as string,
     },
-  };
-};
-
-export const getStaticPaths: GetStaticPaths = async () => {
-  const fs = require('fs');
-  const paths = fs.readdirSync('./data').map((file: string) => ({
-    params: {
-      clientId: file.replace('.json', ''),
-    },
-  }));
-
-  return {
-    paths,
-    fallback: false,
   };
 };
 

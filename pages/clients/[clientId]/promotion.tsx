@@ -1,6 +1,6 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography } from '@mui/material';
+import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { PromotionItem } from '@/mockData';
 
@@ -13,6 +13,7 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   const { addToCart } = useCart();
 
   return (
+    <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
     <Container>
       <Typography variant="h4" gutterBottom>
         Promoções do Cliente {clientId}
@@ -61,6 +62,7 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
       </Grid>
       <BottomNav clientId={clientId} />
     </Container>
+    </Box>
   );
 };
 

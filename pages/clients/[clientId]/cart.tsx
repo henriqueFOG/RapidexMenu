@@ -1,6 +1,6 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl } from '@mui/material';
+import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { useState } from 'react';
 import { styled } from '@mui/system';
@@ -28,6 +28,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
   };
 
   return (
+    <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
     <Container>
       <Typography variant="h4" gutterBottom>
         Carrinho do Cliente {clientId}
@@ -97,6 +98,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
       </Typography>
       <BottomNav clientId={clientId} />
     </Container>
+    </Box>
   );
 };
 
