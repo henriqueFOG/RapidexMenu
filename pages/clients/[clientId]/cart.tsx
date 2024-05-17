@@ -100,22 +100,22 @@ const Cart = ({ clientId }: { clientId: string }) => {
   );
 };
 
-// export const getServerSideProps: GetServerSideProps = async (context) => {
-//   const { params } = context;
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const { params } = context;
 
-//   if (!params || !params.clientId) {
-//     console.error('ClientId não encontrado nos parâmetros');
-//     return {
-//       notFound: true,
-//     };
-//   }
+  if (!params || !params.clientId) {
+    console.error('ClientId não encontrado nos parâmetros');
+    return {
+      notFound: true,
+    };
+  }
 
-//   const clientId = params.clientId as string;
-//   return {
-//     props: {
-//       clientId,
-//     },
-//   };
-// };
+  const clientId = params.clientId as string;
+  return {
+    props: {
+      clientId,
+    },
+  };
+};
 
 export default Cart;
