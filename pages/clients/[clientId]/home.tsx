@@ -14,21 +14,21 @@ const Home: React.FC<HomeProps> = ({ clientId }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  const { params } = context;
+// export const getServerSideProps: GetServerSideProps = async (context) => {
+//   const { params } = context;
 
-  if (!params || !params.clientId) {
-    console.error('ClientId não encontrado nos parâmetros');
-    return {
-      notFound: true,
-    };
-  }
+//   if (!params || !params.clientId) {
+//     console.error('ClientId não encontrado nos parâmetros');
+//     return {
+//       notFound: true,
+//     };
+//   }
 
-  return {
-    props: {
-      clientId: params.clientId as string,
-    },
-  };
-};
+//   return {
+//     props: {
+//       clientId: params.clientId as string,
+//     },
+//   };
+// };
 
 export default Home;
