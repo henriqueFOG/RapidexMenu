@@ -64,35 +64,35 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   );
 };
 
-// export const getServerSideProps: GetServerSideProps = async (context) => {
-//   const { params } = context;
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const { params } = context;
 
-//   if (!params || !params.clientId) {
-//     console.error('ClientId não encontrado nos parâmetros');
-//     return {
-//       notFound: true,
-//     };
-//   }
+  if (!params || !params.clientId) {
+    console.error('ClientId não encontrado nos parâmetros');
+    return {
+      notFound: true,
+    };
+  }
 
-//   const clientId = params.clientId as string;
-//   const fs = require('fs');
-//   const path = `./data/${clientId}.json`;
+  const clientId = params.clientId as string;
+  const fs = require('fs');
+  const path = `./data/${clientId}.json`;
 
-//   if (!fs.existsSync(path)) {
-//     console.error(`Arquivo JSON não encontrado: ${path}`);
-//     return {
-//       notFound: true,
-//     };
-//   }
+  if (!fs.existsSync(path)) {
+    console.error(`Arquivo JSON não encontrado: ${path}`);
+    return {
+      notFound: true,
+    };
+  }
 
-//   const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
 
-//   return {
-//     props: {
-//       clientId,
-//       promotionItems: data.promotionItems || [],
-//     },
-//   };
-// };
+  return {
+    props: {
+      clientId,
+      promotionItems: data.promotionItems || [],
+    },
+  };
+};
 
 export default Promotion;
