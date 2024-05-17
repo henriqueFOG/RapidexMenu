@@ -1,0 +1,46 @@
+{
+  "menuItems": [
+    {
+      "id": 1,
+      "title": "Burger Clássico",
+      "description": "Carne, queijo, alface, tomate",
+      "price": 20.00,
+      "image": "/hamburguer/classic_burger.png",
+      "category": "burger"
+    },
+    {
+      "id": 2,
+      "title": "Burger Bacon",
+      "description": "Carne, queijo, bacon, cebola",
+      "price": 25.00,
+      "image": "/hamburguer/bacon_burger.png",
+      "category": "burger"
+    },
+    {
+      "id": 3,
+      "title": "Cheeseburger",
+      "description": "Carne, queijo cheddar, picles, cebola",
+      "price": 22.00,
+      "image": "/hamburguer/cheeseburger.png",
+      "category": "burger"
+    },
+    {
+      "id": 4,
+      "title": "Burger Vegano",
+      "description": "Hambúrguer de grão-de-bico, alface, tomate, cebola",
+      "price": 20.00,
+      "image": "/hamburguer/vegan_burger.png",
+      "category": "burger"
+    }
+  ],
+  "promotionItems": [
+    {
+      "id": 1,
+      "title": "Combo Burger Clássico",
+      "description": "Burger + Batata + Refrigerante",
+      "price": 30.00,
+      "image": "/hamburguer/promotion_for_classic_burger.png",
+      "category": "burger"
+    }
+  ]
+}
