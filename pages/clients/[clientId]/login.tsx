@@ -52,16 +52,10 @@ const ClientLogin = () => {
   const [password, setPassword] = useState('');
   const router = useRouter();
   const { clientId } = router.query;
-  const { setClientId } = useAuth();
+  const { login } = useAuth();
 
   const handleLogin = () => {
-    // Simulando autenticação
-    if (username === 'admin' && password === 'password') {
-      setClientId(clientId as string);
-      router.push(`/clients/${clientId}/home`);
-    } else {
-      alert('Credenciais inválidas');
-    }
+    login(clientId as string, username, password);
   };
 
   return (
