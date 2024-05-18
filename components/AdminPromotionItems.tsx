@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Grid, Typography, Modal, TextField, styled, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
-import { PromotionItem } from '@/mockData';
-import { useDropzone, FileRejection, Accept } from 'react-dropzone';
+import { useDropzone, Accept } from 'react-dropzone';
 import Image from 'next/image';
+import { PromotionItem } from '@/mockData';
 
 interface AdminPromotionItemsProps {
   clientId: string;
@@ -36,13 +36,22 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
     setIsEditing(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    let updatedItems: PromotionItem[] = [];
     if (isEditing && currentItem) {
-      setItems(items.map(item => (item.id === currentItem.id ? currentItem : item)));
+      updatedItems = items.map(item => (item.id === currentItem.id ? currentItem : item));
     } else if (currentItem) {
-      setItems([...items, { ...currentItem, id: Date.now() }]);
+      updatedItems = [...items, { ...currentItem, id: Date.now() }];
     }
+    setItems(updatedItems);
     handleClose();
+
+    try {
+      await savePromotionItemsToServer(clientId, updatedItems);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar os itens de promoção.');
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -50,9 +59,17 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
     setOpenDialog(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteItemId !== null) {
-      setItems(items.filter(item => item.id !== deleteItemId));
+      const updatedItems = items.filter(item => item.id !== deleteItemId);
+      setItems(updatedItems);
+
+      try {
+        await savePromotionItemsToServer(clientId, updatedItems);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao salvar os itens de promoção.');
+      }
     }
     setOpenDialog(false);
     setDeleteItemId(null);
@@ -75,7 +92,6 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop, accept: 'image/*' as unknown as Accept });
 
-
   return (
     <Box>
       <StyledTypography 
@@ -96,7 +112,9 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
             <Card>
-              <CardMedia component="img" height="140" image={item.image} alt={item.title} />
+              <CardMedia component="div" sx={{ position: 'relative', height: 140 }}>
+                <Image src={item.image || '/default-image.png'} alt={item.title} layout="fill" objectFit="cover" />
+              </CardMedia>
               <CardContent>
                 <Typography variant="h5">{item.title}</Typography>
                 <Typography color="textSecondary">{item.description}</Typography>
@@ -109,9 +127,9 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
               </CardContent>
               <CardActions>
                 <Button size="small" variant="contained" color="secondary" onClick={() => handleOpen(item)}>
-                  Alterar
+                  Editar
                 </Button>
-                <Button size="small" variant="contained" color="error" onClick={() => handleDelete(item.id)}>
+                <Button size="small" variant="contained" color="warning" onClick={() => handleDelete(item.id)}>
                   Excluir
                 </Button>
               </CardActions>
@@ -120,10 +138,11 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
         ))}
       </Grid>
       <Modal open={open} onClose={handleClose}>
-      <Box sx={{  maxHeight:'90vh',overflow:'auto', padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
+        <Box sx={{ maxHeight: '90vh', overflow: 'auto', padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
           <Typography variant="h6" gutterBottom>
             {isEditing ? 'Alterar Item' : 'Criar Novo Item'}
           </Typography>
+          
           <TextField label="Título" name="title" value={currentItem?.title || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Descrição" name="description" value={currentItem?.description || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Preço" name="price" type="number" value={currentItem?.price || ''} onChange={handleChange} fullWidth margin="normal" />
@@ -154,13 +173,26 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
           <Button onClick={() => setOpenDialog(false)} color="primary">
             Não
           </Button>
-          <Button onClick={confirmDelete} color="error" autoFocus>
+          <Button onClick={confirmDelete} color="warning" autoFocus>
             Sim
           </Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
+};
+
+const savePromotionItemsToServer = async (clientId: string, promotionItems: PromotionItem[]) => {
+  const res = await fetch(`/api/clients/${clientId}/promotions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(promotionItems),
+  });
+  if (!res.ok) {
+    throw new Error('Erro ao salvar os itens de promoção.');
+  }
 };
 
 export default AdminPromotionItems;

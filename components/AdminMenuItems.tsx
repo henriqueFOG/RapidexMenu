@@ -36,13 +36,22 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
     setIsEditing(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    let updatedMenuItems: MenuItem[] = [];
     if (isEditing && currentItem) {
-      setMenuItems(menuItems.map(item => (item.id === currentItem.id ? currentItem : item)));
+      updatedMenuItems = menuItems.map(item => (item.id === currentItem.id ? currentItem : item));
     } else if (currentItem) {
-      setMenuItems([...menuItems, { ...currentItem, id: Date.now() }]);
+      updatedMenuItems = [...menuItems, { ...currentItem, id: Date.now() }];
     }
+    setMenuItems(updatedMenuItems);
     handleClose();
+
+    try {
+      await saveMenuItemsToServer(clientId, updatedMenuItems);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar os itens do menu.');
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -50,9 +59,17 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
     setOpenDialog(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteItemId !== null) {
-      setMenuItems(menuItems.filter(item => item.id !== deleteItemId));
+      const updatedMenuItems = menuItems.filter(item => item.id !== deleteItemId);
+      setMenuItems(updatedMenuItems);
+
+      try {
+        await saveMenuItemsToServer(clientId, updatedMenuItems);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao salvar os itens do menu.');
+      }
     }
     setOpenDialog(false);
     setDeleteItemId(null);
@@ -119,7 +136,7 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
         ))}
       </Grid>
       <Modal open={open} onClose={handleClose}>
-        <Box sx={{  maxHeight:'90vh',overflow:'auto', padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
+        <Box sx={{ maxHeight: '90vh', overflow: 'auto', padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
           <Typography variant="h6" gutterBottom>
             {isEditing ? 'Alterar Item' : 'Criar Novo Item'}
           </Typography>
@@ -161,6 +178,19 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
       </Dialog>
     </Box>
   );
+};
+
+const saveMenuItemsToServer = async (clientId: string, menuItems: MenuItem[]) => {
+  const res = await fetch(`/api/clients/${clientId}/menu`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(menuItems),
+  });
+  if (!res.ok) {
+    throw new Error('Erro ao salvar os itens do menu.');
+  }
 };
 
 export default AdminMenuItems;
