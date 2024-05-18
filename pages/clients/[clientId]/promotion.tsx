@@ -5,7 +5,6 @@ import BottomNav from '@/components/BottomNav';
 import { PromotionItem } from '@/mockData';
 import { useState } from 'react';
 
-
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
   color: '#3f51b5',
@@ -41,15 +40,15 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
       <Container>
-      <StyledTypography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-            }}
-          >
+        <StyledTypography 
+          variant="h4" 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 'bold', 
+            color: 'purple', 
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+          }}
+        >
           Promoções {clientId}
         </StyledTypography>
         <Grid container spacing={3}>
@@ -129,6 +128,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
       clientId,
       promotionItems: data.promotionItems || [],
     },
+    revalidate: 1, // Revalidate at most once per second
   };
 };
 

@@ -4,7 +4,7 @@
       "id": 1,
       "title": "Sushi Roll",
       "description": "Arroz, nori, salmão",
-      "price": 15.00,
+      "price": 15,
       "image": "/sushi/sushi_roll.png",
       "category": "sushi"
     },
@@ -12,7 +12,7 @@
       "id": 2,
       "title": "Sashimi",
       "description": "Fatias de peixe fresco",
-      "price": 20.00,
+      "price": 20,
       "image": "/sushi/sashimi.png",
       "category": "sushi"
     },
@@ -20,7 +20,7 @@
       "id": 3,
       "title": "Nigiri",
       "description": "Bolinhas de arroz com peixe em cima",
-      "price": 18.00,
+      "price": 18,
       "image": "/sushi/nigiri.png",
       "category": "sushi"
     },
@@ -28,7 +28,7 @@
       "id": 4,
       "title": "Temaki",
       "description": "Cone de alga recheado com arroz e peixe",
-      "price": 12.00,
+      "price": 12,
       "image": "/sushi/temaki.png",
       "category": "sushi"
     }
@@ -38,7 +38,7 @@
       "id": 1,
       "title": "Combo Sushi",
       "description": "10 peças de sushi",
-      "price": 50.00,
+      "price": 50,
       "image": "/sushi/promotion_for_sushi_combo.png",
       "category": "sushi"
     }

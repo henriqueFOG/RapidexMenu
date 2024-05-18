@@ -5,7 +5,6 @@ import BottomNav from '@/components/BottomNav';
 import { MenuItem } from '@/mockData';
 import { useState } from 'react';
 
-
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
   color: '#3f51b5',
@@ -42,15 +41,15 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}>
       <Container>
-      <StyledTypography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-            }}
-          >
+        <StyledTypography 
+          variant="h4" 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 'bold', 
+            color: 'purple', 
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+          }}
+        >
           Cardápio {clientId}
         </StyledTypography>
         <Grid container spacing={3}>
@@ -71,8 +70,8 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
                     {item.description}
                   </Typography>
                   <Typography variant="body2" component="p">
-                    R$ {item.price.toFixed(2)}
-                  </Typography>
+                  R$ {typeof item.price === 'number' ? item.price.toFixed(2) : item.price}
+                </Typography>
                   <Typography variant="body2" component="p">
                     Categoria: {item.category}
                   </Typography>
@@ -130,6 +129,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
       clientId,
       initialMenuItems: data.menuItems || [],
     },
+    revalidate: 10, // Incremental Static Regeneration (ISR)
   };
 };
 
@@ -143,7 +143,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
   return {
     paths,
-    fallback: false,
+    fallback: 'blocking',
   };
 };
 
