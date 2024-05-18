@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Grid, Typography, Modal, TextField, styled, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { PromotionItem } from '@/mockData';
+import { useDropzone, FileRejection, Accept } from 'react-dropzone';
+import Image from 'next/image';
 
 interface AdminPromotionItemsProps {
   clientId: string;
@@ -61,6 +63,19 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
     setCurrentItem({ ...currentItem, [name]: name === 'price' ? parseFloat(value) : value } as PromotionItem);
   };
 
+  const onDrop = (acceptedFiles: File[]) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (currentItem) {
+        setCurrentItem({ ...currentItem, image: reader.result as string });
+      }
+    };
+    reader.readAsDataURL(acceptedFiles[0]);
+  };
+
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, accept: 'image/*' as unknown as Accept });
+
+
   return (
     <Box>
       <StyledTypography 
@@ -105,7 +120,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
         ))}
       </Grid>
       <Modal open={open} onClose={handleClose}>
-        <Box sx={{ padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
+      <Box sx={{  maxHeight:'90vh',overflow:'auto', padding: 2, backgroundColor: 'white', margin: 'auto', marginTop: '5%', width: 400 }}>
           <Typography variant="h6" gutterBottom>
             {isEditing ? 'Alterar Item' : 'Criar Novo Item'}
           </Typography>
@@ -113,7 +128,16 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
           <TextField label="Descrição" name="description" value={currentItem?.description || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Preço" name="price" type="number" value={currentItem?.price || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Categoria" name="category" value={currentItem?.category || ''} onChange={handleChange} fullWidth margin="normal" />
-          <TextField label="Imagem" name="image" value={currentItem?.image || ''} onChange={handleChange} fullWidth margin="normal" />
+          <div {...getRootProps()} style={{ border: '1px dashed gray', padding: '20px', textAlign: 'center', marginTop: '20px' }}>
+            <input {...getInputProps()} />
+            {currentItem?.image ? (
+              <Box sx={{ position: 'relative', width: '100%', height: 200 }}>
+                <Image src={currentItem.image as string} alt="Imagem do Item" layout="fill" objectFit="cover" />
+              </Box>
+            ) : (
+              <p>Arraste e solte uma imagem aqui, ou clique para selecionar uma imagem</p>
+            )}
+          </div>
           <Button variant="contained" color="primary" onClick={handleSave} sx={{ mt: 2 }}>
             Salvar
           </Button>
