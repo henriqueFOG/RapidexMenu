@@ -49,37 +49,30 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
     }
   };
 
-  const handleDelete = async (id: number) => {
-    const updatedMenuItems = menuItems.filter(item => item.id !== id);
-    setMenuItems(updatedMenuItems);
+  const handleDelete = (id: number) => {
+    setDeleteItemId(id);
+    setOpenDialog(true);
+  };
 
-    try {
-      await saveMenuItemsToServer(clientId, updatedMenuItems);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao salvar os itens do menu.');
+  const confirmDelete = async () => {
+    if (deleteItemId !== null) {
+      const updatedMenuItems = menuItems.filter(item => item.id !== deleteItemId);
+      setMenuItems(updatedMenuItems);
+      setOpenDialog(false);
+      setDeleteItemId(null);
+
+      try {
+        await saveMenuItemsToServer(clientId, updatedMenuItems);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao salvar os itens do menu.');
+      }
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setCurrentItem({ ...currentItem, [name]: value } as MenuItem);
-  };
-
-  const confirmDelete = async () => {
-    if (deleteItemId !== null) {
-      const updatedItems = menuItems.filter(menuItems => menuItems.id !== deleteItemId);
-      setMenuItems(updatedItems);
-
-      try {
-        await saveMenuItemsToServer(clientId, updatedItems);
-      } catch (error) {
-        console.error(error);
-        alert('Erro ao salvar os itens de promoção.');
-      }
-    }
-    setOpenDialog(false);
-    setDeleteItemId(null);
+    setCurrentItem({ ...currentItem, [name]: name === 'price' ? parseFloat(value) : value } as MenuItem);
   };
 
   const onDrop = (acceptedFiles: File[]) => {
@@ -96,22 +89,20 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
 
   return (
     <Box>
-      <Box sx={{margin:2, marginLeft:1}}>
       <Button variant="contained" color="primary" onClick={() => handleOpen()}>
-        + Novo Item
+        Criar Novo Item
       </Button>
-      </Box>
       <Grid container spacing={3}>
         {menuItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
             <Card>
-              <CardMedia component="img" height="140" image={item.image} alt={item.title} />
+              <CardMedia component="div" sx={{ position: 'relative', height: 140 }}>
+                <Image src={item.image || '/default-image.png'} alt={item.title} layout="fill" objectFit="cover" />
+              </CardMedia>
               <CardContent>
                 <Typography variant="h5">{item.title}</Typography>
                 <Typography color="textSecondary">{item.description}</Typography>
-                <Typography variant="body2" component="p">
-                  R$ {typeof item.price === 'number' ? item.price.toFixed(2) : item.price}
-                </Typography>
+                <Typography variant="body2">R$ {item.price.toFixed(2)}</Typography>
                 <Typography variant="body2">Categoria: {item.category}</Typography>
               </CardContent>
               <CardActions>
@@ -165,7 +156,7 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
             Sim
           </Button>
         </DialogActions>
-      </Dialog> 
+      </Dialog>
     </Box>
   );
 };
@@ -176,7 +167,7 @@ const saveMenuItemsToServer = async (clientId: string, menuItems: MenuItem[]) =>
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(menuItems),
+    body: JSON.stringify({ menuItems }),
   });
   if (!res.ok) {
     throw new Error('Erro ao salvar os itens do menu.');

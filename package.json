@@ -26,6 +26,7 @@
     "@types/react-dropzone": "^5.1.0",
     "eslint": "^8",
     "eslint-config-next": "14.2.3",
+    "sharp": "^0.33.4",
     "typescript": "^5"
   }
 }

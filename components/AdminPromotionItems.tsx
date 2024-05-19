@@ -10,7 +10,7 @@ interface AdminPromotionItemsProps {
 }
 
 const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, promotionItems }) => {
-  const [items, setItems] = useState<PromotionItem[]>(promotionItems);
+  const [items, setItems] = useState<PromotionItem[]>(promotionItems || []);
   const [open, setOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState<PromotionItem | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -30,56 +30,49 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
   };
 
   const handleSave = async () => {
-    let updatedItems: PromotionItem[];
+    let updatedPromotionItems: PromotionItem[];
     if (isEditing && currentItem) {
-      updatedItems = items.map(item => (item.id === currentItem.id ? currentItem : item));
+      updatedPromotionItems = items.map(item => (item.id === currentItem.id ? currentItem : item));
     } else if (currentItem) {
-      updatedItems = [...items, { ...currentItem, id: Date.now() }];
+      updatedPromotionItems = [...items, { ...currentItem, id: Date.now() }];
     } else {
       return;
     }
-    setItems(updatedItems);
+    setItems(updatedPromotionItems);
     handleClose();
 
     try {
-      await savePromotionItemsToServer(clientId, updatedItems);
+      await savePromotionItemsToServer(clientId, updatedPromotionItems);
     } catch (error) {
       console.error(error);
       alert('Erro ao salvar os itens de promoção.');
     }
   };
 
-  const handleDelete = async (id: number) => {
-    const updatedItems = items.filter(item => item.id !== id);
-    setItems(updatedItems);
-
-    try {
-      await savePromotionItemsToServer(clientId, updatedItems);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao salvar os itens de promoção.');
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCurrentItem({ ...currentItem, [name]: value } as PromotionItem);
+  const handleDelete = (id: number) => {
+    setDeleteItemId(id);
+    setOpenDialog(true);
   };
 
   const confirmDelete = async () => {
     if (deleteItemId !== null) {
-      const updatedItems = items.filter(item => item.id !== deleteItemId);
-      setItems(updatedItems);
+      const updatedPromotionItems = items.filter(item => item.id !== deleteItemId);
+      setItems(updatedPromotionItems);
+      setOpenDialog(false);
+      setDeleteItemId(null);
 
       try {
-        await savePromotionItemsToServer(clientId, updatedItems);
+        await savePromotionItemsToServer(clientId, updatedPromotionItems);
       } catch (error) {
         console.error(error);
         alert('Erro ao salvar os itens de promoção.');
       }
     }
-    setOpenDialog(false);
-    setDeleteItemId(null);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCurrentItem({ ...currentItem, [name]: name === 'price' ? parseFloat(value) : value } as PromotionItem);
   };
 
   const onDrop = (acceptedFiles: File[]) => {
@@ -96,25 +89,21 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
 
   return (
     <Box>
-      <Box sx={{margin:2, marginLeft:1}}>
-      <Button  variant="contained" color="primary" onClick={() => handleOpen()}>
-      + Novo Item
+      <Button variant="contained" color="primary" onClick={() => handleOpen()}>
+        Criar Novo Item
       </Button>
-      </Box>
       <Grid container spacing={3}>
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
             <Card>
-              <CardMedia component="img" height="140" image={item.image} alt={item.title} />
+              <CardMedia component="div" sx={{ position: 'relative', height: 140 }}>
+                <Image src={item.image || '/default-image.png'} alt={item.title} layout="fill" objectFit="cover" />
+              </CardMedia>
               <CardContent>
                 <Typography variant="h5">{item.title}</Typography>
                 <Typography color="textSecondary">{item.description}</Typography>
-                <Typography variant="body2" component="p">
-                  R$ {typeof item.price === 'number' ? item.price.toFixed(2) : item.price}
-                </Typography>
-                <Typography variant="body2" component="p">
-                  Categoria: {item.category}
-                </Typography>
+                <Typography variant="body2">R$ {item.price.toFixed(2)}</Typography>
+                <Typography variant="body2">Categoria: {item.category}</Typography>
               </CardContent>
               <CardActions>
                 <Button size="small" variant="contained" color="secondary" onClick={() => handleOpen(item)}>
@@ -167,7 +156,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
             Sim
           </Button>
         </DialogActions>
-      </Dialog> 
+      </Dialog>
     </Box>
   );
 };
@@ -178,7 +167,7 @@ const savePromotionItemsToServer = async (clientId: string, promotionItems: Prom
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(promotionItems),
+    body: JSON.stringify({ promotionItems }),
   });
   if (!res.ok) {
     throw new Error('Erro ao salvar os itens de promoção.');

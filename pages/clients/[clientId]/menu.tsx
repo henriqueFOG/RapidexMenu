@@ -1,9 +1,9 @@
+import React, { useState, useEffect } from 'react';
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { MenuItem } from '@/mockData';
-import { useState, useEffect } from 'react';
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -29,8 +29,10 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
       setMenuItems(data.menuItems || []);
     };
 
-    fetchMenuItems();
-  }, [clientId]);
+    if (initialMenuItems.length === 0) {
+      fetchMenuItems();
+    }
+  }, [clientId, initialMenuItems]);
 
   const handleAddToCart = (item: MenuItem) => {
     addToCart({
@@ -137,7 +139,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
   return {
     props: {
       clientId,
-      initialMenuItems: [],
+      initialMenuItems: data.menuItems || [],
     },
     revalidate: 1, // Revalidate at most once per second
   };
