@@ -96,9 +96,11 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
 
   return (
     <Box>
+      <Box sx={{margin:2, marginLeft:1}}>
       <Button variant="contained" color="primary" onClick={() => handleOpen()}>
-        Criar Novo Item
+        + Novo Item
       </Button>
+      </Box>
       <Grid container spacing={3}>
         {menuItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>

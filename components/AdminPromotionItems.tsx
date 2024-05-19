@@ -96,9 +96,11 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
 
   return (
     <Box>
-      <Button variant="contained" color="primary" onClick={() => handleOpen()}>
-        Criar Novo Item
+      <Box sx={{margin:2, marginLeft:1}}>
+      <Button  variant="contained" color="primary" onClick={() => handleOpen()}>
+      + Novo Item
       </Button>
+      </Box>
       <Grid container spacing={3}>
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
