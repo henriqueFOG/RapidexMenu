@@ -162,7 +162,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
           </Button>
         </Box>
       </Modal>
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+     <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>{"Confirmação de Exclusão"}</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -177,7 +177,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
             Sim
           </Button>
         </DialogActions>
-      </Dialog>
+      </Dialog> 
     </Box>
   );
 };

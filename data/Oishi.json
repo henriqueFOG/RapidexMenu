@@ -32,14 +32,13 @@
       "image": "/sushi/temaki.png",
       "category": "sushi"
     }
-    
   ],
   "promotionItems": [
     {
       "id": 1,
       "title": "Combo Sushi",
       "description": "Combo de nigiri, sashimi e temaki",
-      "price": 25.00,
+      "price": 25,
       "image": "/sushi/nigiri.png",
       "category": "Sushi"
     }

@@ -1,4 +1,4 @@
-import { GetStaticProps, GetStaticPaths } from 'next';
+import { GetServerSideProps } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
@@ -41,15 +41,15 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}>
       <Container>
-        <StyledTypography 
-          variant="h4" 
-          gutterBottom 
-          sx={{ 
-            fontWeight: 'bold', 
-            color: 'purple', 
-            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-          }}
-        >
+      <StyledTypography 
+            variant="h4" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 'bold', 
+              color: 'purple', 
+              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+            }}
+          >
           Cardápio {clientId}
         </StyledTypography>
         <Grid container spacing={3}>
@@ -101,7 +101,7 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   );
 };
 
-export const getStaticProps: GetStaticProps = async (context) => {
+export const getServerSideProps: GetServerSideProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -112,38 +112,23 @@ export const getStaticProps: GetStaticProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const fs = require('fs');
-  const path = `./data/${clientId}.json`;
+  const res = await fetch(`http://localhost:3000/api/clients/${clientId}/menu`); // Use localhost para desenvolvimento local
+  // const res = await fetch(`https://your-domain.com/api/clients/${clientId}/menu`); // Use o domínio correto em produção
 
-  if (!fs.existsSync(path)) {
-    console.error(`Arquivo JSON não encontrado: ${path}`);
+  if (!res.ok) {
+    console.error('Erro ao carregar os itens do menu');
     return {
       notFound: true,
     };
   }
 
-  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+  const data = await res.json();
 
   return {
     props: {
       clientId,
       initialMenuItems: data.menuItems || [],
     },
-    revalidate: 10, // Incremental Static Regeneration (ISR)
-  };
-};
-
-export const getStaticPaths: GetStaticPaths = async () => {
-  const fs = require('fs');
-  const paths = fs.readdirSync('./data').map((file: string) => ({
-    params: {
-      clientId: file.replace('.json', ''),
-    },
-  }));
-
-  return {
-    paths,
-    fallback: 'blocking',
   };
 };
 
