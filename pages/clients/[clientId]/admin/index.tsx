@@ -5,6 +5,8 @@ import AdminMenuItems from '@/components/AdminMenuItems';
 import AdminPromotionItems from '@/components/AdminPromotionItems';
 import { GetServerSideProps } from 'next';
 import { MenuItem, PromotionItem } from '@/mockData';
+import path from 'path';
+import fs from 'fs';
 
 interface AdminDashboardProps {
   clientId: string;
@@ -43,17 +45,16 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const fs = require('fs');
-  const path = `./data/${clientId}.json`;
+  const filePath = path.join(process.cwd(), 'data', `${clientId}.json`);
 
-  if (!fs.existsSync(path)) {
-    console.error(`Arquivo JSON não encontrado: ${path}`);
+  if (!fs.existsSync(filePath)) {
+    console.error(`Arquivo JSON não encontrado: ${filePath}`);
     return {
       notFound: true,
     };
   }
 
-  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
   return {
     props: {
