@@ -70,8 +70,8 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
                     {item.description}
                   </Typography>
                   <Typography variant="body2" component="p">
-                  R$ {typeof item.price === 'number' ? item.price.toFixed(2) : item.price}
-                </Typography>
+                    R$ {item.price.toFixed(2)}
+                  </Typography>
                   <Typography variant="body2" component="p">
                     Categoria: {item.category}
                   </Typography>
