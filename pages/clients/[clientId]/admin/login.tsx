@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
-import { TextField, Button, Container, Typography, Box, Paper } from '@mui/material';
-import { styled } from '@mui/system';
+import React, { useState } from 'react';
+import { Container, TextField, Button, Typography, Box, styled, Paper } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/router';
 import Image from 'next/image';
 import LockIcon from '@mui/icons-material/Lock';
 
@@ -47,14 +46,15 @@ const CustomTextField = styled(TextField)({
   },
 });
 
-const ClientLogin = () => {
+const AdminLogin = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const { login } = useAuth();
   const router = useRouter();
   const { clientId } = router.query;
-  const { login } = useAuth();
 
-  const handleLogin = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     login(clientId as string, username, password);
   };
 
@@ -65,35 +65,38 @@ const ClientLogin = () => {
           <Image src="/rapidex.png" alt="Logo" width={200} height={200} />
         </Box>
         <Typography variant="h4" gutterBottom>
-          {clientId}
+          Acesso administradores - {clientId}
         </Typography>
-        <CustomTextField
-          label="Usuário"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          fullWidth
-          margin="normal"
-          variant="outlined"
-        />
-        <CustomTextField
-          label="Senha"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          fullWidth
-          margin="normal"
-          variant="outlined"
-        />
-        <LoginButton
-          onClick={handleLogin}
-          variant="contained"
-          startIcon={<LockIcon />}
-        >
-          Entrar
-        </LoginButton>
+        <form onSubmit={handleSubmit}>
+          <CustomTextField
+            label="Username"
+            fullWidth
+            margin="normal"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            variant="outlined"
+          />
+          <CustomTextField
+            label="Password"
+            type="password"
+            fullWidth
+            margin="normal"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            variant="outlined"
+          />
+          <LoginButton
+            type="submit"
+            variant="contained"
+            startIcon={<LockIcon />}
+            fullWidth
+          >
+            Login
+          </LoginButton>
+        </form>
       </LoginPaper>
     </BackgroundContainer>
   );
 };
 
-export default ClientLogin;
+export default AdminLogin;

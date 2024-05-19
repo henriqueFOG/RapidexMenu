@@ -207,14 +207,14 @@ export const getStaticProps: GetStaticProps = async (context) => {
   return {
     props: {
       clientId,
-      initialCartItems: data.cartItems || [],
+       initialCartItems: data.cartItems || [],
     },
   };
 };
 
 export const getStaticPaths: GetStaticPaths = async () => {
   const fs = require('fs');
-  const paths = fs.readdirSync('./data').map((file: string) => ({
+ const paths = fs.readdirSync('./data').map((file: string) => ({
     params: {
       clientId: file.replace('.json', ''),
     },

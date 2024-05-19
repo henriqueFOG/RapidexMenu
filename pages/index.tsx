@@ -21,7 +21,7 @@ const IndexPage = () => {
         margin="normal"
       />
       <Button onClick={handleLogin} variant="contained" color="primary">
-        Entrar
+        Entrarr
       </Button>
     </Container>
   );

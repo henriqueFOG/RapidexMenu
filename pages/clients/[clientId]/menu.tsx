@@ -1,10 +1,9 @@
+import React, { useState, useEffect } from 'react';
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { MenuItem } from '@/mockData';
-import { useState } from 'react';
-
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -20,8 +19,20 @@ interface MenuProps {
 
 const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems || []);
-  const { addToCart } = useCart();
   const [open, setOpen] = useState(false);
+  const { addToCart } = useCart();
+
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      const res = await fetch(`/api/clients/${clientId}/menu`);
+      const data = await res.json();
+      setMenuItems(data.menuItems || []);
+    };
+
+    if (initialMenuItems.length === 0) {
+      fetchMenuItems();
+    }
+  }, [clientId, initialMenuItems]);
 
   const handleAddToCart = (item: MenuItem) => {
     addToCart({
@@ -42,15 +53,15 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}>
       <Container>
-      <StyledTypography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-            }}
-          >
+        <StyledTypography 
+          variant="h4" 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 'bold', 
+            color: 'purple', 
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+          }}
+        >
           Cardápio {clientId}
         </StyledTypography>
         <Grid container spacing={3}>
@@ -130,6 +141,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
       clientId,
       initialMenuItems: data.menuItems || [],
     },
+    revalidate: 1, // Revalidate at most once per second
   };
 };
 

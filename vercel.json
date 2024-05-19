@@ -1,0 +1,18 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+          "source": "/api/:path*",
+          "destination": "/api/:path*"
+        },
+        {
+          "source": "/clients/:clientId/admin/:path*",
+          "destination": "/clients/:clientId/admin/:path*"
+        },
+        {
+          "source": "/clients/:clientId/:path*",
+          "destination": "/clients/:clientId/:path*"
+        }
+      ]
+  }
+  
