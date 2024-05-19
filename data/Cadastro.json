@@ -1,0 +1,15 @@
+{
+    "Cadastro": [
+        {
+            "id":1,
+            "usuario":"Juvenal01",
+            "password":"jovemagora",
+            "Nome":"Juvenal",
+            "CPF":"12312312345",
+            "Email":"jovemnow@hotmai.com",
+            "Endereço":"Morro dos Milionários",
+            "Numero": "345",
+            "Complemento": "Lote 4 Casa Amarela"
+        }
+    ]
+}

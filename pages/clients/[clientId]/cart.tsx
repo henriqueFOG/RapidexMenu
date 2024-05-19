@@ -4,6 +4,8 @@ import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, Menu
 import BottomNav from '@/components/BottomNav';
 import { useState } from 'react';
 import { styled } from '@mui/system';
+import cadastroData from '../../../data/Cadastro.json';
+
 
 const CustomCard = styled(Card)({
   minWidth: 275,
@@ -23,6 +25,15 @@ const StyledTypography = styled(Typography)({
   textAlign: 'center',
   marginBottom: '20px',
 });
+
+interface Cadastro { //Alteração
+  Nome:String;
+  CPF: string;
+  Endereço: string;
+  Numero: string;
+  Complemento: string;
+  Email: string;
+}
 
 const Cart = ({ clientId }: { clientId: string }) => {
   const { cart, removeFromCart } = useCart();
@@ -46,9 +57,27 @@ const Cart = ({ clientId }: { clientId: string }) => {
     setOpenSnackbar(false);
   };
 
+  const cadastro: Cadastro = cadastroData.Cadastro[0];
+
   return (
     <Box sx={{ paddingBottom: '56px', paddingTop: '20px', backgroundColor: '#f5f5f5' }}>
       <Container>
+      
+      <Typography style={{textAlign:'right'}}>
+            Cadastro
+          
+      </Typography>
+      <Box sx={{ textAlign: 'right', marginBottom: '20px' }}>
+          <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
+          <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
+          <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
+          <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
+          <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
+          <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+        </Box>
+      
+      
+      
       <StyledTypography 
             variant="h4" 
             gutterBottom 
@@ -60,6 +89,9 @@ const Cart = ({ clientId }: { clientId: string }) => {
           >
           Carrinho {clientId}
         </StyledTypography>
+
+        
+
         <Typography variant="h6" gutterBottom style={{ textAlign: 'center', marginBottom: '40px' }}>
           Bem-vindo ao seu carrinho de compras! Revise seus itens e finalize sua compra.
         </Typography>
@@ -103,6 +135,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
                     >
                       Remover
                     </CustomButton>
+
                     {item.quantity > 1 && (
                       <FormControl style={{ marginLeft: '10px' }}>
                         <Select
@@ -123,8 +156,19 @@ const Cart = ({ clientId }: { clientId: string }) => {
             </Grid>
           ))}
         </Grid>
-        <Typography variant="h6" style={{ marginTop: '20px', textAlign: 'right' }}>
+        <Typography variant="h5" style={{ marginTop: '20px', textAlign: 'right', backgroundColor: 'white', marginBottom: '10px'}}>
           Total: R$ {calculateTotal()}
+          
+          <CustomButton
+              size="large"
+              variant="contained"
+              color="warning"
+              //onClick={}
+              style={{marginLeft:'20px', marginBottom: '10px', marginTop:'10px', backgroundColor:'purple'}}
+            >
+              Finalizar Pedido
+          </CustomButton>
+
         </Typography>
         <BottomNav clientId={clientId} />
         <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={handleCloseSnackbar}>
