@@ -49,30 +49,37 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
     }
   };
 
-  const handleDelete = (id: number) => {
-    setDeleteItemId(id);
-    setOpenDialog(true);
-  };
+  const handleDelete = async (id: number) => {
+    const updatedMenuItems = menuItems.filter(item => item.id !== id);
+    setMenuItems(updatedMenuItems);
 
-  const confirmDelete = async () => {
-    if (deleteItemId !== null) {
-      const updatedMenuItems = menuItems.filter(item => item.id !== deleteItemId);
-      setMenuItems(updatedMenuItems);
-
-      try {
-        await saveMenuItemsToServer(clientId, updatedMenuItems);
-      } catch (error) {
-        console.error(error);
-        alert('Erro ao salvar os itens do menu.');
-      }
+    try {
+      await saveMenuItemsToServer(clientId, updatedMenuItems);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar os itens do menu.');
     }
-    setOpenDialog(false);
-    setDeleteItemId(null);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setCurrentItem({ ...currentItem, [name]: name === 'price' ? parseFloat(value) : value } as MenuItem);
+    setCurrentItem({ ...currentItem, [name]: value } as MenuItem);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteItemId !== null) {
+      const updatedItems = menuItems.filter(menuItems => menuItems.id !== deleteItemId);
+      setMenuItems(updatedItems);
+
+      try {
+        await saveMenuItemsToServer(clientId, updatedItems);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao salvar os itens de promoção.');
+      }
+    }
+    setOpenDialog(false);
+    setDeleteItemId(null);
   };
 
   const onDrop = (acceptedFiles: File[]) => {
@@ -96,9 +103,7 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
         {menuItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
             <Card>
-              <CardMedia component="div" sx={{ position: 'relative', height: 140 }}>
-                <Image src={item.image || '/default-image.png'} alt={item.title} layout="fill" objectFit="cover" />
-              </CardMedia>
+              <CardMedia component="img" height="140" image={item.image} alt={item.title} />
               <CardContent>
                 <Typography variant="h5">{item.title}</Typography>
                 <Typography color="textSecondary">{item.description}</Typography>
@@ -111,7 +116,7 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
                 <Button size="small" variant="contained" color="secondary" onClick={() => handleOpen(item)}>
                   Alterar
                 </Button>
-                <Button size="small" variant="contained" color="error" onClick={() => handleDelete(item.id)}>
+                <Button size="small" variant="contained" color="warning" onClick={() => handleDelete(item.id)}>
                   Excluir
                 </Button>
               </CardActions>
@@ -154,11 +159,11 @@ const AdminMenuItems: React.FC<AdminMenuItemsProps> = ({ clientId, initialMenuIt
           <Button onClick={() => setOpenDialog(false)} color="primary">
             Não
           </Button>
-          <Button onClick={confirmDelete} color="error" autoFocus>
+          <Button onClick={confirmDelete} color="warning" autoFocus>
             Sim
           </Button>
         </DialogActions>
-      </Dialog>
+      </Dialog> 
     </Box>
   );
 };
