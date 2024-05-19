@@ -1,9 +1,9 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { MenuItem } from '@/mockData';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -19,8 +19,18 @@ interface MenuProps {
 
 const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems || []);
-  const { addToCart } = useCart();
   const [open, setOpen] = useState(false);
+  const { addToCart } = useCart();
+
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      const res = await fetch(`/api/clients/${clientId}/menu`);
+      const data = await res.json();
+      setMenuItems(data.menuItems || []);
+    };
+
+    fetchMenuItems();
+  }, [clientId]);
 
   const handleAddToCart = (item: MenuItem) => {
     addToCart({
@@ -101,7 +111,7 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -112,22 +122,38 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const res = await fetch(`${process.env.API_URL}/api/clients/${clientId}/menu`);
+  const fs = require('fs');
+  const path = `./data/${clientId}.json`;
 
-  if (!res.ok) {
-    console.error('Erro ao carregar os itens do menu');
+  if (!fs.existsSync(path)) {
+    console.error(`Arquivo JSON não encontrado: ${path}`);
     return {
       notFound: true,
     };
   }
 
-  const data = await res.json();
+  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
 
   return {
     props: {
       clientId,
-      initialMenuItems: data.menuItems || [],
+      initialMenuItems: [],
     },
+    revalidate: 1, // Revalidate at most once per second
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 

@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
@@ -100,7 +100,7 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getStaticProps: GetStaticProps = async (context) => {
   const { params } = context;
 
   if (!params || !params.clientId) {
@@ -111,22 +111,38 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const res = await fetch(`${process.env.API_URL}/api/clients/${clientId}/promotions`);
+  const fs = require('fs');
+  const path = `./data/${clientId}.json`;
 
-  if (!res.ok) {
-    console.error('Erro ao carregar os itens de promoção');
+  if (!fs.existsSync(path)) {
+    console.error(`Arquivo JSON não encontrado: ${path}`);
     return {
       notFound: true,
     };
   }
 
-  const data = await res.json();
+  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
 
   return {
     props: {
       clientId,
       promotionItems: data.promotionItems || [],
     },
+    revalidate: 1, // Revalidate at most once per second
+  };
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fs = require('fs');
+  const paths = fs.readdirSync('./data').map((file: string) => ({
+    params: {
+      clientId: file.replace('.json', ''),
+    },
+  }));
+
+  return {
+    paths,
+    fallback: false,
   };
 };
 
