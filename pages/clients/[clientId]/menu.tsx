@@ -41,15 +41,15 @@ const Menu: React.FC<MenuProps> = ({ clientId, initialMenuItems }) => {
   return (
     <Box sx={{ paddingBottom: '56px' }}>
       <Container>
-      <StyledTypography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-            }}
-          >
+        <StyledTypography 
+          variant="h4" 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 'bold', 
+            color: 'purple', 
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+          }}
+        >
           Cardápio {clientId}
         </StyledTypography>
         <Grid container spacing={3}>
@@ -112,8 +112,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const res = await fetch(`http://localhost:3000/api/clients/${clientId}/menu`); // Use localhost para desenvolvimento local
-  // const res = await fetch(`https://your-domain.com/api/clients/${clientId}/menu`); // Use o domínio correto em produção
+  const res = await fetch(`${process.env.API_URL}/api/clients/${clientId}/menu`);
 
   if (!res.ok) {
     console.error('Erro ao carregar os itens do menu');

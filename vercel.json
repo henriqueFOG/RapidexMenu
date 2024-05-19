@@ -4,9 +4,18 @@
       { "src": "next.config.js", "use": "@vercel/next" }
     ],
     "rewrites": [
-      { "source": "/api/:path*", "destination": "/api/:path*" },
-      { "source": "/clients/:clientId/admin/:path*", "destination": "/clients/:clientId/admin/:path*" },
-      { "source": "/clients/:clientId/:path*", "destination": "/clients/:clientId/:path*" }
-    ]
+        {
+          "source": "/api/:path*",
+          "destination": "/api/:path*"
+        },
+        {
+          "source": "/clients/:clientId/admin/:path*",
+          "destination": "/clients/:clientId/admin/:path*"
+        },
+        {
+          "source": "/clients/:clientId/:path*",
+          "destination": "/clients/:clientId/:path*"
+        }
+      ]
   }
   

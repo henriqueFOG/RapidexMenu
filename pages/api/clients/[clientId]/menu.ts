@@ -1,8 +1,14 @@
-// pages/api/clients/[clientId]/menu.ts
-
 import { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb', // Ajuste o limite conforme necessário
+    },
+  },
+};
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { clientId } = req.query;
@@ -21,7 +27,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
       data.menuItems = req.body;
       fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-
       res.status(200).json({ message: 'Itens do menu salvos com sucesso' });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao salvar os itens do menu' });

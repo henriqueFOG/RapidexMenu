@@ -4,23 +4,25 @@ import path from 'path';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { clientId } = req.query;
+  const dataPath = path.join(process.cwd(), 'data', `${clientId}.json`);
 
-  if (req.method === 'POST') {
-    const dataDir = path.join(process.cwd(), 'data');
-    const filePath = path.join(dataDir, `${clientId}.json`);
-
+  if (req.method === 'GET') {
     try {
-      const promotionItems = req.body;
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      data.promotionItems = promotionItems;
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-      res.status(200).json({ message: 'Promotion items saved successfully.' });
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      res.status(200).json(data);
     } catch (error) {
-      console.error('Error writing file:', error);
-      res.status(500).json({ error: 'Error saving promotion items.' });
+      res.status(500).json({ message: 'Erro ao carregar os itens de promoção' });
+    }
+  } else if (req.method === 'POST') {
+    try {
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      data.promotionItems = req.body;
+      fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+      res.status(200).json({ message: 'Itens de promoção salvos com sucesso' });
+    } catch (error) {
+      res.status(500).json({ message: 'Erro ao salvar os itens de promoção' });
     }
   } else {
-    res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    res.status(405).json({ message: 'Método não permitido' });
   }
 }

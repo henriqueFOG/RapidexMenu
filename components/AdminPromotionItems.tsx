@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Box, Button, Card, CardActions, CardContent, CardMedia, Grid, Typography, Modal, TextField, styled, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
+import { Box, Button, Card, CardActions, CardContent, CardMedia, Grid, Typography, Modal, TextField, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
+import { PromotionItem } from '@/mockData';
 import { useDropzone, Accept } from 'react-dropzone';
 import Image from 'next/image';
-import { PromotionItem } from '@/mockData';
 
 interface AdminPromotionItemsProps {
   clientId: string;
@@ -17,13 +17,6 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
   const [openDialog, setOpenDialog] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
 
-  const StyledTypography = styled(Typography)({
-    fontWeight: 'bold',
-    color: '#3f51b5',
-    textAlign: 'center',
-    marginBottom: '20px',
-  });
-
   const handleOpen = (item: PromotionItem | null = null) => {
     setCurrentItem(item);
     setIsEditing(!!item);
@@ -37,11 +30,13 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
   };
 
   const handleSave = async () => {
-    let updatedItems: PromotionItem[] = [];
+    let updatedItems: PromotionItem[];
     if (isEditing && currentItem) {
       updatedItems = items.map(item => (item.id === currentItem.id ? currentItem : item));
     } else if (currentItem) {
       updatedItems = [...items, { ...currentItem, id: Date.now() }];
+    } else {
+      return;
     }
     setItems(updatedItems);
     handleClose();
@@ -54,9 +49,21 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
     }
   };
 
-  const handleDelete = (id: number) => {
-    setDeleteItemId(id);
-    setOpenDialog(true);
+  const handleDelete = async (id: number) => {
+    const updatedItems = items.filter(item => item.id !== id);
+    setItems(updatedItems);
+
+    try {
+      await savePromotionItemsToServer(clientId, updatedItems);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar os itens de promoção.');
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCurrentItem({ ...currentItem, [name]: value } as PromotionItem);
   };
 
   const confirmDelete = async () => {
@@ -75,11 +82,6 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
     setDeleteItemId(null);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCurrentItem({ ...currentItem, [name]: name === 'price' ? parseFloat(value) : value } as PromotionItem);
-  };
-
   const onDrop = (acceptedFiles: File[]) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -94,27 +96,14 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
 
   return (
     <Box>
-      <StyledTypography 
-        variant="h4" 
-        gutterBottom 
-        sx={{ 
-          fontWeight: 'bold', 
-          color: 'purple', 
-          textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-        }}
-      >
-        Itens de Promoção
-      </StyledTypography>
       <Button variant="contained" color="primary" onClick={() => handleOpen()}>
         Criar Novo Item
-      </Button> 
+      </Button>
       <Grid container spacing={3}>
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.id}>
             <Card>
-              <CardMedia component="div" sx={{ position: 'relative', height: 140 }}>
-                <Image src={item.image || '/default-image.png'} alt={item.title} layout="fill" objectFit="cover" />
-              </CardMedia>
+              <CardMedia component="img" height="140" image={item.image} alt={item.title} />
               <CardContent>
                 <Typography variant="h5">{item.title}</Typography>
                 <Typography color="textSecondary">{item.description}</Typography>
@@ -127,7 +116,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
               </CardContent>
               <CardActions>
                 <Button size="small" variant="contained" color="secondary" onClick={() => handleOpen(item)}>
-                  Editar
+                  Alterar
                 </Button>
                 <Button size="small" variant="contained" color="warning" onClick={() => handleDelete(item.id)}>
                   Excluir
@@ -142,7 +131,6 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
           <Typography variant="h6" gutterBottom>
             {isEditing ? 'Alterar Item' : 'Criar Novo Item'}
           </Typography>
-          
           <TextField label="Título" name="title" value={currentItem?.title || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Descrição" name="description" value={currentItem?.description || ''} onChange={handleChange} fullWidth margin="normal" />
           <TextField label="Preço" name="price" type="number" value={currentItem?.price || ''} onChange={handleChange} fullWidth margin="normal" />
@@ -162,7 +150,7 @@ const AdminPromotionItems: React.FC<AdminPromotionItemsProps> = ({ clientId, pro
           </Button>
         </Box>
       </Modal>
-     <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>{"Confirmação de Exclusão"}</DialogTitle>
         <DialogContent>
           <DialogContentText>
