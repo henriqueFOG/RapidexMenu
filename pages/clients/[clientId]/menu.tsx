@@ -4,6 +4,8 @@ import { useCart } from '@/context/CartContext';
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { MenuItem } from '@/mockData';
+import path from 'path';
+import fs from 'fs/promises';
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -124,30 +126,32 @@ export const getStaticProps: GetStaticProps = async (context) => {
   }
 
   const clientId = params.clientId as string;
-  const fs = require('fs');
-  const path = `./data/${clientId}.json`;
+  const filePath = path.join(process.cwd(), 'data', `${clientId}.json`);
 
-  if (!fs.existsSync(path)) {
-    console.error(`Arquivo JSON não encontrado: ${path}`);
+  try {
+    const fileContents = await fs.readFile(filePath, 'utf8');
+    const data = JSON.parse(fileContents);
+
+    return {
+      props: {
+        clientId,
+        initialMenuItems: data.menuItems || [],
+      },
+      revalidate: 1, // Revalidate at most once per second
+    };
+  } catch (error) {
+    console.error(`Erro ao ler o arquivo JSON: ${filePath}`, error);
     return {
       notFound: true,
     };
   }
-
-  const data = JSON.parse(fs.readFileSync(path, 'utf8'));
-
-  return {
-    props: {
-      clientId,
-      initialMenuItems: data.menuItems || [],
-    },
-    revalidate: 1, // Revalidate at most once per second
-  };
 };
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const fs = require('fs');
-  const paths = fs.readdirSync('./data').map((file: string) => ({
+  const dataDir = path.join(process.cwd(), 'data');
+  const files = await fs.readdir(dataDir);
+
+  const paths = files.map((file) => ({
     params: {
       clientId: file.replace('.json', ''),
     },
