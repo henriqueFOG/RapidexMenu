@@ -32,6 +32,7 @@ const LogoAnimation: React.FC<LogoAnimationProps> = ({ width = 400, height = 400
     router.push(`/clients/${clientId}/login`);
   };
 
+
   const defaultOptions = {
     loop,
     autoplay,
