@@ -1,11 +1,10 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert } from '@mui/material';
+import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover } from '@mui/material'; // Import Popover
 import BottomNav from '@/components/BottomNav';
 import { useState } from 'react';
 import { styled } from '@mui/system';
 import cadastroData from '../../../data/Cadastro.json';
-
 
 const CustomCard = styled(Card)({
   minWidth: 275,
@@ -26,8 +25,8 @@ const StyledTypography = styled(Typography)({
   marginBottom: '20px',
 });
 
-interface Cadastro { //Alteração
-  Nome:String;
+interface Cadastro { // Alteração
+  Nome: string;
   CPF: string;
   Endereço: string;
   Numero: string;
@@ -39,6 +38,8 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const { cart, removeFromCart } = useCart();
   const [selectedQuantities, setSelectedQuantities] = useState<{ [key: string]: number }>({});
   const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [openModal, setOpenModal] = useState(false); // Abrir o Modal
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null); // Estado para Popover
 
   const handleQuantityChange = (id: number, type: 'menu' | 'promotion', quantity: number) => {
     setSelectedQuantities((prev) => ({ ...prev, [`${id}-${type}`]: quantity }));
@@ -57,40 +58,73 @@ const Cart = ({ clientId }: { clientId: string }) => {
     setOpenSnackbar(false);
   };
 
+  const handleOpenModal = () => { // Abrir o modal
+    setOpenModal(true);
+  };
+
+  const handleCloseModal = () => { // Fechar o modal
+    setOpenModal(false);
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClosePopover = () => {
+    setAnchorEl(null);
+  };
+
+  const openPopover = Boolean(anchorEl);
+  const popoverId = openPopover ? 'simple-popover' : undefined;
+
   const cadastro: Cadastro = cadastroData.Cadastro[0];
+
+  const handleEnviarPedido = () => {
+    // Lógica para enviar o pedido aqui
+    console.log("Pedido enviado com sucesso!");
+    setOpenModal(false); // Fechar o modal após o envio do pedido
+  };
 
   return (
     <Box sx={{ paddingBottom: '56px', paddingTop: '20px', backgroundColor: '#f5f5f5' }}>
       <Container>
-      
-      <Typography style={{textAlign:'right'}}>
+        {/* Alteração - Botão Cadastro */}
+        <Typography style={{ textAlign: 'right' }}>
+          <Button aria-describedby={popoverId} variant="contained" color="primary" onClick={handleClick}>
             Cadastro
-          
-      </Typography>
-      <Box sx={{ textAlign: 'right', marginBottom: '20px' }}>
-          <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
-          <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
-          <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
-          <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
-          <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
-          <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
-        </Box>
-      
-      
-      
-      <StyledTypography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
+          </Button>
+          <Popover
+            id={popoverId}
+            open={openPopover}
+            anchorEl={anchorEl}
+            onClose={handleClosePopover}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
             }}
           >
+            <Typography sx={{ p: 2 }}>
+                <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
+                <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
+                <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
+                <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
+                <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
+                <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+            </Typography>
+          </Popover>
+        </Typography>
+        
+        <StyledTypography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontWeight: 'bold',
+            color: 'purple',
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)',
+          }}
+        >
           Carrinho {clientId}
         </StyledTypography>
-
-        
 
         <Typography variant="h6" gutterBottom style={{ textAlign: 'center', marginBottom: '40px' }}>
           Bem-vindo ao seu carrinho de compras! Revise seus itens e finalize sua compra.
@@ -163,12 +197,11 @@ const Cart = ({ clientId }: { clientId: string }) => {
               size="large"
               variant="contained"
               color="warning"
-              //onClick={}
+              onClick={handleOpenModal}
               style={{marginLeft:'20px', marginBottom: '10px', marginTop:'10px', backgroundColor:'purple'}}
             >
               Finalizar Pedido
           </CustomButton>
-
         </Typography>
         <BottomNav clientId={clientId} />
         <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={handleCloseSnackbar}>
@@ -176,6 +209,56 @@ const Cart = ({ clientId }: { clientId: string }) => {
             Item removido do carrinho!
           </Alert>
         </Snackbar>
+
+        <Modal
+          open={openModal}
+          onClose={handleCloseModal}
+          aria-labelledby="modal-title"
+          aria-describedby="modal-description"
+        >
+
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 400,
+              bgcolor: 'background.paper',
+              border: '2px solid #000',
+              boxShadow: 24,
+              p: 4,
+            }}
+          >
+            <Typography id="modal-title" variant="h6" component="h2">
+              Bom dia!
+            </Typography>
+            <Typography id="modal-description" sx={{ mt: 2 }}>
+              Este é o seu modal de finalização de pedido.
+              <Box sx={{ textAlign: 'right', marginBottom: '20px' }}>
+                <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
+                <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
+                <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
+                <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
+                <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
+                <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+              </Box>
+            </Typography>
+            <CustomButton
+              size="small"
+              variant="contained"
+              color="warning"
+              sx={{ marginRight: '20px' }}
+              onClick={handleCloseModal}
+            >
+              Fechar
+            </CustomButton>
+            <Button variant="contained" color="secondary" sx={{ backgroundColor: 'purple' }} onClick={handleEnviarPedido}>
+              Enviar Pedido
+            </Button>
+            
+          </Box>
+        </Modal>
       </Container>
     </Box>
   );
@@ -207,14 +290,14 @@ export const getStaticProps: GetStaticProps = async (context) => {
   return {
     props: {
       clientId,
-       initialCartItems: data.cartItems || [],
+      initialCartItems: data.cartItems || [],
     },
   };
 };
 
 export const getStaticPaths: GetStaticPaths = async () => {
   const fs = require('fs');
- const paths = fs.readdirSync('./data').map((file: string) => ({
+  const paths = fs.readdirSync('./data').map((file: string) => ({
     params: {
       clientId: file.replace('.json', ''),
     },
