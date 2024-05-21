@@ -1,6 +1,6 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover } from '@mui/material'; // Import Popover
+import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover, TextField } from '@mui/material'; // Import Popover e TextField
 import BottomNav from '@/components/BottomNav';
 import { useState } from 'react';
 import { styled } from '@mui/system';
@@ -25,13 +25,14 @@ const StyledTypography = styled(Typography)({
   marginBottom: '20px',
 });
 
-interface Cadastro { // Alteração
+interface Cadastro {
   Nome: string;
   CPF: string;
   Endereço: string;
   Numero: string;
   Complemento: string;
   Email: string;
+  Telefone: string;
 }
 
 const Cart = ({ clientId }: { clientId: string }) => {
@@ -40,6 +41,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [openModal, setOpenModal] = useState(false); // Abrir o Modal
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null); // Estado para Popover
+  const [cadastro, setCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]);
 
   const handleQuantityChange = (id: number, type: 'menu' | 'promotion', quantity: number) => {
     setSelectedQuantities((prev) => ({ ...prev, [`${id}-${type}`]: quantity }));
@@ -58,11 +60,11 @@ const Cart = ({ clientId }: { clientId: string }) => {
     setOpenSnackbar(false);
   };
 
-  const handleOpenModal = () => { // Abrir o modal
+  const handleOpenModal = () => {
     setOpenModal(true);
   };
 
-  const handleCloseModal = () => { // Fechar o modal
+  const handleCloseModal = () => {
     setOpenModal(false);
   };
 
@@ -77,12 +79,14 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const openPopover = Boolean(anchorEl);
   const popoverId = openPopover ? 'simple-popover' : undefined;
 
-  const cadastro: Cadastro = cadastroData.Cadastro[0];
-
   const handleEnviarPedido = () => {
     // Lógica para enviar o pedido aqui
     console.log("Pedido enviado com sucesso!");
     setOpenModal(false); // Fechar o modal após o envio do pedido
+  };
+
+  const handleChangeCadastro = (field: string, value: string) => {
+    setCadastro((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -103,14 +107,15 @@ const Cart = ({ clientId }: { clientId: string }) => {
               horizontal: 'left',
             }}
           >
-            <Typography sx={{ p: 2 }}>
-                <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
-                <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
-                <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
-                <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
-                <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
-                <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
-            </Typography>
+            <Box sx={{ p: 2 }}>
+              <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
+              <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
+              <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
+              <Typography variant="body2"><strong>Telefone:</strong> {cadastro.Telefone}</Typography>
+              <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
+              <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
+              <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+            </Box>
           </Popover>
         </Typography>
         
@@ -216,7 +221,6 @@ const Cart = ({ clientId }: { clientId: string }) => {
           aria-labelledby="modal-title"
           aria-describedby="modal-description"
         >
-
           <Box
             sx={{
               position: 'absolute',
@@ -231,31 +235,60 @@ const Cart = ({ clientId }: { clientId: string }) => {
             }}
           >
             <Typography id="modal-title" variant="h6" component="h2">
-              Bom dia!
+              Finaliando Pedido
             </Typography>
             <Typography id="modal-description" sx={{ mt: 2 }}>
-              Este é o seu modal de finalização de pedido.
-              <Box sx={{ textAlign: 'right', marginBottom: '20px' }}>
-                <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
-                <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
-                <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
-                <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
-                <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
-                <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+              Confirme seu endereço:
+              <Box sx={{ marginBottom: '20px' }}>
+                <TextField
+                  label="Endereço"
+                  fullWidth
+                  margin="normal"
+                  value={cadastro.Endereço}
+                  onChange={(e) => handleChangeCadastro('Endereço', e.target.value)}
+                />
+                <TextField
+                  label="Número"
+                  fullWidth
+                  margin="normal"
+                  value={cadastro.Numero}
+                  onChange={(e) => handleChangeCadastro('Numero', e.target.value)}
+                />
+                <TextField
+                  label="Complemento"
+                  fullWidth
+                  margin="normal"
+                  value={cadastro.Complemento}
+                  onChange={(e) => handleChangeCadastro('Complemento', e.target.value)}
+                />
+                <TextField
+                  label="Telefone"
+                  fullWidth
+                  margin="normal"
+                  value={cadastro.Telefone}
+                  onChange={(e) => handleChangeCadastro('Telefone', e.target.value)}
+                />
               </Box>
             </Typography>
-            <CustomButton
-              size="small"
-              variant="contained"
-              color="warning"
-              sx={{ marginRight: '20px' }}
-              onClick={handleCloseModal}
-            >
-              Fechar
-            </CustomButton>
-            <Button variant="contained" color="secondary" sx={{ backgroundColor: 'purple' }} onClick={handleEnviarPedido}>
-              Enviar Pedido
-            </Button>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '20px', width: '100%' }}>
+              <Button
+                variant="contained"
+                color="warning"
+                sx={{ marginRight: '15px', width: '150px', height: '40px' }} // Margem direita para manter 30px de distância total
+                onClick={handleCloseModal}
+              >
+                Fechar
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={{ backgroundColor: 'purple', marginLeft: '15px', width: '150px', height: '40px' }} // Margem esquerda para manter 30px de distância total
+                onClick={handleEnviarPedido}
+              >
+                Enviar Pedido
+              </Button>
+            </Box>
             
           </Box>
         </Modal>
