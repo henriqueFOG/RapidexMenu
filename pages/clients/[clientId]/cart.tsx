@@ -42,6 +42,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const [openModal, setOpenModal] = useState(false); // Abrir o Modal
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null); // Estado para Popover
   const [cadastro, setCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]);
+  const [tempCadastro, setTempCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]); // Estado temporário para edição
 
   const handleQuantityChange = (id: number, type: 'menu' | 'promotion', quantity: number) => {
     setSelectedQuantities((prev) => ({ ...prev, [`${id}-${type}`]: quantity }));
@@ -70,6 +71,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
+    setTempCadastro(cadastro); // Copiar dados atuais para o estado temporário ao abrir o Popover
   };
 
   const handleClosePopover = () => {
@@ -86,7 +88,12 @@ const Cart = ({ clientId }: { clientId: string }) => {
   };
 
   const handleChangeCadastro = (field: string, value: string) => {
-    setCadastro((prev) => ({ ...prev, [field]: value }));
+    setTempCadastro((prev) => ({ ...prev, [field]: value })); // Atualizar estado temporário
+  };
+
+  const handleSalvarCadastro = () => {
+    setCadastro(tempCadastro); // Aplicar mudanças ao estado principal
+    setAnchorEl(null); // Fechar o Popover
   };
 
   return (
@@ -107,14 +114,46 @@ const Cart = ({ clientId }: { clientId: string }) => {
               horizontal: 'left',
             }}
           >
-            <Box sx={{ p: 2 }}>
-              <Typography variant="body2"><strong>Nome:</strong> {cadastro.Nome}</Typography>
-              <Typography variant="body2"><strong>CPF:</strong> {cadastro.CPF}</Typography>
-              <Typography variant="body2"><strong>Email:</strong> {cadastro.Email}</Typography>
-              <Typography variant="body2"><strong>Telefone:</strong> {cadastro.Telefone}</Typography>
-              <Typography variant="body2"><strong>Endereço:</strong> {cadastro.Endereço}</Typography>
-              <Typography variant="body2"><strong>Número:</strong> {cadastro.Numero}</Typography>
-              <Typography variant="body2"><strong>Complemento:</strong> {cadastro.Complemento}</Typography>
+            <Box sx={{ p: 2, width: '300px' }}>
+              <Typography variant="body2"><strong>Nome:</strong> {tempCadastro.Nome}</Typography>
+              <Typography variant="body2"><strong>CPF:</strong> {tempCadastro.CPF}</Typography>
+              <Typography variant="body2"><strong>Email:</strong> {tempCadastro.Email}</Typography>
+              <TextField
+                label="Telefone"
+                fullWidth
+                margin="normal"
+                value={tempCadastro.Telefone}
+                onChange={(e) => handleChangeCadastro('Telefone', e.target.value)}
+              />
+              <TextField
+                label="Endereço"
+                fullWidth
+                margin="normal"
+                value={tempCadastro.Endereço}
+                onChange={(e) => handleChangeCadastro('Endereço', e.target.value)}
+              />
+              <TextField
+                label="Número"
+                fullWidth
+                margin="normal"
+                value={tempCadastro.Numero}
+                onChange={(e) => handleChangeCadastro('Numero', e.target.value)}
+              />
+              <TextField
+                label="Complemento"
+                fullWidth
+                margin="normal"
+                value={tempCadastro.Complemento}
+                onChange={(e) => handleChangeCadastro('Complemento', e.target.value)}
+              />
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleSalvarCadastro}
+                sx={{ mt: 2 }}
+              >
+                Salvar
+              </Button>
             </Box>
           </Popover>
         </Typography>
@@ -201,20 +240,23 @@ const Cart = ({ clientId }: { clientId: string }) => {
           <CustomButton
               size="large"
               variant="contained"
-              color="warning"
+              color="secondary"
+              sx={{ backgroundColor: 'purple', marginLeft: '30px' }}
               onClick={handleOpenModal}
-              style={{marginLeft:'20px', marginBottom: '10px', marginTop:'10px', backgroundColor:'purple'}}
             >
               Finalizar Pedido
-          </CustomButton>
+            </CustomButton>
         </Typography>
+        
         <BottomNav clientId={clientId} />
+
         <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={handleCloseSnackbar}>
           <Alert onClose={handleCloseSnackbar} severity="success" sx={{ width: '100%' }}>
-            Item removido do carrinho!
+            Item removido com sucesso!
           </Alert>
         </Snackbar>
 
+        {/* Modal para Finalizar Pedido */}
         <Modal
           open={openModal}
           onClose={handleCloseModal}
@@ -235,7 +277,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
             }}
           >
             <Typography id="modal-title" variant="h6" component="h2">
-              Finaliando Pedido
+              Finalizando Pedido
             </Typography>
             <Typography id="modal-description" sx={{ mt: 2 }}>
               Confirme seu endereço:
@@ -341,5 +383,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
     fallback: false,
   };
 };
+
+
 
 export default Cart;
