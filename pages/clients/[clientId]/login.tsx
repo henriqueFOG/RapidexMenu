@@ -59,6 +59,7 @@ const ClientLogin = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [userExists, setUserExists] = useState(false);
 
   const [formData, setFormData] = useState({
     usuario: '',
@@ -88,16 +89,28 @@ const ClientLogin = () => {
     setModalOpen(false);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
       [name]: value,
     }));
+
+    if (name === 'usuario') {
+      try {
+        const response = await axios.post(`/api/clients/${clientId}/checkUser`, { usuario: value });
+        setUserExists(response.data.exists);
+      } catch (error) {
+        console.error('Error checking user:', error);
+      }
+    }
   };
 
   const handleFormSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (userExists) {
+      return; // Se o usuário já existir, não continua com o cadastro
+    }
     try {
       const response = await axios.post(`/api/clients/${clientId}/register`, formData);
       console.log('User registered:', response.data);
@@ -176,6 +189,11 @@ const ClientLogin = () => {
                 variant="outlined"
                 required
               />
+              {userExists && (
+                <Typography variant="body2" color="error">
+                  Usuário não disponível
+                </Typography>
+              )}
               <CustomTextField
                 label="Senha"
                 type="password"
