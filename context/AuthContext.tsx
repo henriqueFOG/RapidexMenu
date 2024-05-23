@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useRouter } from 'next/router';
+import cadastroData from '../data/Cadastro.json'; // Importando os dados do JSON
+
+interface User {
+  id: number;
+  usuario: string;
+  password: string;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -24,7 +31,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
 
   const login = (clientId: string, username: string, password: string) => {
-    if (username === 'admin' && password === 'password') {
+    // Procurar usuário no JSON
+    const user: User | undefined = cadastroData.Cadastro.find((user: User) => user.usuario === username);
+
+    // Verificar se o usuário foi encontrado e se a senha está correta
+    if (user && user.password === password) {
       setIsAuthenticated(true);
       setClientId(clientId);
       if (router.pathname.includes('/admin')) {

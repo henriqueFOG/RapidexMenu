@@ -281,36 +281,40 @@ const Cart = ({ clientId }: { clientId: string }) => {
             </Typography>
             <Typography id="modal-description" sx={{ mt: 2 }}>
               Confirme seu endereço:
+
               <Box sx={{ marginBottom: '20px' }}>
                 <TextField
                   label="Endereço"
                   fullWidth
                   margin="normal"
-                  value={cadastro.Endereço}
+                  value={tempCadastro.Endereço}
                   onChange={(e) => handleChangeCadastro('Endereço', e.target.value)}
                 />
                 <TextField
                   label="Número"
                   fullWidth
                   margin="normal"
-                  value={cadastro.Numero}
+                  value={tempCadastro.Numero}
                   onChange={(e) => handleChangeCadastro('Numero', e.target.value)}
                 />
                 <TextField
                   label="Complemento"
                   fullWidth
                   margin="normal"
-                  value={cadastro.Complemento}
+                  value={tempCadastro.Complemento}
                   onChange={(e) => handleChangeCadastro('Complemento', e.target.value)}
                 />
                 <TextField
                   label="Telefone"
                   fullWidth
                   margin="normal"
-                  value={cadastro.Telefone}
+                  value={tempCadastro.Telefone}
                   onChange={(e) => handleChangeCadastro('Telefone', e.target.value)}
                 />
               </Box>
+
+              
+
             </Typography>
             
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '20px', width: '100%' }}>
