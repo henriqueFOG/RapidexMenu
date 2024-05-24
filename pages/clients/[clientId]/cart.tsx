@@ -1,10 +1,14 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
+import { useRouter } from 'next/router';// Importe useRouter para redirecionament
 import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover, TextField } from '@mui/material'; // Import Popover e TextField
 import BottomNav from '@/components/BottomNav';
 import { useState } from 'react';
 import { styled } from '@mui/system';
 import cadastroData from '../../../data/Cadastro.json';
+import { useAuth } from '@/context/AuthContext'; // Importe o contexto de autenticação
+import React, { useEffect } from 'react';
+
 
 const CustomCard = styled(Card)({
   minWidth: 275,
@@ -38,12 +42,23 @@ interface Cadastro {
 const Cart = ({ clientId }: { clientId: string }) => {
   const { cart, removeFromCart } = useCart();
   const [selectedQuantities, setSelectedQuantities] = useState<{ [key: string]: number }>({});
+  const { isAuthenticated } = useAuth(); // Use o contexto de autenticação
+  const router = useRouter(); // Use useRouter para redirecionamento
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [openModal, setOpenModal] = useState(false); // Abrir o Modal
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null); // Estado para Popover
   const [cadastro, setCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]);
   const [tempCadastro, setTempCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]); // Estado temporário para edição
 
+  // Verificar se o usuário está autenticado
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Redirecionar para a tela de login se não estiver autenticado
+      router.push(`/clients/${clientId}/login`);
+    }
+  }, [isAuthenticated, router, clientId]);
+  
+  
   const handleQuantityChange = (id: number, type: 'menu' | 'promotion', quantity: number) => {
     setSelectedQuantities((prev) => ({ ...prev, [`${id}-${type}`]: quantity }));
   };

@@ -28,13 +28,25 @@
       "id": 3,
       "usuario": "Pedro",
       "password": "Pedro",
-      "nome": "Pedro",
-      "cpf": "Pedro",
-      "telefone": "Pedro",
-      "email": "Pedro@gmail.com",
-      "endereco": "Pedro",
-      "numero": "Pedro",
-      "complemento": "Pedro"
+      "Nome": "Pedro",
+      "CPF": "Pedro",
+      "Telefone": "Pedro",
+      "Email": "Pedro@gmail.com",
+      "Endereço": "Pedro",
+      "Numero": "Pedro",
+      "Complemento": "Pedro"
+    },
+    {
+      "id": 4,
+      "usuario": "Renata",
+      "password": "Renata",
+      "nome": "Renata",
+      "cpf": "Renata",
+      "telefone": "Renata",
+      "email": "Renata@gmail.com",
+      "endereco": "Renata",
+      "numero": "Renata",
+      "complemento": "Renata"
     }
   ]
 }

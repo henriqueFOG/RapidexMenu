@@ -11,6 +11,7 @@ interface User {
 interface AuthContextType {
   isAuthenticated: boolean;
   clientId: string | null;
+  loggedUser: User | null;
   login: (clientId: string, username: string, password: string) => void;
   logout: () => void;
 }
@@ -28,6 +29,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [loggedUser, setLoggedUser] = useState<User | null>(null);
   const router = useRouter();
 
   const login = (clientId: string, username: string, password: string) => {
@@ -38,6 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (user && user.password === password) {
       setIsAuthenticated(true);
       setClientId(clientId);
+      setLoggedUser(user);
       if (router.pathname.includes('/admin')) {
         router.push(`/clients/${clientId}/admin`);
       } else {
@@ -51,11 +54,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setIsAuthenticated(false);
     setClientId(null);
+    setLoggedUser(null);
     router.push('/');
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, clientId, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, clientId, loggedUser, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
