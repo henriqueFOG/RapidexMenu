@@ -1,11 +1,13 @@
+import React, { useState, useEffect } from 'react';
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
+import { useRouter } from 'next/router'; // Importe useRouter para redirecionamento
 import { Box, Button, Card, CardActions, CardContent, CardMedia, Container, Grid, Typography, Snackbar, Alert, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { PromotionItem } from '@/mockData';
-import { useState } from 'react';
 import path from 'path';
 import fs from 'fs/promises';
+import { useAuth } from '@/context/AuthContext'; // Importe o contexto de autenticação
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -21,6 +23,8 @@ interface PromotionProps {
 
 const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth(); // Use o contexto de autenticação
+  const router = useRouter(); // Use useRouter para redirecionamento
   const [open, setOpen] = useState(false);
 
   const handleAddToCart = (item: PromotionItem) => {
@@ -39,8 +43,16 @@ const Promotion: React.FC<PromotionProps> = ({ clientId, promotionItems }) => {
     setOpen(false);
   };
 
+  // Verificar se o usuário está autenticado
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Redirecionar para a tela de login se não estiver autenticado
+      router.push(`/clients/${clientId}/login`);
+    }
+  }, [isAuthenticated, router, clientId]);
+
   return (
-    <Box sx={{ paddingBottom: '56px' }}> {/* Adicione paddingBottom */}
+    <Box sx={{ paddingBottom: '56px' }}>
       <Container>
         <StyledTypography 
           variant="h4" 

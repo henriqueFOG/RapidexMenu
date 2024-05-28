@@ -7,7 +7,7 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { useRouter } from 'next/router';
 
 interface BottomNavProps {
-  clientId: string;
+  clientId: string | null;
 }
 
 const BottomNav: React.FC<BottomNavProps> = ({ clientId }) => {

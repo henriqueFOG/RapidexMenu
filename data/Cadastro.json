@@ -1,0 +1,64 @@
+{
+  "Cadastro": [
+    {
+      "id": 1,
+      "usuario": "Juvenal01",
+      "password": "jovemagora",
+      "Nome": "Juvenal",
+      "CPF": "12312312345",
+      "Telefone": "24 97689-3456",
+      "Email": "jovemnow@hotmai.com",
+      "Endereço": "Morro dos Milionários",
+      "Numero": "345",
+      "Complemento": "Lote 4 Casa Amarela"
+    },
+    {
+      "id": 2,
+      "usuario": "Majoca",
+      "password": "Majoca",
+      "Nome": "Maria Joaquina",
+      "CPF": "23245467689",
+      "Telefone": "24 98976-9878",
+      "Email": "majoca@gmail.com",
+      "Endereço": "Rua 16 de Março",
+      "Numero": "1010",
+      "Complemento": "Prédio Banerj, apto 603"
+    },
+    {
+      "id": 3,
+      "usuario": "Pedro",
+      "password": "Pedro",
+      "Nome": "Pedro",
+      "CPF": "Pedro",
+      "Telefone": "Pedro",
+      "Email": "Pedro@gmail.com",
+      "Endereço": "Pedro",
+      "Numero": "Pedro",
+      "Complemento": "Pedro"
+    },
+    {
+      "id": 4,
+      "usuario": "Renata",
+      "password": "Renata",
+      "Nome": "Renata",
+      "CPF": "Renata",
+      "Telefone": "Renata",
+      "Email": "Renata@gmail.com",
+      "Endereço": "Renata",
+      "Numero": "Renata",
+      "Complemento": "825"
+    },
+    {
+      "id": 5,
+      "usuario": "Henrique",
+      "password": "123",
+      "nome": "Henrique",
+      "cpf": "65957869469",
+      "telefone": "24995896598",
+      "email": "henrique@pedro",
+      "endereco": "em algum lugar ",
+      "numero": "855",
+      "complemento": "apt 1"
+    }
+  ]
+}

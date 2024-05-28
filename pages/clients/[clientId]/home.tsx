@@ -1,7 +1,9 @@
 import { Container, Typography, Box, Grid, Paper, Button, styled } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
 import { GetServerSideProps } from 'next';
-
+import { useAuth } from '@/context/AuthContext';
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 const StyledTypography = styled(Typography)({
   fontWeight: 'bold',
@@ -15,20 +17,39 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ clientId }) => {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push(`/clients/${clientId}/login`);
+    }
+  }, [isAuthenticated, router, clientId]);
+
+  if (!isAuthenticated) {
+    // Retorna null ou um spinner enquanto redireciona
+    return null;
+  }
+
   return (
     <Box sx={{ paddingBottom: '56px' }}>
       <Container>
-      <StyledTypography
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 'bold', 
-              color: 'purple', 
-              textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' 
-            }}
-          >
-            Bem-vindo ao {clientId}
-          </StyledTypography>
+        <StyledTypography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontWeight: 'bold',
+            color: 'purple',
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          Bem-vindo ao {clientId}
+        </StyledTypography>
+
+        {/* Mensagem de autenticação */}
+        <Typography variant="h6" gutterBottom>
+          {isAuthenticated ? "Login realizado" : "Falta fazer login"}
+        </Typography>
 
         {/* Banners */}
         <Grid container spacing={2} sx={{ marginBottom: '20px' }}>
