@@ -1,14 +1,24 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useCart } from '@/context/CartContext';
-import { useRouter } from 'next/router';// Importe useRouter para redirecionament
-import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover, TextField } from '@mui/material'; // Import Popover e TextField
+import { useRouter } from 'next/router';
+import { Button, Card, CardContent, CardMedia, Typography, Container, Grid, MenuItem, Select, FormControl, Box, Snackbar, Alert, Modal, Popover, TextField } from '@mui/material';
 import BottomNav from '@/components/BottomNav';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { styled } from '@mui/system';
-import cadastroData from '../../../data/Cadastro.json';
-import { useAuth } from '@/context/AuthContext'; // Importe o contexto de autenticação
-import React, { useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
+interface Cadastro {
+  id: number;
+  usuario: string;
+  password: string;
+  Nome?: string;
+  CPF?: string;
+  Telefone?: string;
+  Email?: string;
+  Endereço?: string;
+  Numero?: string;
+  Complemento?: string;
+}
 
 const CustomCard = styled(Card)({
   minWidth: 275,
@@ -29,36 +39,30 @@ const StyledTypography = styled(Typography)({
   marginBottom: '20px',
 });
 
-interface Cadastro {
-  Nome: string;
-  CPF: string;
-  Endereço: string;
-  Numero: string;
-  Complemento: string;
-  Email: string;
-  Telefone: string;
-}
-
 const Cart = ({ clientId }: { clientId: string }) => {
   const { cart, removeFromCart } = useCart();
+  const { isAuthenticated, loggedUser } = useAuth();
+  const router = useRouter();
   const [selectedQuantities, setSelectedQuantities] = useState<{ [key: string]: number }>({});
-  const { isAuthenticated } = useAuth(); // Use o contexto de autenticação
-  const router = useRouter(); // Use useRouter para redirecionamento
   const [openSnackbar, setOpenSnackbar] = useState(false);
-  const [openModal, setOpenModal] = useState(false); // Abrir o Modal
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null); // Estado para Popover
-  const [cadastro, setCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]);
-  const [tempCadastro, setTempCadastro] = useState<Cadastro>(cadastroData.Cadastro[0]); // Estado temporário para edição
+  const [openModal, setOpenModal] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [cadastro, setCadastro] = useState<Cadastro | null>(loggedUser || null);
+  const [tempCadastro, setTempCadastro] = useState<Cadastro | null>(loggedUser || null);
 
-  // Verificar se o usuário está autenticado
   useEffect(() => {
     if (!isAuthenticated) {
-      // Redirecionar para a tela de login se não estiver autenticado
       router.push(`/clients/${clientId}/login`);
     }
   }, [isAuthenticated, router, clientId]);
-  
-  
+
+  useEffect(() => {
+    if (loggedUser) {
+      setCadastro(loggedUser);
+      setTempCadastro(loggedUser);
+    }
+  }, [loggedUser]);
+
   const handleQuantityChange = (id: number, type: 'menu' | 'promotion', quantity: number) => {
     setSelectedQuantities((prev) => ({ ...prev, [`${id}-${type}`]: quantity }));
   };
@@ -86,7 +90,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
-    setTempCadastro(cadastro); // Copiar dados atuais para o estado temporário ao abrir o Popover
+    setTempCadastro(cadastro);
   };
 
   const handleClosePopover = () => {
@@ -97,24 +101,26 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const popoverId = openPopover ? 'simple-popover' : undefined;
 
   const handleEnviarPedido = () => {
-    // Lógica para enviar o pedido aqui
     console.log("Pedido enviado com sucesso!");
-    setOpenModal(false); // Fechar o modal após o envio do pedido
+    setOpenModal(false);
   };
 
   const handleChangeCadastro = (field: string, value: string) => {
-    setTempCadastro((prev) => ({ ...prev, [field]: value })); // Atualizar estado temporário
+    setTempCadastro((prev) => prev ? { ...prev, [field]: value } : null);
   };
 
   const handleSalvarCadastro = () => {
-    setCadastro(tempCadastro); // Aplicar mudanças ao estado principal
-    setAnchorEl(null); // Fechar o Popover
+    setCadastro(tempCadastro);
+    setAnchorEl(null);
   };
+
+  if (!cadastro) {
+    return <div>Carregando...</div>;
+  }
 
   return (
     <Box sx={{ paddingBottom: '56px', paddingTop: '20px', backgroundColor: '#f5f5f5' }}>
       <Container>
-        {/* Alteração - Botão Cadastro */}
         <Typography style={{ textAlign: 'right' }}>
           <Button aria-describedby={popoverId} variant="contained" color="primary" onClick={handleClick}>
             Cadastro
@@ -130,35 +136,35 @@ const Cart = ({ clientId }: { clientId: string }) => {
             }}
           >
             <Box sx={{ p: 2, width: '300px' }}>
-              <Typography variant="body2"><strong>Nome:</strong> {tempCadastro.Nome}</Typography>
-              <Typography variant="body2"><strong>CPF:</strong> {tempCadastro.CPF}</Typography>
-              <Typography variant="body2"><strong>Email:</strong> {tempCadastro.Email}</Typography>
+              {tempCadastro && <Typography variant="body2"><strong>Nome:</strong> {tempCadastro.Nome}</Typography>}
+              {tempCadastro && <Typography variant="body2"><strong>CPF:</strong> {tempCadastro.CPF}</Typography>}
+              {tempCadastro && <Typography variant="body2"><strong>Email:</strong> {tempCadastro.Email}</Typography>}
               <TextField
                 label="Telefone"
                 fullWidth
                 margin="normal"
-                value={tempCadastro.Telefone}
+                value={tempCadastro?.Telefone}
                 onChange={(e) => handleChangeCadastro('Telefone', e.target.value)}
               />
               <TextField
                 label="Endereço"
                 fullWidth
                 margin="normal"
-                value={tempCadastro.Endereço}
+                value={tempCadastro?.Endereço}
                 onChange={(e) => handleChangeCadastro('Endereço', e.target.value)}
               />
               <TextField
                 label="Número"
                 fullWidth
                 margin="normal"
-                value={tempCadastro.Numero}
+                value={tempCadastro?.Numero}
                 onChange={(e) => handleChangeCadastro('Numero', e.target.value)}
               />
               <TextField
                 label="Complemento"
                 fullWidth
                 margin="normal"
-                value={tempCadastro.Complemento}
+                value={tempCadastro?.Complemento}
                 onChange={(e) => handleChangeCadastro('Complemento', e.target.value)}
               />
               <Button
@@ -271,7 +277,6 @@ const Cart = ({ clientId }: { clientId: string }) => {
           </Alert>
         </Snackbar>
 
-        {/* Modal para Finalizar Pedido */}
         <Modal
           open={openModal}
           onClose={handleCloseModal}
@@ -302,33 +307,31 @@ const Cart = ({ clientId }: { clientId: string }) => {
                   label="Endereço"
                   fullWidth
                   margin="normal"
-                  value={tempCadastro.Endereço}
+                  value={tempCadastro?.Endereço}
                   onChange={(e) => handleChangeCadastro('Endereço', e.target.value)}
                 />
                 <TextField
                   label="Número"
                   fullWidth
                   margin="normal"
-                  value={tempCadastro.Numero}
+                  value={tempCadastro?.Numero}
                   onChange={(e) => handleChangeCadastro('Numero', e.target.value)}
                 />
                 <TextField
                   label="Complemento"
                   fullWidth
                   margin="normal"
-                  value={tempCadastro.Complemento}
+                  value={tempCadastro?.Complemento}
                   onChange={(e) => handleChangeCadastro('Complemento', e.target.value)}
                 />
                 <TextField
                   label="Telefone"
                   fullWidth
                   margin="normal"
-                  value={tempCadastro.Telefone}
+                  value={tempCadastro?.Telefone}
                   onChange={(e) => handleChangeCadastro('Telefone', e.target.value)}
                 />
               </Box>
-
-              
 
             </Typography>
             
@@ -336,7 +339,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
               <Button
                 variant="contained"
                 color="warning"
-                sx={{ marginRight: '15px', width: '150px', height: '40px' }} // Margem direita para manter 30px de distância total
+                sx={{ marginRight: '15px', width: '150px', height: '40px' }}
                 onClick={handleCloseModal}
               >
                 Fechar
@@ -344,7 +347,7 @@ const Cart = ({ clientId }: { clientId: string }) => {
               <Button
                 variant="contained"
                 color="secondary"
-                sx={{ backgroundColor: 'purple', marginLeft: '15px', width: '150px', height: '40px' }} // Margem esquerda para manter 30px de distância total
+                sx={{ backgroundColor: 'purple', marginLeft: '15px', width: '150px', height: '40px' }}
                 onClick={handleEnviarPedido}
               >
                 Enviar Pedido
@@ -402,7 +405,5 @@ export const getStaticPaths: GetStaticPaths = async () => {
     fallback: false,
   };
 };
-
-
 
 export default Cart;

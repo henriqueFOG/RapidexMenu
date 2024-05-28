@@ -1,17 +1,37 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import cadastroData from '../data/Cadastro.json'; // Importando os dados do JSON
+import cadastroData from '../data/Cadastro.json';
 
-interface User {
+interface Cadastro {
   id: number;
   usuario: string;
   password: string;
+  Nome?: string;
+  CPF?: string;
+  Telefone?: string;
+  Email?: string;
+  Endereço?: string;
+  Numero?: string;
+  Complemento?: string;
 }
+
+const normalizeCadastro = (data: any): Cadastro => ({
+  id: data.id,
+  usuario: data.usuario,
+  password: data.password,
+  Nome: data.Nome || data.nome,
+  CPF: data.CPF || data.cpf,
+  Telefone: data.Telefone || data.telefone,
+  Email: data.Email || data.email,
+  Endereço: data.Endereço || data.endereco,
+  Numero: data.Numero || data.numero,
+  Complemento: data.Complemento || data.complemento,
+});
 
 interface AuthContextType {
   isAuthenticated: boolean;
   clientId: string | null;
-  loggedUser: User | null;
+  loggedUser: Cadastro | null;
   login: (clientId: string, username: string, password: string) => void;
   logout: () => void;
 }
@@ -29,18 +49,16 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
-  const [loggedUser, setLoggedUser] = useState<User | null>(null);
+  const [loggedUser, setLoggedUser] = useState<Cadastro | null>(null);
   const router = useRouter();
 
   const login = (clientId: string, username: string, password: string) => {
-    // Procurar usuário no JSON
-    const user: User | undefined = cadastroData.Cadastro.find((user: User) => user.usuario === username);
+    const user: Cadastro | undefined = cadastroData.Cadastro.find((user: Cadastro) => user.usuario === username);
 
-    // Verificar se o usuário foi encontrado e se a senha está correta
     if (user && user.password === password) {
       setIsAuthenticated(true);
       setClientId(clientId);
-      setLoggedUser(user);
+      setLoggedUser(normalizeCadastro(user));
       if (router.pathname.includes('/admin')) {
         router.push(`/clients/${clientId}/admin`);
       } else {
