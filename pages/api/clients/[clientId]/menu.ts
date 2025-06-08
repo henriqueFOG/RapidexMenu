@@ -20,7 +20,11 @@ const getMenuItems = (dataPath: string) => {
 };
 
 const saveMenuItems = (dataPath: string, menuItems: any) => {
-  const data = { menuItems };
+  let existingData = {};
+  if (fs.existsSync(dataPath)) {
+    existingData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+  }
+  const data = { ...existingData, menuItems };
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 };
 
@@ -47,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     try {
       const menuItems = getMenuItems(dataPath);
-      res.status(200).json(menuItems);
+      res.status(200).json({ menuItems });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao carregar os itens do menu' });
     }
