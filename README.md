@@ -39,4 +39,12 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/deploym
 
 A new endpoint `/api/clients/[clientId]/orders` allows creation and listing of customer orders. `POST` saves an order in the client's JSON file and `GET` returns all orders.
 
+## Clients API
+
+`GET /api/clients` returns the list of available client IDs based on the JSON files stored in the `data` directory.
+
+## Login API
+
+`POST /api/login` checks credentials sent as `{ usuario, password }` against `Cadastro.json` and returns the user data on success.
+
 

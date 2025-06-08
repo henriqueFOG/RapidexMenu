@@ -13,7 +13,10 @@ const getPromotionItems = (dataPath: string) => {
 };
 
 const savePromotionItems = (dataPath: string, promotionItems: any) => {
-  const data = { promotionItems };
+  const data = fs.existsSync(dataPath)
+    ? JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+    : {};
+  data.promotionItems = promotionItems;
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 };
 
