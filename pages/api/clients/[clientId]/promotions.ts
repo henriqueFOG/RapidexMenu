@@ -13,7 +13,11 @@ const getPromotionItems = (dataPath: string) => {
 };
 
 const savePromotionItems = (dataPath: string, promotionItems: any) => {
-  const data = { promotionItems };
+  let existingData = {};
+  if (fs.existsSync(dataPath)) {
+    existingData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+  }
+  const data = { ...existingData, promotionItems };
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 };
 
@@ -40,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     try {
       const promotionItems = getPromotionItems(dataPath);
-      res.status(200).json(promotionItems);
+      res.status(200).json({ promotionItems });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao carregar os itens de promoção' });
     }
