@@ -40,7 +40,7 @@ const StyledTypography = styled(Typography)({
 });
 
 const Cart = ({ clientId }: { clientId: string }) => {
-  const { cart, removeFromCart } = useCart();
+  const { cart, removeFromCart, clearCart } = useCart();
   const { isAuthenticated, loggedUser } = useAuth();
   const router = useRouter();
   const [selectedQuantities, setSelectedQuantities] = useState<{ [key: string]: number }>({});
@@ -100,9 +100,30 @@ const Cart = ({ clientId }: { clientId: string }) => {
   const openPopover = Boolean(anchorEl);
   const popoverId = openPopover ? 'simple-popover' : undefined;
 
-  const handleEnviarPedido = () => {
-    console.log("Pedido enviado com sucesso!");
-    setOpenModal(false);
+  const handleEnviarPedido = async () => {
+    const order = {
+      customer: tempCadastro,
+      items: cart,
+      total: calculateTotal(),
+    };
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+      });
+
+      if (response.ok) {
+        alert('Pedido enviado com sucesso!');
+        clearCart();
+        setOpenModal(false);
+      } else {
+        alert('Erro ao enviar pedido');
+      }
+    } catch (error) {
+      alert('Erro ao enviar pedido');
+    }
   };
 
   const handleChangeCadastro = (field: string, value: string) => {

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import cadastroData from '../data/Cadastro.json';
 
 interface Cadastro {
   id: number;
@@ -52,20 +51,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loggedUser, setLoggedUser] = useState<Cadastro | null>(null);
   const router = useRouter();
 
-  const login = (clientId: string, username: string, password: string) => {
-    const user: Cadastro | undefined = cadastroData.Cadastro.find((user: Cadastro) => user.usuario === username);
+  const login = async (client: string, username: string, password: string) => {
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: username, password }),
+      });
 
-    if (user && user.password === password) {
-      setIsAuthenticated(true);
-      setClientId(clientId);
-      setLoggedUser(normalizeCadastro(user));
-      if (router.pathname.includes('/admin')) {
-        router.push(`/clients/${clientId}/admin`);
-      } else {
-        router.push(`/clients/${clientId}/home`);
+      if (!res.ok) {
+        alert('Invalid credentials');
+        return;
       }
-    } else {
-      alert('Invalid credentials');
+
+      const data = await res.json();
+      setIsAuthenticated(true);
+      setClientId(client);
+      setLoggedUser(normalizeCadastro(data.user));
+      if (router.pathname.includes('/admin')) {
+        router.push(`/clients/${client}/admin`);
+      } else {
+        router.push(`/clients/${client}/home`);
+      }
+    } catch {
+      alert('Erro ao fazer login');
     }
   };
 

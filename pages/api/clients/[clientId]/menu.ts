@@ -20,7 +20,10 @@ const getMenuItems = (dataPath: string) => {
 };
 
 const saveMenuItems = (dataPath: string, menuItems: any) => {
-  const data = { menuItems };
+  const data = fs.existsSync(dataPath)
+    ? JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+    : {};
+  data.menuItems = menuItems;
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 };
 
