@@ -1,8 +1,16 @@
 import { env } from "cloudflare:workers";
+import { getPostgresDatabase } from "./postgres-d1";
 
 export type RapidexBindings = {
-  DB: D1Database;
+  DB?: D1Database;
   BUCKET?: R2Bucket;
+  DATABASE_URL?: string;
+  POSTGRES_URL?: string;
+  RAPIDEX_ENV?: string;
+  RAPIDEX_AUTH_MODE?: string;
+  RAPIDEX_HMG_OWNER_EMAIL?: string;
+  RAPIDEX_HMG_OWNER_NAME?: string;
+  RAPIDEX_HMG_ACCESS_CODE?: string;
   RAPIDEX_OWNER_EMAIL?: string;
   RAPIDEX_PUBLIC_URL?: string;
   OPENAI_API_KEY?: string;
@@ -23,15 +31,21 @@ export function getBindings(): RapidexBindings {
 }
 
 export function getDatabase(): D1Database {
-  const database = getBindings().DB;
-  if (!database) throw new Error("Binding D1 DB indisponível.");
-  return database;
+  const bindings = getBindings();
+  if (bindings.DB) return bindings.DB;
+
+  const connectionString = bindings.DATABASE_URL || bindings.POSTGRES_URL;
+  if (connectionString) return getPostgresDatabase(connectionString);
+
+  throw new Error("Banco indisponivel. Configure DATABASE_URL para Postgres ou o binding DB para D1.");
 }
 
 export function integrationReadiness() {
   const bindings = getBindings();
   return {
-    database: Boolean(bindings.DB),
+    environment: bindings.RAPIDEX_ENV || "development",
+    database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
+    databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: Boolean(

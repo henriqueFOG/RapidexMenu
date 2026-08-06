@@ -11,12 +11,18 @@
     "build": "bash scripts/build-verified.sh",
     "build:vercel": "RAPIDEX_RUNTIME=vercel next build --webpack",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --experimental-loader ./scripts/cloudflare-validation-loader.mjs --test tests/rendered-html.test.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --import tsx --test tests/postgres-adapter.test.ts",
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "db:postgres:migrate": "node --env-file-if-exists=.env.local scripts/migrate-postgres.mjs",
+    "db:postgres:seed": "node --env-file-if-exists=.env.local --import tsx scripts/seed-postgres.ts",
+    "hmg:setup": "npm run db:postgres:migrate && npm run db:postgres:seed"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "react": "19.2.6",
@@ -36,6 +42,7 @@
     "eslint-config-next": "16.2.6",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
+    "tsx": "^4.20.6",
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",

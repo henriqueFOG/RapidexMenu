@@ -2,14 +2,27 @@
 
 Variáveis abaixo são nomes de configuração. Nunca coloque valores reais em arquivo versionado ou no chat.
 
-## Base
+## Base da HMG (Vercel)
 
 | Variável/binding | Uso |
 |---|---|
-| `DB` | binding Cloudflare D1 |
-| `BUCKET` | binding Cloudflare R2 para fotos públicas |
-| `RAPIDEX_OWNER_EMAIL` | e-mail autorizado a reivindicar a primeira loja |
+| `DATABASE_URL` | conexão privada do PostgreSQL/Neon; nunca é enviada ao navegador |
+| `RAPIDEX_ENV` | usar `homologation` na HMG |
+| `RAPIDEX_AUTH_MODE` | usar `hmg-access-code` na HMG |
+| `RAPIDEX_HMG_OWNER_EMAIL` | e-mail que assume a loja de teste |
+| `RAPIDEX_HMG_OWNER_NAME` | nome exibido no painel |
+| `RAPIDEX_HMG_ACCESS_CODE` | código privado com pelo menos 16 caracteres; armazenar como segredo |
 | `RAPIDEX_PUBLIC_URL` | URL canônica, quando necessária para callback |
+
+O adaptador aceita `POSTGRES_URL` como compatibilidade, mas `DATABASE_URL` é o nome canônico. O schema é aplicado com `npm run db:postgres:migrate` e os dados controlados de HMG com `npm run db:postgres:seed`. Upload de imagens não faz parte do primeiro teste na Vercel; os produtos iniciais usam ilustrações embutidas e o status permanece pendente até a escolha de um armazenamento de objetos.
+
+## Compatibilidade Sites/Cloudflare
+
+| Binding | Uso |
+|---|---|
+| `DB` | Cloudflare D1, quando a aplicação roda no Sites |
+| `BUCKET` | Cloudflare R2 para fotos públicas |
+| `RAPIDEX_OWNER_EMAIL` | proprietário no fluxo Sign in with ChatGPT |
 
 ## OpenAI
 
@@ -38,7 +51,7 @@ Callback:
 https://SEU_DOMINIO/api/webhooks/whatsapp
 ```
 
-Assinar o campo `messages`. Para múltiplos restaurantes, cadastrar `external_phone_id` na tabela `integrations` e manter credenciais em cofre/secret store referenciado, nunca em D1 sem criptografia e gestão de chaves.
+Assinar o campo `messages`. Para múltiplos restaurantes, cadastrar `external_phone_id` na tabela `integrations` e manter credenciais no cofre da hospedagem, nunca no PostgreSQL/D1 sem criptografia e gestão de chaves.
 
 ## Mercado Pago / Pix
 

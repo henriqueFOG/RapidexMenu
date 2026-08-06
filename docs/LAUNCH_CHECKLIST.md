@@ -2,11 +2,11 @@
 
 ## Bloqueadores de produção
 
-- [ ] definir `RAPIDEX_OWNER_EMAIL`;
+- [ ] definir proprietário e autenticação separadamente em HMG e produção;
 - [ ] decidir CNPJ, conta bancária e entidade contratante;
 - [ ] revisar Termos, Privacidade e DPA com jurídico;
 - [ ] configurar domínio próprio e e-mail transacional;
-- [ ] ativar D1/R2 e validar migrações;
+- [ ] ativar PostgreSQL/Neon e Blob, validar migrações e seed de HMG;
 - [ ] configurar backup e restaurar uma cópia de teste;
 - [ ] adicionar chave OpenAI com limite de gasto;
 - [ ] conectar app Meta, número, template e webhook;

@@ -83,9 +83,11 @@ const nextStatus: Record<string, { status: string; label: string } | undefined> 
 export default function AdminClient({
   initialUser,
   signOutHref,
+  environment,
 }: {
   initialUser: { name: string; email: string };
   signOutHref: string;
+  environment: string;
 }) {
   const [section, setSection] = useState<Section>("overview");
   const [data, setData] = useState<Overview | null>(null);
@@ -147,6 +149,7 @@ export default function AdminClient({
         <header className="rm-admin-topbar">
           <button className="rm-mobile-trigger" onClick={() => setMobileNav(!mobileNav)}>☰</button>
           <div>
+            {environment === "homologation" && <span className="rm-hmg-badge">HMG</span>}
             <span className="rm-live"><i /> Dados reais</span>
             <button onClick={refresh} title="Atualizar">↻</button>
             <a className="rm-view-store" href={`/loja/${data?.restaurant.slug || "serra-burger"}`}>Ver loja ↗</a>
