@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786040880127,
+      "tag": "0000_brown_iron_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786040928564,
+      "tag": "0001_tough_captain_flint",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786041335828,
+      "tag": "0002_normal_rhino",
+      "breakpoints": true
+    }
+  ]
+}
