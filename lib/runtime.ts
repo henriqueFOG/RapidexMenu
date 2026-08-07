@@ -16,6 +16,8 @@ export type RapidexBindings = {
   RAPIDEX_OWNER_EMAIL?: string;
   RAPIDEX_PUBLIC_URL?: string;
   RAPIDEX_BILLING_MP_ACCESS_TOKEN?: string;
+  RESEND_API_KEY?: string;
+  RAPIDEX_EMAIL_FROM?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   OPENAI_TRANSCRIBE_MODEL?: string;
@@ -51,6 +53,7 @@ export function integrationReadiness() {
     databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
     nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
     billing: Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
+    email: Boolean(bindings.RESEND_API_KEY && bindings.RAPIDEX_EMAIL_FROM),
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: Boolean(
