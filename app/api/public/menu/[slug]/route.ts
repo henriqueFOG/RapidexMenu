@@ -13,15 +13,19 @@ export async function GET(
     const db = getDatabase();
     await ensureDemoData(db);
     const slug = safeSlug((await params).slug);
+    const now = Date.now();
     const restaurant = await db
       .prepare(
         `SELECT id, slug, name, city, state, phone, whatsapp, delivery_fee_cents,
                 minimum_order_cents, average_prep_minutes, delivery_minutes, is_open, settings_json
          FROM restaurants
-         WHERE slug = ? AND (status = 'active' OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?)))
+         WHERE slug = ? AND (
+           (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
+           OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?))
+         )
          LIMIT 1`,
       )
-      .bind(slug, Date.now())
+      .bind(slug, now, now)
       .first<Record<string, unknown>>();
     if (!restaurant) throw new HttpError(404, "Loja não encontrada ou temporariamente indisponível.", "store_not_found");
 
