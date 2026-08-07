@@ -26,16 +26,7 @@ export default function CalculatorPage() {
     const addedRevenue = upsellRevenue + repeatRevenue;
     const addedContribution = addedRevenue * safeMargin;
     const price = ({ start: 97, growth: 297, scale: 597 } as const)[plan];
-    return {
-      baseRevenue: safeOrders * safeTicket,
-      upsellRevenue,
-      repeatRevenue,
-      addedRevenue,
-      addedContribution,
-      price,
-      roi: price > 0 ? addedContribution / price : 0,
-      netContribution: addedContribution - price,
-    };
+    return { baseRevenue: safeOrders * safeTicket, upsellRevenue, repeatRevenue, addedRevenue, addedContribution, price, roi: price > 0 ? addedContribution / price : 0, netContribution: addedContribution - price };
   }, [orders, ticket, margin, upsellRate, upsellValue, repeatLift, plan]);
 
   return <main className={styles.shell}><section className={styles.card} style={{ maxWidth: 1040 }}>
@@ -58,8 +49,8 @@ export default function CalculatorPage() {
         </div>
       </section>
 
-      <section className={styles.panel} style={{ background: "#171915", color: "white" }}>
-        <small style={{ color: "#c9ff4a", fontWeight: 900, letterSpacing: ".09em" }}>CENÁRIO SIMULADO</small>
+      <section className={styles.panel} style={{ background: "#090909", color: "white", borderColor: "#292929" }}>
+        <small style={{ color: "#ff8a3d", fontWeight: 900, letterSpacing: ".09em" }}>CENÁRIO SIMULADO</small>
         <h2 style={{ fontSize: 28, marginBottom: 6 }}>{money.format(result.addedContribution)} de contribuição adicional</h2>
         <p style={{ opacity: .72, lineHeight: 1.55 }}>após aplicar sua margem informada sobre o ganho estimado de ticket + recompra.</p>
         <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
@@ -71,7 +62,7 @@ export default function CalculatorPage() {
           <Result label="Contribuição após mensalidade" value={money.format(result.netContribution)} strong />
           <Result label="ROI sobre a mensalidade" value={`${result.roi.toFixed(2)}x`} strong />
         </div>
-        <Link href="/cadastro" style={{ display: "block", marginTop: 22, borderRadius: 14, background: "#c9ff4a", color: "#171915", textDecoration: "none", textAlign: "center", padding: 14, fontWeight: 950 }}>Testar por 14 dias →</Link>
+        <Link href="/cadastro" style={{ display: "block", marginTop: 22, borderRadius: 14, background: "#ff650b", color: "white", textDecoration: "none", textAlign: "center", padding: 14, fontWeight: 950 }}>Testar por 14 dias →</Link>
       </section>
     </div>
 
@@ -83,13 +74,10 @@ export default function CalculatorPage() {
         <article className={styles.step}><small>03</small><strong>Prova de ROI</strong><p>Separa vendas totais de receita realmente atribuída às ações do Rapidex.</p></article>
       </div>
     </section>
-
     <p className={styles.note}>Premissas são ajustadas por você e os resultados são apenas uma simulação matemática. O desempenho real depende de demanda, mix de produtos, margem, operação, adesão dos clientes e execução.</p>
   </section></main>;
 }
 
-function NumberField({ label, value, min, max, step, set }: { label: string; value: number; min: number; max: number; step: number; set: (value: number) => void }) {
-  return <label className={styles.field}>{label}<input type="number" min={min} max={max} step={step} value={value} onChange={(event) => set(Number(event.target.value) || 0)} /></label>;
-}
-function Result({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div style={{ display: "flex", justifyContent: "space-between", gap: 18, padding: "9px 0", borderBottom: "1px solid rgba(255,255,255,.1)" }}><span style={{ opacity: .72 }}>{label}</span><b style={{ color: strong ? "#c9ff4a" : "white", fontSize: strong ? 18 : 14 }}>{value}</b></div>; }
+function NumberField({ label, value, min, max, step, set }: { label: string; value: number; min: number; max: number; step: number; set: (value: number) => void }) { return <label className={styles.field}>{label}<input type="number" min={min} max={max} step={step} value={value} onChange={(event) => set(Number(event.target.value) || 0)} /></label>; }
+function Result({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div style={{ display: "flex", justifyContent: "space-between", gap: 18, padding: "9px 0", borderBottom: "1px solid rgba(255,255,255,.1)" }}><span style={{ opacity: .72 }}>{label}</span><b style={{ color: strong ? "#ff8a3d" : "white", fontSize: strong ? 18 : 14 }}>{value}</b></div>; }
 function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min)); }
