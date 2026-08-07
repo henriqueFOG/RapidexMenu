@@ -4,6 +4,8 @@ import { generateSalesReply, transcribeAudio } from "@/lib/integrations/openai";
 import { downloadWhatsAppMedia, sendWhatsAppText } from "@/lib/integrations/whatsapp";
 import { getBindings, getDatabase } from "@/lib/runtime";
 import { sha256Hex, verifyHmacSha256 } from "@/lib/security";
+import { applyWhatsAppOrderFlow, cartContext } from "@/lib/whatsapp-order-flow";
+import { getWhatsAppDraft } from "@/lib/whatsapp-order-draft";
 
 export const dynamic = "force-dynamic";
 
@@ -187,15 +189,23 @@ async function processInboundMessage(
     .run();
   if (conversation.status === "human") return;
 
+  const draft = await getWhatsAppDraft(db, restaurantId, customer.id, conversation.id);
   const [restaurant, productRows, preferences, recentOrders] = await Promise.all([
-    db.prepare("SELECT name FROM restaurants WHERE id = ?").bind(restaurantId).first<{ name: string }>(),
+    db.prepare("SELECT name, slug FROM restaurants WHERE id = ?").bind(restaurantId).first<{ name: string; slug: string }>(),
     db
       .prepare(
         `SELECT id, name, description, price_cents, cost_cents, available
          FROM products WHERE restaurant_id = ? AND active = 1 ORDER BY position`,
       )
       .bind(restaurantId)
-      .all<Record<string, unknown>>(),
+      .all<{
+        id: string;
+        name: string;
+        description: string;
+        price_cents: number;
+        cost_cents: number;
+        available: number;
+      }>(),
     db
       .prepare("SELECT kind, value FROM customer_preferences WHERE customer_id = ?")
       .bind(customer.id)
@@ -208,6 +218,8 @@ async function processInboundMessage(
       .bind(customer.id)
       .all<{ id: string; order_number: number; total_cents: number }>(),
   ]);
+  if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
+
   const orderIds = recentOrders.results.map((order) => order.id);
   const recentItems = orderIds.length
     ? await db
@@ -220,14 +232,14 @@ async function processInboundMessage(
         .all<{ order_id: string; product_name: string }>()
     : { results: [] as Array<{ order_id: string; product_name: string }> };
   const reply = await generateSalesReply({
-    restaurantName: restaurant?.name || "Restaurante",
+    restaurantName: restaurant.name,
     message: text,
     customerName: customer.name,
     preferences: preferences.results,
     products: productRows.results.map((product) => ({
-      id: String(product.id),
-      name: String(product.name),
-      description: String(product.description),
+      id: product.id,
+      name: product.name,
+      description: product.description,
       priceCents: Number(product.price_cents),
       marginPercent: Math.round(
         ((Number(product.price_cents) - Number(product.cost_cents)) / Number(product.price_cents)) * 100,
@@ -241,6 +253,11 @@ async function processInboundMessage(
         .filter((item) => item.order_id === order.id)
         .map((item) => item.product_name),
     })),
+    currentCart: cartContext(draft, productRows.results),
+    currentCheckout: {
+      address: draft.address,
+      paymentMethod: draft.paymentMethod || "",
+    },
   });
 
   for (const memory of reply.memory.slice(0, 5)) {
@@ -261,11 +278,27 @@ async function processInboundMessage(
       )
       .run();
   }
+
+  let outboundText = reply.reply;
+  let orderId: string | null = null;
   if (reply.requiresHuman) {
     await db
       .prepare("UPDATE conversations SET status = 'human', updated_at = ? WHERE id = ?")
       .bind(Date.now(), conversation.id)
       .run();
+  } else {
+    const flow = await applyWhatsAppOrderFlow({
+      db,
+      draft,
+      salesReply: reply,
+      message: text,
+      restaurantSlug: restaurant.slug,
+      customerName: customer.name,
+      customerPhone: phone,
+      products: productRows.results,
+    });
+    outboundText = flow.reply;
+    orderId = flow.order?.id || null;
   }
 
   const outboundId = crypto.randomUUID();
@@ -278,12 +311,12 @@ async function processInboundMessage(
     .bind(
       outboundId,
       conversation.id,
-      reply.reply,
-      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason, phoneNumberId }),
+      outboundText,
+      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason, phoneNumberId, orderId }),
       Date.now(),
     )
     .run();
-  const sent = await sendWhatsAppText(phone, reply.reply, phoneNumberId);
+  const sent = await sendWhatsAppText(phone, outboundText, phoneNumberId);
   await db
     .prepare("UPDATE messages SET provider_message_id = ?, status = 'sent' WHERE id = ?")
     .bind(sent.providerMessageId, outboundId)
