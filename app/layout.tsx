@@ -5,6 +5,7 @@ import CommercialEntry from "./CommercialEntry";
 import "./globals.css";
 import "./operational.css";
 import "./storefront.css";
+import "./storefront-fixes.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
 const hmgBadge: React.CSSProperties = {
   position: "fixed",
-  top: 10,
+  top: 80,
   left: 10,
   zIndex: 9999,
   borderRadius: 999,
