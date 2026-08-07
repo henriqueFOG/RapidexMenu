@@ -133,7 +133,7 @@ async function processInboundMessage(
   if (!phone) throw new HttpError(400, "Contato do WhatsApp ausente.", "invalid_webhook");
   let text = message.text?.body?.trim() || message.interactive?.button_reply?.title?.trim() || "";
   if (message.type === "audio" && message.audio?.id) {
-    const media = await downloadWhatsAppMedia(message.audio.id);
+    const media = await downloadWhatsAppMedia(message.audio.id, phoneNumberId);
     text = await transcribeAudio(media.blob, `pedido.${extensionFor(media.mimeType)}`);
   }
   if (!text) return;
