@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import styles from "../commercial.module.css";
 
 export const metadata = { title: "Termos de Uso | RapidexMenu" };
@@ -22,6 +23,6 @@ export default function TermsPage() {
   </article></main>;
 }
 
-function Legal({ title, children }: { title: string; children: React.ReactNode }) {
+function Legal({ title, children }: { title: string; children: ReactNode }) {
   return <section className={styles.panel}><h2>{title}</h2><p style={{ margin: 0, lineHeight: 1.65 }}>{children}</p></section>;
 }
