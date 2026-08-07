@@ -61,7 +61,7 @@ export async function PATCH(request: Request) {
        is_open = 1, updated_at = ? WHERE id = ?`,
     ).bind(now, now, context.restaurantId).run();
     await audit(context, "restaurant.published", "restaurant", context.restaurantId);
-    return json({ ok: true, next: "/admin", store: `/loja/${context.restaurantSlug}` });
+    return json({ ok: true, next: "/assinatura?welcome=1", store: `/loja/${context.restaurantSlug}` });
   } catch (error) {
     return apiError(error);
   }
