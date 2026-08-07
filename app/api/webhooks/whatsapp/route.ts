@@ -86,6 +86,7 @@ export async function POST(request: Request) {
             await processInboundMessage(
               db,
               restaurantId,
+              phoneNumberId,
               message,
               value.contacts?.[0]?.profile?.name || null,
             );
@@ -122,6 +123,7 @@ export async function POST(request: Request) {
 async function processInboundMessage(
   db: D1Database,
   restaurantId: string,
+  phoneNumberId: string,
   message: WhatsAppMessage,
   profileName: string | null,
 ) {
@@ -179,7 +181,7 @@ async function processInboundMessage(
       message.id,
       message.type === "audio" ? "audio" : "text",
       text,
-      JSON.stringify({ transcribed: message.type === "audio" }),
+      JSON.stringify({ transcribed: message.type === "audio", phoneNumberId }),
       timestamp,
     )
     .run();
@@ -277,11 +279,11 @@ async function processInboundMessage(
       outboundId,
       conversation.id,
       reply.reply,
-      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason }),
+      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason, phoneNumberId }),
       Date.now(),
     )
     .run();
-  const sent = await sendWhatsAppText(phone, reply.reply);
+  const sent = await sendWhatsAppText(phone, reply.reply, phoneNumberId);
   await db
     .prepare("UPDATE messages SET provider_message_id = ?, status = 'sent' WHERE id = ?")
     .bind(sent.providerMessageId, outboundId)
@@ -299,10 +301,14 @@ async function resolveRestaurant(db: D1Database, phoneNumberId: string) {
       .first<{ restaurant_id: string }>();
     if (integration) return integration.restaurant_id;
   }
-  if (!phoneNumberId || phoneNumberId === getBindings().WHATSAPP_PHONE_NUMBER_ID) {
+  const bindings = getBindings();
+  if (
+    bindings.RAPIDEX_AUTH_MODE === "hmg-access-code" &&
+    (!phoneNumberId || phoneNumberId === bindings.WHATSAPP_PHONE_NUMBER_ID)
+  ) {
     return DEMO_RESTAURANT_ID;
   }
-  throw new HttpError(404, "Número do WhatsApp não vinculado.", "integration_not_found");
+  throw new HttpError(404, "Número do WhatsApp não vinculado a uma loja.", "integration_not_found");
 }
 
 function normalizeMemoryKind(kind: string) {
