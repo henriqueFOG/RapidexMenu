@@ -36,11 +36,15 @@ export async function getSmartUpsells(
   limit = 3,
 ): Promise<{ restaurantId: string; pressure: number; recommendations: SmartUpsell[] }> {
   const slug = safeSlug(restaurantSlug);
+  const now = Date.now();
   const restaurant = await db.prepare(
     `SELECT id, max_concurrent_orders FROM restaurants
-     WHERE slug = ? AND status IN ('trial', 'active') LIMIT 1`,
-  ).bind(slug).first<RestaurantRow>();
-  if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
+     WHERE slug = ? AND (
+       (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
+       OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?))
+     ) LIMIT 1`,
+  ).bind(slug, now, now).first<RestaurantRow>();
+  if (!restaurant) throw new HttpError(404, "Loja não encontrada ou temporariamente indisponível.", "store_not_found");
 
   const active = await db.prepare(
     `SELECT COUNT(*) AS total FROM orders
