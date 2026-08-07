@@ -8,6 +8,8 @@ export type RapidexBindings = {
   POSTGRES_URL?: string;
   RAPIDEX_ENV?: string;
   RAPIDEX_AUTH_MODE?: string;
+  RAPIDEX_SESSION_SECRET?: string;
+  RAPIDEX_SIGNUP_ENABLED?: string;
   RAPIDEX_HMG_OWNER_EMAIL?: string;
   RAPIDEX_HMG_OWNER_NAME?: string;
   RAPIDEX_HMG_ACCESS_CODE?: string;
@@ -46,6 +48,7 @@ export function integrationReadiness() {
     environment: bindings.RAPIDEX_ENV || "development",
     database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
     databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
+    nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: Boolean(
