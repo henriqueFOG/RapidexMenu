@@ -48,7 +48,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 }
 
 const hmgBadge: React.CSSProperties = {
-  position: "fixed", top: 118, left: 10, zIndex: 9999, pointerEvents: "none", userSelect: "none",
-  borderRadius: 999, padding: "7px 11px", background: "#171717", color: "#ff8a3d", border: "1px solid #3a3a3a",
-  fontSize: 11, fontWeight: 900, letterSpacing: ".06em", boxShadow: "0 6px 18px rgba(0,0,0,.22)",
+  position: "fixed",
+  top: "50%",
+  left: 0,
+  zIndex: 9999,
+  pointerEvents: "none",
+  userSelect: "none",
+  transform: "translateY(-50%)",
+  writingMode: "vertical-rl",
+  borderRadius: "0 9px 9px 0",
+  padding: "9px 5px",
+  background: "rgba(23,23,23,.92)",
+  color: "#ff8a3d",
+  border: "1px solid #3a3a3a",
+  borderLeft: 0,
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: ".08em",
+  boxShadow: "0 6px 18px rgba(0,0,0,.18)",
 };
