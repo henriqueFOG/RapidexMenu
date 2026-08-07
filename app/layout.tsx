@@ -4,6 +4,7 @@ import { getBindings, getRapidexEnvironment } from "@/lib/runtime";
 import CommercialEntry from "./CommercialEntry";
 import "./globals.css";
 import "./operational.css";
+import "./storefront.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
