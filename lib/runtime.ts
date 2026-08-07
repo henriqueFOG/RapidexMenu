@@ -54,6 +54,21 @@ export function getDatabase(): D1Database {
 
 export function integrationReadiness() {
   const bindings = getBindings();
+  const whatsappLegacy = Boolean(
+    bindings.WHATSAPP_ACCESS_TOKEN &&
+      bindings.WHATSAPP_PHONE_NUMBER_ID &&
+      bindings.WHATSAPP_VERIFY_TOKEN &&
+      bindings.WHATSAPP_APP_SECRET,
+  );
+  const metaEmbeddedSignup = Boolean(
+    bindings.RAPIDEX_META_APP_ID &&
+      bindings.RAPIDEX_META_APP_SECRET &&
+      bindings.RAPIDEX_META_EMBEDDED_SIGNUP_CONFIG_ID &&
+      bindings.RAPIDEX_INTEGRATION_SECRET &&
+      bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32 &&
+      bindings.WHATSAPP_VERIFY_TOKEN &&
+      bindings.WHATSAPP_APP_SECRET,
+  );
   return {
     environment: bindings.RAPIDEX_ENV || "development",
     database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
@@ -67,23 +82,11 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET &&
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
-    metaEmbeddedSignup: Boolean(
-      bindings.RAPIDEX_META_APP_ID &&
-        bindings.RAPIDEX_META_APP_SECRET &&
-        bindings.RAPIDEX_META_EMBEDDED_SIGNUP_CONFIG_ID &&
-        bindings.RAPIDEX_INTEGRATION_SECRET &&
-        bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32 &&
-        bindings.WHATSAPP_VERIFY_TOKEN &&
-        bindings.WHATSAPP_APP_SECRET,
-    ),
+    metaEmbeddedSignup,
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
-    whatsappLegacy: Boolean(
-      bindings.WHATSAPP_ACCESS_TOKEN &&
-        bindings.WHATSAPP_PHONE_NUMBER_ID &&
-        bindings.WHATSAPP_VERIFY_TOKEN &&
-        bindings.WHATSAPP_APP_SECRET,
-    ),
+    whatsapp: whatsappLegacy || metaEmbeddedSignup,
+    whatsappLegacy,
     pixLegacy: Boolean(bindings.MERCADO_PAGO_ACCESS_TOKEN),
   };
 }
