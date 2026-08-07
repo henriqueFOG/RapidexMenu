@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const memberId = crypto.randomUUID();
     const categoryId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
-    const settingsJson = JSON.stringify({ cuisine: "Restaurante", brandColor: "#c9ff4a" });
+    const settingsJson = JSON.stringify({ cuisine: "Restaurante", brandColor: "#ff650b" });
 
     await db.batch([
       db.prepare(
