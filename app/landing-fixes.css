@@ -1,0 +1,26 @@
+/* Fixes for the approved commercial landing.
+   Keep the phone mock content in normal vertical flow and avoid text collisions. */
+main[class*="landing"] [class*="phoneRestaurant"] {
+  min-height: 92px;
+}
+
+main[class*="landing"] [class*="phoneDelivery"] {
+  position: relative;
+  z-index: 3;
+  margin-top: 8px !important;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  main[class*="landing"] [class*="phoneRestaurant"] {
+    min-height: 62px;
+  }
+
+  main[class*="landing"] [class*="phoneDelivery"] {
+    margin-top: 6px !important;
+    padding-top: 5px;
+  }
+}
