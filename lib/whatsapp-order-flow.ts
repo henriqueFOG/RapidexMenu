@@ -69,6 +69,39 @@ export function cartContext(draft: WhatsAppDraft, products: Product[]) {
   });
 }
 
+export async function getWhatsAppTrackingReply(
+  db: D1Database,
+  restaurantId: string,
+  customerId: string,
+  message: string,
+) {
+  const explicitNumber = message.match(/#?\s*(\d{1,8})/)?.[1];
+  const order = explicitNumber
+    ? await db.prepare(
+        `SELECT order_number, status, total_cents FROM orders
+         WHERE restaurant_id = ? AND customer_id = ? AND order_number = ? LIMIT 1`,
+      ).bind(restaurantId, customerId, Number(explicitNumber)).first<{ order_number: number; status: string; total_cents: number }>()
+    : await db.prepare(
+        `SELECT order_number, status, total_cents FROM orders
+         WHERE restaurant_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 1`,
+      ).bind(restaurantId, customerId).first<{ order_number: number; status: string; total_cents: number }>();
+  if (!order) return explicitNumber ? `Não encontrei o pedido #${explicitNumber} nesta conversa.` : "Ainda não encontrei um pedido seu para acompanhar.";
+  return `Pedido #${order.order_number}: ${statusLabel(order.status)} · total ${money(order.total_cents)}.`;
+}
+
+export async function latestRepeatCart(db: D1Database, restaurantId: string, customerId: string) {
+  const order = await db.prepare(
+    `SELECT id FROM orders WHERE restaurant_id = ? AND customer_id = ? AND status <> 'canceled'
+     ORDER BY created_at DESC LIMIT 1`,
+  ).bind(restaurantId, customerId).first<{ id: string }>();
+  if (!order) return [] as WhatsAppDraftItem[];
+  const result = await db.prepare(
+    `SELECT product_id, quantity, notes FROM order_items
+     WHERE order_id = ? AND product_id IS NOT NULL ORDER BY created_at`,
+  ).bind(order.id).all<{ product_id: string; quantity: number; notes: string | null }>();
+  return result.results.map((item) => ({ productId: item.product_id, quantity: Number(item.quantity), notes: item.notes || "" }));
+}
+
 async function tryCreateWhatsAppOrder(input: FlowInput, draft: WhatsAppDraft): Promise<{ order: CreatedOrder | null; reply: string }> {
   if (!draft.paymentMethod) return { order: null, reply: "Escolha dinheiro ou cartão na entrega antes de confirmar." };
   try {
@@ -138,5 +171,16 @@ function normalizeItems(items: WhatsAppDraftItem[]) {
   return Array.from(compact.values()).slice(0, 30);
 }
 
+function statusLabel(status: string) {
+  return ({
+    received: "recebido pela loja",
+    confirmed: "confirmado",
+    preparing: "em preparo",
+    ready: "pronto",
+    out_for_delivery: "saiu para entrega",
+    delivered: "entregue",
+    canceled: "cancelado",
+  } as Record<string, string>)[status] || status;
+}
 function join(...parts: string[]) { return parts.filter((part) => part.trim()).join("\n\n").slice(0, 4096); }
 function money(cents: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100); }
