@@ -8,9 +8,9 @@ if (!connectionString) {
   throw new Error("Configure DATABASE_URL antes de executar as migracoes Postgres.");
 }
 
-const environment = normalizeEnvironment(process.env.RAPIDEX_ENV);
-if (!["hmg", "production", "development", "ci"].includes(environment)) {
-  throw new Error("RAPIDEX_ENV inválido para migrations.");
+const environment = parseEnvironment(process.env.RAPIDEX_ENV);
+if (!environment) {
+  throw new Error("RAPIDEX_ENV inválido para migrations. Use development, ci, hmg ou production.");
 }
 
 const migrationsDirectory = path.join(process.cwd(), "db", "postgres");
@@ -83,10 +83,11 @@ for (const file of files) {
 
 console.log(`Postgres ${environment} pronto: ${files.length} migracao(oes) verificada(s).`);
 
-function normalizeEnvironment(value) {
-  const normalized = String(value || "development").trim().toLowerCase();
+function parseEnvironment(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "development" || normalized === "dev") return "development";
   if (["prod", "production"].includes(normalized)) return "production";
   if (["hmg", "homologation", "homolog", "staging", "stage"].includes(normalized)) return "hmg";
   if (["ci", "test"].includes(normalized)) return "ci";
-  return "development";
+  return null;
 }
