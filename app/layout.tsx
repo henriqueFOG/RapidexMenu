@@ -41,7 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const environment = getRapidexEnvironment();
   const commercialEntryEnabled = bindings.RAPIDEX_AUTH_MODE === "native" && Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32);
   return <html lang="pt-BR"><body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-    {environment === "hmg" && <div style={hmgBadge}>HMG · NÃO É PRODUÇÃO</div>}
+    {environment === "hmg" && <div className="rm-hmg-env-badge" style={hmgBadge}>HMG · NÃO É PRODUÇÃO</div>}
     {children}
     <ConversionLayer />
     <CommercialEntry enabled={commercialEntryEnabled} />
