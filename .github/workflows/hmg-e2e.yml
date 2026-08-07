@@ -105,7 +105,7 @@ jobs:
         run: node scripts/hmg-e2e.mjs
 
       - name: Run Playwright full UI HMG E2E
-        run: npx playwright test tests/hmg-ui-e2e.spec.mjs --reporter=line
+        run: npx playwright test tests/landing-functional-ui.spec.mjs tests/hmg-ui-e2e.spec.mjs --reporter=line
 
       - name: Upload Playwright evidence
         if: always()
