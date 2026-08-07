@@ -19,6 +19,10 @@ export type RapidexBindings = {
   RAPIDEX_BILLING_MP_ACCESS_TOKEN?: string;
   RAPIDEX_MP_CLIENT_ID?: string;
   RAPIDEX_MP_CLIENT_SECRET?: string;
+  RAPIDEX_META_APP_ID?: string;
+  RAPIDEX_META_APP_SECRET?: string;
+  RAPIDEX_META_EMBEDDED_SIGNUP_CONFIG_ID?: string;
+  RAPIDEX_META_SOLUTION_ID?: string;
   RESEND_API_KEY?: string;
   RAPIDEX_EMAIL_FROM?: string;
   OPENAI_API_KEY?: string;
@@ -63,9 +67,18 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET &&
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
+    metaEmbeddedSignup: Boolean(
+      bindings.RAPIDEX_META_APP_ID &&
+        bindings.RAPIDEX_META_APP_SECRET &&
+        bindings.RAPIDEX_META_EMBEDDED_SIGNUP_CONFIG_ID &&
+        bindings.RAPIDEX_INTEGRATION_SECRET &&
+        bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32 &&
+        bindings.WHATSAPP_VERIFY_TOKEN &&
+        bindings.WHATSAPP_APP_SECRET,
+    ),
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
-    whatsapp: Boolean(
+    whatsappLegacy: Boolean(
       bindings.WHATSAPP_ACCESS_TOKEN &&
         bindings.WHATSAPP_PHONE_NUMBER_ID &&
         bindings.WHATSAPP_VERIFY_TOKEN &&
