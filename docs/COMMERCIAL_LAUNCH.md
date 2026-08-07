@@ -1,125 +1,181 @@
 # RapidexMenu — checklist de lançamento comercial
 
-Este documento separa o que é código do que depende de credenciais/identidade externas. Nunca versionar segredos reais.
+Este documento separa o que já está implementado no produto do que depende de credenciais/contas externas antes de abrir o cadastro para restaurantes pagantes.
 
-## 1. Banco e migrations
+## Fluxo comercial implementado
 
-A produção comercial usa PostgreSQL. O build Vercel executa migrations pendentes quando `DATABASE_URL` ou `POSTGRES_URL` estiver configurada.
+1. Restaurante acessa `/cadastro`.
+2. Cria usuário com e-mail e senha e aceita Termos/Privacidade.
+3. A plataforma cria a loja, vínculo de proprietário e trial de 14 dias.
+4. O proprietário passa pelo `/onboarding`.
+5. Configura cidade/UF, WhatsApp, taxa, pedido mínimo e tempos.
+6. Importa até 250 produtos por CSV/TXT ou cria itens manualmente; custo é obrigatório para o Profit Engine.
+7. Configura agenda semanal/pausa emergencial em `/admin/horarios`.
+8. Publica a loja e recebe seu link `/loja/<slug>`.
+9. Cliente final consulta cardápio, recebe recomendações de margem, cria pedido e recebe token de acompanhamento.
+10. Restaurante recebe o pedido no painel e avança os estados; alertas de navegador são opt-in.
+11. Trial expirado sem assinatura ativa deixa de aceitar novos pedidos em qualquer canal.
+12. Senha pode ser recuperada por token único e expirável enviado por e-mail.
+13. A loja pode conectar sua conta Mercado Pago por OAuth em `/admin/pagamentos` para habilitar Pix próprio.
+14. A loja pode conectar seu WhatsApp pelo Embedded Signup oficial da Meta em `/admin/whatsapp` quando a plataforma Meta estiver configurada.
 
-Migrations comerciais:
+## Profit Engine
 
-- `0002_commercial_accounts.sql` — contas, trial e onboarding;
-- `0003_platform_billing.sql` — assinatura da plataforma;
-- `0004_password_recovery.sql` — recuperação de senha;
-- `0005_restaurant_payment_connections.sql` — credenciais de recebimento por restaurante;
-- `0006_profit_engine.sql` — atribuição de upsell/recompra e ROI;
-- `0007_subscription_access_window.sql` — janela de acesso após cancelamento.
+- custo e margem são calculados no servidor;
+- upsell combina margem, afinidade histórica e pressão da cozinha;
+- `upsell_shown` e `upsell_accepted` são registrados separadamente;
+- `/admin/lucro` mostra contribuição, receita atribuída, conversão, recompra, precisão da promessa e ROI;
+- recomendações não são exibidas fora do horário de funcionamento;
+- `/calculadora` usa premissas editáveis e declara explicitamente que é uma simulação.
 
-Antes do lançamento, confirmar backup/restauração do PostgreSQL e política de retenção.
+## WhatsApp ponta a ponta
 
-## 2. Autenticação comercial
+O fluxo comercial do WhatsApp foi desenhado para não confiar no modelo de IA para preço ou conclusão de compra:
 
-Produção:
+1. `phone_number_id` roteia a mensagem para o `restaurant_id` correto;
+2. texto e áudio usam a credencial criptografada da própria loja;
+3. a IA interpreta carrinho/endereço/pagamento em JSON estruturado;
+4. IDs inexistentes/indisponíveis são filtrados no servidor;
+5. um rascunho persistente mantém carrinho, endereço e forma de pagamento;
+6. dinheiro/cartão na entrega são os métodos permitidos no fechamento automatizado inicial;
+7. só uma confirmação explícita (`CONFIRMAR`, `SIM`, etc.) libera a tentativa de pedido;
+8. `createOrder()` recalcula preço/custo, valida estoque, mínimo, horário e assinatura;
+9. o restaurante recebe o pedido no mesmo painel;
+10. mudanças de status originadas no WhatsApp geram mensagens transacionais sem impedir a operação caso a Meta falhe;
+11. `acompanhar meu pedido` consulta o banco da própria loja/cliente;
+12. `pedir de novo` reutiliza IDs/quantidades do último pedido real e exige nova confirmação.
 
-- `RAPIDEX_AUTH_MODE=native`
-- `RAPIDEX_SESSION_SECRET` com segredo aleatório forte de pelo menos 32 caracteres;
-- `RAPIDEX_SIGNUP_ENABLED=true` somente quando o lançamento estiver aprovado.
+### Embedded Signup da Meta
 
-HMG pode continuar com `RAPIDEX_AUTH_MODE=hmg-access-code` e não deve expor o cadastro comercial.
+A conexão multiempresa não aceita `phone_number_id` digitado manualmente. O fluxo oficial:
 
-Validar cadastro, login, logout, reset de senha, 401 sem sessão e isolamento entre tenants.
+- Facebook Login for Business / WhatsApp Embedded Signup;
+- recebe código temporário + WABA + Phone Number ID;
+- backend troca o código usando App Secret server-side;
+- backend consulta o WABA para provar que o número pertence à autorização;
+- backend assina o WABA em `subscribed_apps`;
+- backend registra o telefone para Cloud API com PIN aleatório de 6 dígitos;
+- token e PIN são criptografados com `RAPIDEX_INTEGRATION_SECRET`;
+- a tabela `integrations` guarda somente roteamento/metadados sem segredo.
 
-## 3. Onboarding e ativação
+## Variáveis obrigatórias para produção comercial
 
-Fluxo obrigatório:
+```text
+DATABASE_URL=<PostgreSQL/Neon>
+RAPIDEX_ENV=production
+RAPIDEX_PUBLIC_URL=https://rapidexmenu.com.br
+RAPIDEX_AUTH_MODE=native
+RAPIDEX_SESSION_SECRET=<segredo aleatorio forte com 32+ caracteres>
+RAPIDEX_INTEGRATION_SECRET=<segredo aleatorio forte com 32+ caracteres>
+RAPIDEX_SIGNUP_ENABLED=true
+```
 
-1. `/cadastro`;
-2. `/onboarding`;
-3. operação e contato;
-4. categoria/produto;
-5. publicação;
-6. `/assinatura` para explicar trial/plano;
-7. `/admin`;
-8. `/admin/pagamentos` para conectar Mercado Pago se desejar Pix;
-9. primeiro pedido público;
-10. `/admin/lucro` para medir contribuição/ROI.
+Nunca versionar os valores reais no GitHub.
 
-Aceite de lançamento: slug único, loja sem produto não publica, preço/custo validados, cardápio não expõe custo, trial expirado bloqueia pedido, cancelamento respeita `access_ends_at` e checkout sem Mercado Pago continua com pagamento na entrega.
+## Cobrança da mensalidade Rapidex
 
-## 4. Pagamentos dos restaurantes
+```text
+RAPIDEX_BILLING_MP_ACCESS_TOKEN=<credencial da conta Mercado Pago da Rapidex>
+```
 
-O dinheiro dos pedidos não pode usar a credencial da mensalidade Rapidex.
+A mensalidade usa uma conta/credencial separada do dinheiro dos pedidos. O cancelamento da renovação fica disponível dentro do painel e o acesso já pago é preservado até `access_ends_at`.
 
-Configurar a aplicação OAuth do Mercado Pago:
+## Mercado Pago dos restaurantes
 
-- `RAPIDEX_MP_CLIENT_ID`;
-- `RAPIDEX_MP_CLIENT_SECRET`;
-- `RAPIDEX_INTEGRATION_SECRET` (32+ caracteres);
-- redirect URI exatamente igual a `<RAPIDEX_PUBLIC_URL>/api/integrations/mercado-pago/callback`.
+```text
+RAPIDEX_MP_CLIENT_ID=
+RAPIDEX_MP_CLIENT_SECRET=
+```
 
-Regras: cada restaurante autoriza a própria conta; tokens ficam criptografados; Pix só aparece quando a conexão daquela loja está ativa; desconectar remove Pix dos novos checkouts; nunca usar uma credencial global de vendedor para receber pedidos multiempresa.
+O restaurante autoriza a própria conta por OAuth. Tokens ficam criptografados por `restaurant_id`; Pix só aparece quando aquela loja está conectada.
 
-## 5. Mensalidade Rapidex
+## WhatsApp Embedded Signup / Meta Tech Provider
 
-Credencial separada:
+```text
+RAPIDEX_META_APP_ID=
+RAPIDEX_META_APP_SECRET=
+RAPIDEX_META_EMBEDDED_SIGNUP_CONFIG_ID=
+RAPIDEX_META_SOLUTION_ID=        # opcional/conforme arquitetura de Partner Solution
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_APP_SECRET=
+WHATSAPP_GRAPH_VERSION=v25.0
+```
 
-- `RAPIDEX_BILLING_MP_ACCESS_TOKEN` da conta da plataforma.
+Antes de liberar conexão para restaurantes reais, configurar no ecossistema Meta:
 
-Validar valor, autorização, cancelamento no próprio painel, preservação do período pago, webhook sem encurtar `access_ends_at` e bloqueio de novos pedidos após o período terminar.
+- Meta Business Portfolio do Rapidex;
+- Meta App do tipo Business;
+- WhatsApp Business Platform e Tech Provider conforme elegibilidade/revisão vigente;
+- Facebook Login for Business com configuração de WhatsApp Embedded Signup;
+- permissões `whatsapp_business_management` e `whatsapp_business_messaging` aprovadas quando exigidas;
+- domínio/HTTPS e JavaScript SDK autorizados;
+- webhook público apontando para `/api/webhooks/whatsapp` e verify token configurado.
 
-## 6. E-mail transacional
+## Recuperação de senha / e-mail transacional
 
-Configurar `RESEND_API_KEY` e `RAPIDEX_EMAIL_FROM` com domínio/remetente verificado. Validar recuperação de senha real, expiração em 30 minutos e token de uso único.
+```text
+RESEND_API_KEY=
+RAPIDEX_EMAIL_FROM=
+```
 
-## 7. Profit Engine — diferencial comercial
+O domínio/remetente deve estar verificado antes de liberar clientes pagantes.
 
-Validar ponta a ponta:
+## IA
 
-1. cliente adiciona item ao carrinho;
-2. `/api/public/recommendations` recebe os produtos escolhidos;
-3. recomendação considera margem, histórico de compra conjunta e pressão da cozinha;
-4. `upsell_shown` é registrado uma vez por produto/carrinho;
-5. produto recomendado aceito entra no pedido com preço recalculado pelo servidor;
-6. `upsell_accepted` é registrado separadamente;
-7. `/admin/lucro` mostra receita e contribuição atribuídas;
-8. faturamento normal não é contado como ROI Rapidex;
-9. produto de margem baixa aparece no Guardião de margem;
-10. recomendação não funciona para loja com trial/acesso encerrado.
+```text
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5-mini
+OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
+```
 
-Nunca anunciar ganho garantido. `/calculadora` usa premissas editáveis e deve permanecer explicitamente como simulação.
+Sem OpenAI, o sistema mantém respostas locais seguras e o estado do carrinho; transcrição de áudio exige a integração ativa.
 
-## 8. WhatsApp, IA e mídia
+## Storage de fotos
 
-Só anunciar como ativos depois de credenciais e E2E reais. WhatsApp precisa de credenciais oficiais, consentimento/opt-out e templates quando necessários. IA deve obedecer produto/preço/status reais e transferir alergia, reclamação, cancelamento e reembolso para humano. Upload precisa de storage persistente, limite de arquivo e isolamento por restaurante.
+Fotos ainda dependem de object storage real. Não armazenar binários no PostgreSQL. Na Vercel, a direção recomendada é usar object storage (ex.: Vercel Blob) e persistir somente chave/URL no banco. Enquanto storage não estiver provisionado, não anunciar upload de fotos como ativo.
 
-## 9. Jurídico/LGPD
+## Infra / Vercel
 
-Antes de aceitar clientes pagantes, substituir textos genéricos por dados reais da entidade que opera o RapidexMenu: razão social/nome empresarial, CNPJ se aplicável, endereço/canal de contato, e-mail de privacidade/suporte, responsabilidades controlador/operador, política de retenção e versão/data dos termos. Não inventar esses dados no código.
+O repositório ficou conectado historicamente a três projetos Vercel. `vercel.json` possui `ignoreCommand` para permitir build apenas no projeto oficial `rapidexmenu` e evitar consumo triplo de cota nos projetos legados.
 
-## 10. Segurança mínima
+O Preview READY de 07/08/2026 confirmou em runtime de build:
 
-Rate limit, same-origin, cookies HTTP-only/Secure, segredos fora do Git, revisão de segredos históricos, logs sem dados sensíveis, backup testado, dependências revisadas e CI aprovado.
+- PostgreSQL acessível;
+- migrations automáticas funcionando;
+- migrations 0004–0007 aplicadas no Preview;
+- Next.js 16 / Node 22 compilando e publicando corretamente.
 
-## 11. CI e deploy
+Migrations 0008/0009 precisam ser verificadas no Preview do head que as contém antes do merge.
 
-`.github/workflows/ci.yml` executa `npm ci`, `npm run typecheck`, `npm run test:unit` e `npm run build:vercel`.
+## Antes de abrir aquisição paga
 
-O PR não deve ser integrado ao `master` enquanto o CI não estiver verde. Se a Vercel estiver bloqueada por limite de builds, não criar commits artificiais para furar limite: usar CI para compilação e a próxima janela disponível para validar runtime/preview.
+- CI verde no head exato a ser mergeado;
+- Preview do mesmo head READY;
+- migrations 0001–0009 verificadas no banco de Preview;
+- executar cadastro -> importação -> horários -> publicação -> pedido -> recebimento -> entrega;
+- validar recomendação -> aceite -> atribuição no Profit Engine;
+- validar isolamento entre pelo menos duas lojas;
+- confirmar e-mail de recuperação;
+- confirmar assinatura sandbox/conta de teste e webhook;
+- confirmar Mercado Pago por vendedor ou deixar Pix explicitamente desabilitado;
+- concluir Meta Embedded Signup com conta/número de teste e validar texto + áudio + pedido + status + track + repeat;
+- publicar identidade jurídica real, CNPJ e contato de suporte nos documentos legais;
+- configurar monitoramento/alertas de erros;
+- rotacionar/remover qualquer segredo histórico que tenha sido versionado em repositórios antigos;
+- manter backup/recuperação do PostgreSQL compatível com o plano contratado.
 
-Depois do CI: preview READY; smoke test de `/`, `/calculadora`, `/cadastro`, `/entrar`, `/onboarding`, `/admin`, `/admin/lucro`, `/admin/pagamentos`, `/assinatura`, `/loja/serra-burger`; E2E empresa -> cardápio -> pedido -> status -> acompanhamento; E2E recomendação -> aceite -> atribuição; E2E cancelamento -> período final; depois merge e produção.
+## Critério para dizer “pronto para comercializar”
 
-## 12. Critério de pronto para comercializar
+O código estar em produção não é suficiente. O sinal verde exige no mínimo:
 
-- [ ] CI verde;
-- [ ] preview/runtime verde;
-- [ ] migrations aplicadas sem erro;
-- [ ] E2E novo restaurante aprovado;
-- [ ] E2E consumidor/pedido aprovado;
-- [ ] E2E Profit Engine aprovado;
-- [ ] isolamento multiempresa aprovado;
-- [ ] pagamentos por vendedor aprovados ou Pix explicitamente desativado;
-- [ ] cobrança Rapidex aprovada ou trial sem cobrança explicitamente controlado;
-- [ ] e-mail transacional aprovado;
-- [ ] termos/privacidade com dados jurídicos reais;
-- [ ] credenciais de WhatsApp/IA só prometidas quando realmente ativas;
-- [ ] domínio e canais de suporte definidos.
+- autenticação nativa ativa;
+- PostgreSQL operacional e migrado;
+- cadastro/onboarding/importação aprovados ponta a ponta;
+- cardápio/pedido/acompanhamento aprovados;
+- horários e pausa de operação aprovados;
+- Profit Engine medindo atribuição sem inflar faturamento;
+- cobrança Rapidex ou processo comercial alternativo definido;
+- recuperação de acesso funcional;
+- pagamentos/WhatsApp anunciados apenas quando as respectivas conexões estiverem efetivamente ativadas;
+- documentos legais com dados reais da empresa;
+- suporte/contato real publicado.
