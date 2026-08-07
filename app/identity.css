@@ -1,0 +1,16 @@
+/* Canonical RapidexMenu identity across operational surfaces. */
+.brand>span,
+.rm-admin-brand>span,
+.rm-store-powered>span {
+  font-size: 0 !important;
+  color: transparent !important;
+  background: #050505 url('/favicon.svg') center/100% 100% no-repeat !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+}
+.brand>span { width: 38px; height: 38px; }
+.rm-admin-brand>span { width: 38px; height: 38px; }
+.rm-store-powered>span { width: 34px; height: 34px; }
+.brand i,.rm-admin-brand i,.rm-store-powered i { color:#ff650b !important; font-style:normal; }
+.rm-admin-brand,.rm-store-powered { color:#fff; font-weight:900; }
+.rm-store-top .rm-store-powered { color:#111; }
