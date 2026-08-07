@@ -1,0 +1,126 @@
+import { HttpError } from "./http";
+import { getBindings, getDatabase } from "./runtime";
+
+export const PLAN_PRICES = { start: 9700, growth: 29700, scale: 59700 } as const;
+export type RapidexPlan = keyof typeof PLAN_PRICES;
+
+type ProviderSubscription = {
+  id?: string;
+  status?: string;
+  init_point?: string;
+  external_reference?: string;
+  next_payment_date?: string;
+  auto_recurring?: { transaction_amount?: number; currency_id?: string };
+};
+
+export function billingConfigured() {
+  return Boolean(getBindings().RAPIDEX_BILLING_MP_ACCESS_TOKEN);
+}
+
+export async function createBillingCheckout(input: {
+  restaurantId: string;
+  plan: RapidexPlan;
+  payerEmail: string;
+  origin: string;
+}) {
+  const token = getBindings().RAPIDEX_BILLING_MP_ACCESS_TOKEN;
+  if (!token) throw new HttpError(503, "A cobrança recorrente ainda não foi ativada.", "billing_not_configured");
+  const amountCents = PLAN_PRICES[input.plan];
+  const backUrl = `${getBindings().RAPIDEX_PUBLIC_URL || input.origin}/assinatura?retorno=1`;
+  const response = await fetch("https://api.mercadopago.com/preapproval", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      reason: `RapidexMenu · ${planName(input.plan)}`,
+      external_reference: input.restaurantId,
+      payer_email: input.payerEmail,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: "months",
+        transaction_amount: amountCents / 100,
+        currency_id: "BRL",
+      },
+      back_url: backUrl,
+      status: "pending",
+    }),
+  });
+  const provider = await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
+  if (!response.ok || !provider.id || !provider.init_point) {
+    console.error("Rapidex billing checkout failed", response.status, provider.message || "unknown");
+    throw new HttpError(502, "Não foi possível abrir a assinatura agora.", "billing_provider_error");
+  }
+
+  const now = Date.now();
+  const db = getDatabase();
+  await db.prepare(
+    `INSERT INTO platform_subscriptions
+     (id, restaurant_id, provider, provider_subscription_id, plan, amount_cents, status, checkout_url,
+      next_payment_at, provider_data_json, created_at, updated_at)
+     VALUES (?, ?, 'mercado_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    crypto.randomUUID(), input.restaurantId, provider.id, input.plan, amountCents,
+    normalizeStatus(provider.status), provider.init_point, parseDate(provider.next_payment_date),
+    JSON.stringify(provider), now, now,
+  ).run();
+
+  return { id: provider.id, checkoutUrl: provider.init_point, status: normalizeStatus(provider.status) };
+}
+
+export async function fetchProviderSubscription(providerId: string) {
+  const token = getBindings().RAPIDEX_BILLING_MP_ACCESS_TOKEN;
+  if (!token) throw new HttpError(503, "A cobrança recorrente ainda não foi ativada.", "billing_not_configured");
+  const response = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(providerId)}`, {
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+  });
+  const provider = await response.json().catch(() => ({})) as ProviderSubscription;
+  if (!response.ok || !provider.id) throw new HttpError(502, "Não foi possível consultar a assinatura.", "billing_provider_error");
+  return provider;
+}
+
+export async function syncProviderSubscription(provider: ProviderSubscription) {
+  if (!provider.id || !provider.external_reference) throw new HttpError(400, "Assinatura inválida.", "invalid_subscription");
+  const db = getDatabase();
+  const local = await db.prepare(
+    `SELECT id, restaurant_id, plan, amount_cents FROM platform_subscriptions
+     WHERE provider = 'mercado_pago' AND provider_subscription_id = ? LIMIT 1`,
+  ).bind(provider.id).first<{ id: string; restaurant_id: string; plan: RapidexPlan; amount_cents: number }>();
+  if (!local || local.restaurant_id !== String(provider.external_reference)) {
+    throw new HttpError(404, "Assinatura não reconhecida.", "subscription_not_found");
+  }
+  const expectedAmount = PLAN_PRICES[local.plan];
+  const providerAmount = Math.round(Number(provider.auto_recurring?.transaction_amount || 0) * 100);
+  if (providerAmount && providerAmount !== expectedAmount) {
+    throw new HttpError(409, "Valor da assinatura não confere com o plano.", "subscription_amount_mismatch");
+  }
+  const status = normalizeStatus(provider.status);
+  const now = Date.now();
+  await db.batch([
+    db.prepare(
+      `UPDATE platform_subscriptions SET status = ?, next_payment_at = ?, provider_data_json = ?, updated_at = ?
+       WHERE id = ?`,
+    ).bind(status, parseDate(provider.next_payment_date), JSON.stringify(provider), now, local.id),
+    db.prepare(
+      `UPDATE restaurants SET status = CASE
+         WHEN ? = 'authorized' THEN 'active'
+         WHEN ? IN ('paused', 'cancelled') AND COALESCE(trial_ends_at, 0) <= ? THEN 'paused'
+         ELSE status END,
+       plan = ?, updated_at = ? WHERE id = ?`,
+    ).bind(status, status, now, local.plan, now, local.restaurant_id),
+  ]);
+  return { restaurantId: local.restaurant_id, status, plan: local.plan };
+}
+
+function normalizeStatus(value: unknown): "pending" | "authorized" | "paused" | "cancelled" | "unknown" {
+  if (value === "pending" || value === "authorized" || value === "paused" || value === "cancelled") return value;
+  return "unknown";
+}
+
+function parseDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function planName(plan: RapidexPlan) {
+  return ({ start: "Começo", growth: "Crescimento", scale: "Escala" } as const)[plan];
+}
