@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getCommercialUser, isNativeAuthMode } from "@/lib/commercial-auth";
 import { constantTimeEqual, hmacSha256Hex } from "@/lib/security";
 import { getBindings } from "@/lib/runtime";
 
@@ -11,12 +12,13 @@ export type ChatGPTUser = {
 
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
 const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
-const USER_FULL_NAME_ENCODING_HEADER =
-  "oai-authenticated-user-full-name-encoding";
+const USER_FULL_NAME_ENCODING_HEADER = "oai-authenticated-user-full-name-encoding";
 const PERCENT_ENCODED_UTF8 = "percent-encoded-utf-8";
 const SIGN_IN_PATH = "/signin-with-chatgpt";
 const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
+const NATIVE_SIGN_IN_PATH = "/entrar";
+const NATIVE_SIGN_OUT_PATH = "/api/auth/logout";
 const HMG_SIGN_IN_PATH = "/admin/login";
 const HMG_SIGN_OUT_PATH = "/api/auth/hmg/logout";
 export const HMG_SESSION_COOKIE = "rapidex_hmg_session";
@@ -24,6 +26,10 @@ const HMG_SESSION_HOURS = 8;
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   if (isHmgAccessCodeAuth()) return getHmgUser();
+  if (isNativeAuthMode()) {
+    const user = await getCommercialUser();
+    return user ? { displayName: user.fullName || user.email, email: user.email, fullName: user.fullName } : null;
+  }
 
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
@@ -31,40 +37,30 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
   const fullName =
-    encodedFullName &&
-    requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
+    encodedFullName && requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
       ? safeDecodeURIComponent(encodedFullName)
       : null;
 
-  return {
-    displayName: fullName ?? email,
-    email,
-    fullName,
-  };
+  return { displayName: fullName ?? email, email, fullName };
 }
 
-export async function requireChatGPTUser(
-  returnTo: string,
-): Promise<ChatGPTUser> {
+export async function requireChatGPTUser(returnTo: string): Promise<ChatGPTUser> {
   const user = await getChatGPTUser();
   if (user) return user;
-
   redirect(chatGPTSignInPath(returnTo));
 }
 
 export function chatGPTSignInPath(returnTo: string): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  if (isHmgAccessCodeAuth()) {
-    return `${HMG_SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
-  }
+  if (isHmgAccessCodeAuth()) return `${HMG_SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  if (isNativeAuthMode()) return `${NATIVE_SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
   return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  if (isHmgAccessCodeAuth()) {
-    return `${HMG_SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
-  }
+  if (isHmgAccessCodeAuth()) return `${HMG_SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  if (isNativeAuthMode()) return `${NATIVE_SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
@@ -74,12 +70,7 @@ export function isHmgAccessCodeAuth() {
 
 export function isHmgAccessConfigured() {
   const bindings = getBindings();
-  return Boolean(
-    isHmgAccessCodeAuth() &&
-      bindings.RAPIDEX_HMG_OWNER_EMAIL &&
-      bindings.RAPIDEX_HMG_ACCESS_CODE &&
-      bindings.RAPIDEX_HMG_ACCESS_CODE.length >= 16,
-  );
+  return Boolean(isHmgAccessCodeAuth() && bindings.RAPIDEX_HMG_OWNER_EMAIL && bindings.RAPIDEX_HMG_ACCESS_CODE && bindings.RAPIDEX_HMG_ACCESS_CODE.length >= 16);
 }
 
 export function safeAuthReturnPath(value: string | null | undefined) {
@@ -95,17 +86,12 @@ export async function createHmgSessionToken() {
   const bindings = getBindings();
   const email = bindings.RAPIDEX_HMG_OWNER_EMAIL?.trim().toLowerCase();
   const secret = bindings.RAPIDEX_HMG_ACCESS_CODE;
-  if (!email || !secret || secret.length < 16) {
-    throw new Error("A autenticacao de HMG ainda nao foi configurada.");
-  }
+  if (!email || !secret || secret.length < 16) throw new Error("A autenticacao de HMG ainda nao foi configurada.");
 
   const expiresAt = Date.now() + HMG_SESSION_HOURS * 60 * 60 * 1000;
   const payload = `v1.${expiresAt}`;
   const signature = await hmacSha256Hex(secret, `${payload}.${email}`);
-  return {
-    value: `${payload}.${signature}`,
-    maxAge: HMG_SESSION_HOURS * 60 * 60,
-  };
+  return { value: `${payload}.${signature}`, maxAge: HMG_SESSION_HOURS * 60 * 60 };
 }
 
 async function getHmgUser(): Promise<ChatGPTUser | null> {
@@ -121,50 +107,25 @@ async function getHmgUser(): Promise<ChatGPTUser | null> {
 
   const expiresAt = Number(expiresAtRaw);
   if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) return null;
-
-  const expectedSignature = await hmacSha256Hex(
-    secret,
-    `${version}.${expiresAtRaw}.${email}`,
-  );
+  const expectedSignature = await hmacSha256Hex(secret, `${version}.${expiresAtRaw}.${email}`);
   if (!constantTimeEqual(expectedSignature, providedSignature)) return null;
 
   const fullName = bindings.RAPIDEX_HMG_OWNER_NAME?.trim() || null;
-  return {
-    displayName: fullName || email,
-    email,
-    fullName,
-  };
+  return { displayName: fullName || email, email, fullName };
 }
 
 function safeRelativeReturnPath(value: string): string {
   if (!value.startsWith("/") || value.startsWith("//")) return "/";
-
   let url: URL;
-  try {
-    url = new URL(value, "https://app.local");
-  } catch {
-    return "/";
-  }
-  if (url.origin !== "https://app.local") return "/";
-  if (isReservedAuthPath(url.pathname)) return "/";
-
+  try { url = new URL(value, "https://app.local"); } catch { return "/"; }
+  if (url.origin !== "https://app.local" || isReservedAuthPath(url.pathname)) return "/";
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function isReservedAuthPath(pathname: string): boolean {
-  return (
-    pathname === SIGN_IN_PATH ||
-    pathname === SIGN_OUT_PATH ||
-    pathname === CALLBACK_PATH ||
-    pathname === HMG_SIGN_IN_PATH ||
-    pathname === HMG_SIGN_OUT_PATH
-  );
+  return [SIGN_IN_PATH, SIGN_OUT_PATH, CALLBACK_PATH, NATIVE_SIGN_IN_PATH, "/cadastro", HMG_SIGN_IN_PATH, HMG_SIGN_OUT_PATH].includes(pathname);
 }
 
 function safeDecodeURIComponent(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
+  try { return decodeURIComponent(value); } catch { return null; }
 }
