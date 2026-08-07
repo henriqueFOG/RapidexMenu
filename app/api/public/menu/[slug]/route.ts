@@ -1,6 +1,7 @@
 import { ensureDemoData } from "@/lib/demo-data";
 import { apiError, json, HttpError } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
+import { isRestaurantAcceptingOrders } from "@/lib/store-availability";
 import { safeSlug } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(
     const restaurant = await db
       .prepare(
         `SELECT id, slug, name, city, state, phone, whatsapp, delivery_fee_cents,
-                minimum_order_cents, average_prep_minutes, delivery_minutes, is_open, settings_json
+                minimum_order_cents, average_prep_minutes, delivery_minutes, is_open, timezone, settings_json
          FROM restaurants
          WHERE slug = ? AND (
            (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
@@ -69,6 +70,12 @@ export async function GET(
 
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(String(restaurant.settings_json || "{}")); } catch { settings = {}; }
+    const acceptingOrders = isRestaurantAcceptingOrders({
+      isOpen: Number(restaurant.is_open),
+      timezone: String(restaurant.timezone || "America/Sao_Paulo"),
+      settingsJson: settings,
+      now,
+    });
 
     return json({
       ok: true,
@@ -80,7 +87,8 @@ export async function GET(
         state: restaurant.state,
         phone: restaurant.phone,
         whatsapp: restaurant.whatsapp,
-        isOpen: Boolean(restaurant.is_open),
+        isOpen: acceptingOrders,
+        manuallyEnabled: Boolean(restaurant.is_open),
         pixAvailable: Boolean(paymentConnection),
         deliveryFeeCents: restaurant.delivery_fee_cents,
         minimumOrderCents: restaurant.minimum_order_cents,
