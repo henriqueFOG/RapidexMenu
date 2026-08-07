@@ -16,7 +16,6 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
   await test.step("empresa cria conta", async () => {
     await company.goto("/cadastro");
     await expect(company.getByRole("heading", { name: /Crie sua loja e comece a receber pedidos/i })).toBeVisible();
-
     await company.locator('input[name="ownerName"]').fill("Mariana Playwright");
     await company.locator('input[name="restaurantName"]').fill("Playwright Burger HMG");
     await company.locator('input[name="email"]').fill("mariana.playwright@rapidex-hmg.test");
@@ -26,7 +25,6 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
     await company.locator('input[name="password"]').fill("RapidexPlaywright123");
     await company.locator('input[name="terms"]').check();
     await company.locator('input[name="privacy"]').check();
-
     await Promise.all([
       company.waitForURL(/\/onboarding/, { timeout: 20_000 }),
       company.getByRole("button", { name: /Criar minha loja/i }).click(),
@@ -51,12 +49,10 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
       buffer: Buffer.from(menuWorkbookBase64, "base64"),
     });
     await expect(company.getByText(/2 produtos/).first()).toBeVisible();
-    await expect(company.getByText("Smash Playwright")).toBeVisible();
-    await expect(company.getByText("Batata Playwright")).toBeVisible();
+    await expect(company.getByRole("cell", { name: /Smash Playwright/ })).toBeVisible();
+    await expect(company.getByRole("cell", { name: /Batata Playwright/ })).toBeVisible();
     await company.getByRole("button", { name: "Importar 2 produtos →" }).click();
     await expect(company.getByText(/2 itens processados/i)).toBeVisible({ timeout: 15_000 });
-    await expect(company.getByText("Smash Playwright").first()).toBeVisible();
-    await expect(company.getByText("Batata Playwright").first()).toBeVisible();
     await company.screenshot({ path: `${artifactsDir}/01-empresa-onboarding.png`, fullPage: true });
   });
 
@@ -71,7 +67,6 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
     await expect(company.getByText(/A cobrança recorrente ainda não está conectada neste ambiente/i)).toBeVisible();
     await expect(company.getByText("Começo", { exact: true })).toBeVisible();
     await company.screenshot({ path: `${artifactsDir}/01b-empresa-assinatura-hmg.png`, fullPage: true });
-
     await Promise.all([
       company.waitForURL(/\/admin/, { timeout: 20_000 }),
       company.getByRole("link", { name: "Continuar meu teste →" }).click(),
@@ -88,19 +83,26 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
     await consumer.goto("/loja/playwright-burger-hmg");
     await expect(consumer.getByRole("heading", { name: "Playwright Burger HMG" })).toBeVisible();
     await expect(consumer.getByText("● Aberto")).toBeVisible();
-
     const smash = consumer.locator("article").filter({ hasText: "Smash Playwright" });
     const fries = consumer.locator("article").filter({ hasText: "Batata Playwright" });
     await smash.getByRole("button", { name: "Adicionar +" }).click();
     await fries.getByRole("button", { name: "Adicionar +" }).click();
     await expect(consumer.getByText("R$ 44,80").first()).toBeVisible();
     await consumer.screenshot({ path: `${artifactsDir}/02-cliente-cardapio.png`, fullPage: true });
+
+    const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+    const mobile = await mobileContext.newPage();
+    await mobile.goto("/loja/playwright-burger-hmg");
+    await expect(mobile.getByRole("heading", { name: "Playwright Burger HMG" })).toBeVisible();
+    await expect(mobile.getByText("Smash Playwright")).toBeVisible();
+    await expect(mobile.getByText("Batata Playwright")).toBeVisible();
+    await mobile.screenshot({ path: `${artifactsDir}/02b-cliente-cardapio-mobile.png`, fullPage: true });
+    await mobileContext.close();
   });
 
   await test.step("cliente finaliza compra", async () => {
     await consumer.getByRole("button", { name: "Finalizar pedido →" }).click();
     await expect(consumer.getByRole("heading", { name: "Finalizar pedido" })).toBeVisible();
-
     const checkout = consumer.locator(".rm-checkout");
     await checkout.locator('input[name="name"]').fill("Cliente Playwright");
     await checkout.locator('input[name="phone"]').fill("24988880001");
@@ -113,7 +115,6 @@ test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({
     await checkout.locator('input[name="city"]').fill("Petrópolis");
     await checkout.locator('input[name="state"]').fill("RJ");
     await checkout.locator('input[name="payment"][value="card_on_delivery"]').check();
-
     await consumer.locator(".rm-submit-order").click();
     await expect(consumer.getByText("PEDIDO RECEBIDO")).toBeVisible({ timeout: 20_000 });
     const orderHeading = consumer.locator(".rm-success-modal h2");
