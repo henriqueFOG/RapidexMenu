@@ -127,13 +127,23 @@ export async function attributeAcceptedUpsells(
 ) {
   const now = Date.now();
   const statements = items.map((item) => db.prepare(
-    `UPDATE growth_events
-     SET event_type = 'upsell_accepted', order_id = ?, value_cents = ?, contribution_cents = ?, updated_at = ?
-     WHERE restaurant_id = ? AND client_order_id = ? AND product_id = ? AND event_type = 'upsell_shown'`,
+    `INSERT INTO growth_events
+     (id, restaurant_id, client_order_id, order_id, product_id, event_type,
+      value_cents, contribution_cents, metadata_json, created_at, updated_at)
+     SELECT ?, ?, ?, ?, g.product_id, 'upsell_accepted', ?, ?, g.metadata_json, ?, ?
+     FROM growth_events g
+     WHERE g.restaurant_id = ? AND g.client_order_id = ? AND g.product_id = ?
+       AND g.event_type = 'upsell_shown'
+     LIMIT 1
+     ON CONFLICT (restaurant_id, client_order_id, event_type, product_id) DO NOTHING`,
   ).bind(
+    crypto.randomUUID(),
+    restaurantId,
+    clientOrderId,
     orderId,
     item.priceCents * item.quantity,
     Math.max(0, item.priceCents - item.costCents) * item.quantity,
+    now,
     now,
     restaurantId,
     clientOrderId,
