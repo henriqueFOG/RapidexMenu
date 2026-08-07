@@ -1,0 +1,35 @@
+const columns = [
+  { title: "Recebidos", tone: "coral", count: 3, rows: [["#1285","Carla Mendes","2 itens · WhatsApp","R$ 56,80","há 1 min"],["#1282","Rafael Costa","1 item · Cardápio","R$ 38,90","há 4 min"]] },
+  { title: "Na cozinha", tone: "yellow", count: 5, rows: [["#1284","João Martins","2 itens · WhatsApp","R$ 64,80","12 min"],["#1281","Bia Moreira","4 itens · Link","R$ 112,40","18 min"]] },
+  { title: "Em rota", tone: "green", count: 2, rows: [["#1283","Ana Lima","3 itens · Cardápio","R$ 82,70","chega 20:42"],["#1279","Pedro Nunes","2 itens · Link","R$ 48,90","chega 20:48"]] },
+];
+
+function Brand() {
+  return <div className="brand inverse"><span>⚡</span><b>Rapidex<i>Menu</i></b></div>;
+}
+function Metric({ icon, label, value, foot, tone = "" }: { icon: string; label: string; value: string; foot: string; tone?: string }) {
+  return <article className={`metric ${tone}`}><span>{icon}</span><small>{label}</small><b>{value}</b><em>{foot}</em></article>;
+}
+function PanelTitle({ title, text }: { title: string; text: string }) {
+  return <header className="panelTitle"><div><h2>{title}</h2><p>{text}</p></div><a href="/admin">Abrir gestão real →</a></header>;
+}
+function Channel({ color, name, detail, value }: { color: string; name: string; detail: string; value: string }) {
+  return <li><i className={color}/><p><b>{name}</b><small>{detail}</small></p><strong>{value}</strong></li>;
+}
+function Returning({ initials, name, detail, value, tone }: { initials: string; name: string; detail: string; value: string; tone: string }) {
+  return <div className="return"><span className={tone}>{initials}</span><p><b>{name}</b><small>{detail}</small></p><strong>{value}</strong></div>;
+}
+
+export default function DemoDashboardPage() {
+  return <main className="dashShell rapidex-demo-dashboard">
+    <aside className="sidebar"><Brand/><nav><button className="active">▦ <span>Visão geral</span></button><button>▤ <span>Pedidos</span><i>10</i></button><button>▣ <span>Cardápio</span></button><button>✦ <span>Automações</span><em>IA</em></button><button>♙ <span>Clientes</span></button><button>▥ <span>Financeiro</span></button></nav><div className="growth">↗<b>Canal próprio em alta</b><p>64% das vendas vieram sem comissão.</p><span><i/></span></div><div className="dashUser"><span>MB</span><div><b>Marina Braga</b><small>Serra Burger</small></div></div></aside>
+    <section className="dashMain"><header className="dashTop"><a href="/">← Voltar ao site</a><div><a href="/loja/serra-burger" className="customerView">🛍 Experimentar pedido real</a><a href="/admin" className="customerView">Acessar gestão real</a></div></header>
+      <div className="dashBody"><div className="dashTitle"><div><small>DEMONSTRAÇÃO RAPIDEXMENU</small><h1>Boa tarde, Marina.</h1><p>Veja como o restaurante acompanha pedidos, margem, recompra e oportunidades em uma única visão.</p></div><span><i/> Loja aberta</span></div>
+        <div className="dashMetrics"><Metric icon="◉" label="Vendas hoje" value="R$ 2.846,20" foot="↗ 18,4% acima de ontem" tone="lime"/><Metric icon="▤" label="Pedidos" value="58" foot="12 em andamento"/><Metric icon="▣" label="Ticket médio" value="R$ 49,07" foot="+ R$ 3,12 esta semana"/><Metric icon="✦" label="Receita Rapidex IA" value="R$ 412,60" foot="8 vendas recuperadas" tone="dark"/></div>
+        <div className="dashGrid"><section className="ordersPanel"><PanelTitle title="Pedidos agora" text="Acompanhe a fila da entrada até a entrega."/><div className="orderColumns">{columns.map(c => <div className="orderColumn" key={c.title}><header><i className={c.tone}/><b>{c.title}</b><span>{c.count}</span></header>{c.rows.map(r => <article key={r[0]}><div><small>{r[0]}</small><em>{r[4]}</em></div><b>{r[1]}</b><p>{r[2]}</p><footer><strong>{r[3]}</strong><button aria-label={`Abrir ${r[0]}`}>›</button></footer></article>)}<button className="more">+ {Math.max(0,c.count-c.rows.length)} pedidos</button></div>)}</div></section>
+          <aside className="aiPanel"><header><span>✦</span><div><small>RAPIDEX IA</small><b>Oportunidade agora</b></div></header><div className="insight"><span>🔥 Movimento abaixo do previsto</span><h3>26 clientes costumam pedir às quintas, mas ainda não voltaram.</h3><p>Uma campanha com o Combo Rapidex pode gerar de <b>R$ 286 a R$ 412</b>, preservando margem de 39%.</p><div><small>♙ 26 clientes</small><small>◷ Melhor envio: agora</small></div><a href="/admin">Abrir gestão real →</a><em>A automação só envia após sua aprovação.</em></div><div className="aiRoi"><div><small>Receita recuperada no mês</small><b>R$ 3.482</b></div><span><b>8,7x</b><small>ROI</small></span></div></aside></div>
+        <div className="dashBottom"><section className="channelPanel"><PanelTitle title="De onde vêm suas vendas" text="Participação por canal nos últimos 7 dias."/><div className="channelContent"><span className="donut"><b>64%</b><small>canal próprio</small></span><ul><Channel color="c1" name="RapidexMenu" detail="R$ 12.840 · sem comissão" value="64%"/><Channel color="c2" name="WhatsApp assistido" detail="R$ 4.210 · sem comissão" value="21%"/><Channel color="c3" name="Marketplaces" detail="R$ 3.008 · taxas variáveis" value="15%"/></ul></div></section><section className="returnPanel"><PanelTitle title="Clientes que voltaram" text="Recompras ativadas pela memória Rapidex."/><Returning initials="JL" name="Juliana Lopes" detail="“O de sempre” · WhatsApp" value="R$ 52,80" tone="pink"/><Returning initials="HS" name="Hugo Silva" detail="Carrinho recuperado" value="R$ 68,40" tone="green"/><Returning initials="MF" name="Márcia Freitas" detail="Campanha de recompra" value="R$ 46,90" tone="blue"/></section></div>
+      </div>
+    </section>
+  </main>;
+}
