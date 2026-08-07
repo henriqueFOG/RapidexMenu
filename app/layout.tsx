@@ -8,6 +8,7 @@ import "./operational.css";
 import "./storefront.css";
 import "./storefront-fixes.css";
 import "./conversion.css";
+import "./brand-v2.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,11 +70,11 @@ const hmgBadge: React.CSSProperties = {
   zIndex: 9999,
   borderRadius: 999,
   padding: "7px 11px",
-  background: "#fff3cd",
-  color: "#5f4300",
-  border: "1px solid #e6c968",
+  background: "#171717",
+  color: "#ff8a3d",
+  border: "1px solid #3a3a3a",
   fontSize: 11,
   fontWeight: 900,
   letterSpacing: ".06em",
-  boxShadow: "0 6px 18px rgba(0,0,0,.12)",
+  boxShadow: "0 6px 18px rgba(0,0,0,.22)",
 };
