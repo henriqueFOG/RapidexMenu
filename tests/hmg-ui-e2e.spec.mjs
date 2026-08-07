@@ -16,13 +16,13 @@ test("empresa cadastra produtos, publica, cliente compra e empresa recebe", asyn
     await company.goto("/cadastro");
     await expect(company.getByRole("heading", { name: /Crie sua loja e comece a receber pedidos/i })).toBeVisible();
 
-    await company.getByLabel("Seu nome").fill("Mariana Playwright");
-    await company.getByLabel("Nome do restaurante").fill("Playwright Burger HMG");
-    await company.getByLabel("E-mail").fill("mariana.playwright@rapidex-hmg.test");
-    await company.getByLabel("WhatsApp").fill("24999990001");
-    await company.getByLabel("Cidade").fill("Petrópolis");
-    await company.getByLabel("UF").fill("RJ");
-    await company.getByLabel("Crie uma senha").fill("RapidexPlaywright123");
+    await company.locator('input[name="ownerName"]').fill("Mariana Playwright");
+    await company.locator('input[name="restaurantName"]').fill("Playwright Burger HMG");
+    await company.locator('input[name="email"]').fill("mariana.playwright@rapidex-hmg.test");
+    await company.locator('input[name="phone"]').fill("24999990001");
+    await company.locator('input[name="city"]').fill("Petrópolis");
+    await company.locator('input[name="state"]').fill("RJ");
+    await company.locator('input[name="password"]').fill("RapidexPlaywright123");
     await company.locator('input[name="terms"]').check();
     await company.locator('input[name="privacy"]').check();
 
@@ -34,35 +34,35 @@ test("empresa cadastra produtos, publica, cliente compra e empresa recebe", asyn
   });
 
   await test.step("empresa configura operação", async () => {
-    await company.getByLabel("Taxa de entrega (R$)").fill("5.90");
-    await company.getByLabel("Pedido mínimo (R$)").fill("20.00");
-    await company.getByLabel("Preparo médio (min)").fill("15");
-    await company.getByLabel("Entrega média (min)").fill("25");
+    await company.locator('input[name="deliveryFee"]').fill("5.90");
+    await company.locator('input[name="minimumOrder"]').fill("20.00");
+    await company.locator('input[name="prep"]').fill("15");
+    await company.locator('input[name="delivery"]').fill("25");
     await company.getByRole("button", { name: "Salvar operação" }).click();
     await expect(company.getByText("Dados da operação salvos.")).toBeVisible();
   });
 
   await test.step("empresa cadastra categoria e produtos", async () => {
-    await company.getByLabel("Nova categoria").fill("Hambúrgueres");
+    await company.locator('input[name="category"]').fill("Hambúrgueres");
     await company.getByRole("button", { name: "+ Categoria" }).click();
     await expect(company.getByText("Categoria criada.")).toBeVisible();
 
-    await company.getByLabel("Produto").fill("Smash Playwright");
-    await company.getByLabel("Categoria", { exact: true }).selectOption({ label: "Hambúrgueres" });
-    await company.getByLabel("Preço (R$)").fill("29.90");
-    await company.getByLabel("Custo (R$)").fill("10.00");
-    await company.getByLabel("Preparo (min)").fill("12");
-    await company.getByLabel("Descrição").fill("Pão brioche, carne, queijo e molho da casa.");
+    await company.locator('input[name="product"]').fill("Smash Playwright");
+    await company.locator('select[name="categoryId"]').selectOption({ label: "Hambúrgueres" });
+    await company.locator('input[name="price"]').fill("29.90");
+    await company.locator('input[name="cost"]').fill("10.00");
+    await company.locator('input[name="productPrep"]').fill("12");
+    await company.locator('input[name="description"]').fill("Pão brioche, carne, queijo e molho da casa.");
     await company.getByRole("button", { name: "+ Adicionar produto" }).click();
     await expect(company.getByText("Produto cadastrado. Seu cardápio já tem conteúdo real.")).toBeVisible();
     await expect(company.getByText("Smash Playwright")).toBeVisible();
 
-    await company.getByLabel("Produto").fill("Batata Playwright");
-    await company.getByLabel("Categoria", { exact: true }).selectOption({ label: "Hambúrgueres" });
-    await company.getByLabel("Preço (R$)").fill("14.90");
-    await company.getByLabel("Custo (R$)").fill("4.00");
-    await company.getByLabel("Preparo (min)").fill("8");
-    await company.getByLabel("Descrição").fill("Batata crocante com tempero especial.");
+    await company.locator('input[name="product"]').fill("Batata Playwright");
+    await company.locator('select[name="categoryId"]').selectOption({ label: "Hambúrgueres" });
+    await company.locator('input[name="price"]').fill("14.90");
+    await company.locator('input[name="cost"]').fill("4.00");
+    await company.locator('input[name="productPrep"]').fill("8");
+    await company.locator('input[name="description"]').fill("Batata crocante com tempero especial.");
     await company.getByRole("button", { name: "+ Adicionar produto" }).click();
     await expect(company.getByText("Batata Playwright")).toBeVisible();
     await company.screenshot({ path: `${artifactsDir}/01-empresa-onboarding.png`, fullPage: true });
@@ -100,17 +100,18 @@ test("empresa cadastra produtos, publica, cliente compra e empresa recebe", asyn
     await consumer.getByRole("button", { name: "Finalizar pedido →" }).click();
     await expect(consumer.getByRole("heading", { name: "Finalizar pedido" })).toBeVisible();
 
-    await consumer.getByLabel("Nome").fill("Cliente Playwright");
-    await consumer.getByLabel("WhatsApp").fill("24988880001");
-    await consumer.getByLabel(/E-mail/).fill("cliente.playwright@rapidex-hmg.test");
-    await consumer.getByLabel("Rua").fill("Rua do Teste E2E");
-    await consumer.getByLabel("Número").fill("123");
-    await consumer.getByLabel("Complemento").fill("Apto 10");
-    await consumer.getByLabel("Bairro").fill("Centro");
-    await consumer.getByLabel("CEP").fill("25600000");
-    await consumer.getByLabel("Cidade").fill("Petrópolis");
-    await consumer.getByLabel("UF").fill("RJ");
-    await consumer.getByLabel(/Cartão/).check();
+    const checkout = consumer.locator(".rm-checkout");
+    await checkout.locator('input[name="name"]').fill("Cliente Playwright");
+    await checkout.locator('input[name="phone"]').fill("24988880001");
+    await checkout.locator('input[name="email"]').fill("cliente.playwright@rapidex-hmg.test");
+    await checkout.locator('input[name="street"]').fill("Rua do Teste E2E");
+    await checkout.locator('input[name="number"]').fill("123");
+    await checkout.locator('input[name="complement"]').fill("Apto 10");
+    await checkout.locator('input[name="neighborhood"]').fill("Centro");
+    await checkout.locator('input[name="postalCode"]').fill("25600000");
+    await checkout.locator('input[name="city"]').fill("Petrópolis");
+    await checkout.locator('input[name="state"]').fill("RJ");
+    await checkout.locator('input[name="payment"][value="card_on_delivery"]').check();
 
     await consumer.locator(".rm-submit-order").click();
     await expect(consumer.getByText("PEDIDO RECEBIDO")).toBeVisible({ timeout: 20_000 });
