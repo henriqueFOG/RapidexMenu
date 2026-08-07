@@ -1,4 +1,5 @@
 import { HttpError } from "./http";
+import { attributeAcceptedUpsells } from "./profit-engine";
 import { booleanValue, normalizePhone, optionalString, positiveInteger, requiredString, safeSlug } from "./validation";
 
 type OrderInput = {
@@ -285,6 +286,26 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     const raced = await findExistingOrder(db, restaurant, clientOrderId, email);
     if (raced) return raced;
     throw error;
+  }
+
+  try {
+    await attributeAcceptedUpsells(
+      db,
+      restaurant.id,
+      clientOrderId,
+      orderId,
+      items.map((item) => {
+        const product = products.get(item.productId)!;
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          priceCents: product.price_cents,
+          costCents: product.cost_cents,
+        };
+      }),
+    );
+  } catch (error) {
+    console.error("Profit attribution skipped", error instanceof Error ? error.message : "unknown");
   }
 
   return {
