@@ -9,6 +9,7 @@ import "./storefront.css";
 import "./storefront-fixes.css";
 import "./conversion.css";
 import "./brand-v2.css";
+import "./landing-fixes.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
