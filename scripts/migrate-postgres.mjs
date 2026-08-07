@@ -19,7 +19,7 @@ let pool = null;
 let sql = null;
 
 if (wsProxy) {
-  neonConfig.wsProxy = () => wsProxy;
+  neonConfig.wsProxy = wsProxy;
   neonConfig.useSecureWebSocket = false;
   neonConfig.pipelineConnect = false;
   neonConfig.forceDisablePgSSL = true;
