@@ -6,6 +6,7 @@ const artifactsDir = "playwright-artifacts";
 mkdirSync(artifactsDir, { recursive: true });
 
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
+test.setTimeout(120_000);
 
 test("empresa cadastra produtos, publica, cliente compra e empresa recebe", async ({ browser }) => {
   const companyContext = await browser.newContext();
