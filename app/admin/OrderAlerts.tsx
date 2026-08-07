@@ -1,0 +1,107 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+type OrderRow = {
+  id: string;
+  order_number?: number;
+  total_cents?: number;
+  created_at?: number;
+};
+
+type OrdersPayload = { orders?: OrderRow[] };
+
+export default function OrderAlerts() {
+  const [enabled, setEnabled] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const seen = useRef<Set<string> | null>(null);
+  const audio = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    setPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    async function poll() {
+      try {
+        const response = await fetch("/api/admin/orders?status=received", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json() as OrdersPayload;
+        const orders = payload.orders || [];
+        if (!seen.current) {
+          seen.current = new Set(orders.map((order) => order.id));
+          return;
+        }
+        const fresh = orders.filter((order) => !seen.current!.has(order.id));
+        for (const order of orders) seen.current.add(order.id);
+        if (!enabled || disposed) return;
+        for (const order of fresh.reverse()) announce(order);
+      } catch {
+        // O painel principal continua operando mesmo se o alerta auxiliar falhar.
+      }
+    }
+    void poll();
+    const interval = window.setInterval(() => void poll(), 10_000);
+    return () => { disposed = true; window.clearInterval(interval); };
+  }, [enabled]);
+
+  async function enableAlerts() {
+    if (typeof Notification === "undefined") {
+      setPermission("unsupported");
+      return;
+    }
+    const next = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+    setPermission(next);
+    if (next !== "granted") return;
+    setEnabled(true);
+    try {
+      audio.current = audio.current || new AudioContext();
+      if (audio.current.state === "suspended") await audio.current.resume();
+      beep();
+    } catch {
+      // Som é opcional; a notificação visual continua funcionando.
+    }
+  }
+
+  function announce(order: OrderRow) {
+    beep();
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      const total = Number(order.total_cents || 0) / 100;
+      const notification = new Notification(`Novo pedido #${order.order_number || ""}`.trim(), {
+        body: total > 0 ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.` : "Abra o painel para conferir.",
+        tag: `rapidex-order-${order.id}`,
+      });
+      notification.onclick = () => { window.focus(); notification.close(); };
+    }
+  }
+
+  function beep() {
+    const context = audio.current;
+    if (!context || context.state !== "running") return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.23);
+  }
+
+  if (enabled) return <div style={badgeStyle}>🔔 Alertas ativos</div>;
+  return <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title={permission === "denied" ? "Permissão de notificação bloqueada no navegador" : "Receber alerta quando chegar pedido novo"}>
+    {permission === "denied" ? "🔕 Alertas bloqueados" : permission === "unsupported" ? "Painel sem notificações" : "🔔 Ativar alertas de pedido"}
+  </button>;
+}
+
+const buttonStyle: React.CSSProperties = {
+  position: "fixed", left: 18, bottom: 18, zIndex: 90, border: "1px solid #dfe3d7", borderRadius: 999,
+  padding: "11px 14px", background: "white", color: "#171915", fontWeight: 850, cursor: "pointer",
+  boxShadow: "0 10px 30px rgba(0,0,0,.09)",
+};
+const badgeStyle: React.CSSProperties = {
+  ...buttonStyle, background: "#171915", color: "#c9ff4a", cursor: "default",
+};
