@@ -27,6 +27,12 @@ export async function POST(request: Request) {
       throw new HttpError(401, "Assinatura do webhook inválida.", "invalid_signature");
     }
     const db = getDatabase();
+    const paymentOwner = await db.prepare(
+      `SELECT restaurant_id, order_id FROM payments
+       WHERE provider = 'mercado_pago' AND provider_payment_id = ? LIMIT 1`,
+    ).bind(providerOrderId).first<{ restaurant_id: string; order_id: string }>();
+    if (!paymentOwner) throw new HttpError(404, "Pagamento não reconhecido.", "payment_not_found");
+
     const eventId = `${payload.id || providerOrderId}:${payload.action || payload.type || "order"}`;
     const previous = await db
       .prepare(
@@ -53,31 +59,34 @@ export async function POST(request: Request) {
     }
 
     try {
-      const providerOrder = await getMercadoPagoOrder(providerOrderId);
+      const providerOrder = await getMercadoPagoOrder(providerOrderId, paymentOwner.restaurant_id);
       const orderId = typeof providerOrder.external_reference === "string" ? providerOrder.external_reference : null;
-      if (!orderId) throw new HttpError(400, "Referência do pedido ausente.", "invalid_webhook");
+      if (!orderId || orderId !== paymentOwner.order_id) {
+        throw new HttpError(400, "Referência do pedido não confere.", "invalid_webhook");
+      }
       const status = normalizeMercadoPagoStatus(providerOrder);
       const timestamp = Date.now();
       await db.batch([
         db
           .prepare(
             `UPDATE payments SET status = ?, provider_data_json = ?, updated_at = ?
-             WHERE provider = 'mercado_pago' AND provider_payment_id = ?`,
+             WHERE provider = 'mercado_pago' AND provider_payment_id = ? AND restaurant_id = ?`,
           )
           .bind(
             status,
             JSON.stringify({ providerStatus: providerOrder.status || null }),
             timestamp,
             providerOrderId,
+            paymentOwner.restaurant_id,
           ),
         db
           .prepare(
             `UPDATE orders SET payment_status = ?,
              status = CASE WHEN ? = 'paid' AND status = 'received' THEN 'confirmed' ELSE status END,
              confirmed_at = CASE WHEN ? = 'paid' AND confirmed_at IS NULL THEN ? ELSE confirmed_at END,
-             updated_at = ? WHERE id = ?`,
+             updated_at = ? WHERE id = ? AND restaurant_id = ?`,
           )
-          .bind(status, status, status, timestamp, timestamp, orderId),
+          .bind(status, status, status, timestamp, timestamp, orderId, paymentOwner.restaurant_id),
         db
           .prepare(
             `UPDATE webhook_events SET status = 'processed', processed_at = ?, error = NULL
