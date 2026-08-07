@@ -1,0 +1,16 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#F6F7F2"/>
+  <circle cx="1045" cy="104" r="250" fill="#CAFF58" fill-opacity="0.55"/>
+  <circle cx="1110" cy="590" r="310" fill="#173F32" fill-opacity="0.08"/>
+  <rect x="72" y="68" width="96" height="96" rx="28" fill="#102119"/>
+  <path d="M126 82L98 122H117L110 150L142 107H123L126 82Z" fill="#CAFF58"/>
+  <text x="194" y="126" fill="#102119" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="900" letter-spacing="-2">RapidexMenu</text>
+  <text x="72" y="255" fill="#337452" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800" letter-spacing="2">DELIVERY PRÓPRIO + IA NO WHATSAPP</text>
+  <text x="72" y="342" fill="#102119" font-family="Arial, Helvetica, sans-serif" font-size="67" font-weight="900" letter-spacing="-3.5">Venda direto.</text>
+  <text x="72" y="414" fill="#235B47" font-family="Arial, Helvetica, sans-serif" font-size="67" font-weight="900" letter-spacing="-3.5">Faça o cliente voltar.</text>
+  <text x="72" y="485" fill="#68756D" font-family="Arial, Helvetica, sans-serif" font-size="27">Cardápio, pedidos e recompra em um só lugar — sem comissão por pedido.</text>
+  <rect x="72" y="526" width="248" height="58" rx="18" fill="#102119"/>
+  <text x="104" y="564" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800">14 dias grátis</text>
+  <rect x="342" y="526" width="255" height="58" rx="18" fill="#CAFF58"/>
+  <text x="374" y="564" fill="#102119" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800">0% comissão</text>
+</svg>
