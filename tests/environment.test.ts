@@ -9,6 +9,14 @@ test("normalizes common environment aliases", () => {
   assert.equal(normalizeRapidexEnvironment("test"), "ci");
 });
 
+test("unknown environment names fail closed", () => {
+  const result = validateEnvironmentConfiguration({
+    environment: "prodction",
+    publicUrl: "https://rapidexmenu.com.br",
+  });
+  assert.ok(result.issues.some((issue) => issue.includes("RAPIDEX_ENV inválido")));
+});
+
 test("HMG rejects the official production domain", () => {
   const result = validateEnvironmentConfiguration({
     environment: "hmg",
