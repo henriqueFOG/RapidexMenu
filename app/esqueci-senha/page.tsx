@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import styles from "../commercial.module.css";
 
+type ErrorPayload = { error?: { message?: string } };
+
 export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -13,7 +15,10 @@ export default function ForgotPasswordPage() {
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: form.get("email") }) });
-      if (!response.ok) { const payload = await response.json(); throw new Error(payload.error?.message || "Não foi possível enviar agora."); }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as ErrorPayload;
+        throw new Error(payload.error?.message || "Não foi possível enviar agora.");
+      }
       setSent(true);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar agora."); } finally { setBusy(false); }
   }
