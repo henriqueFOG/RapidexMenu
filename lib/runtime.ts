@@ -9,6 +9,7 @@ export type RapidexBindings = {
   RAPIDEX_ENV?: string;
   RAPIDEX_AUTH_MODE?: string;
   RAPIDEX_SESSION_SECRET?: string;
+  RAPIDEX_INTEGRATION_SECRET?: string;
   RAPIDEX_SIGNUP_ENABLED?: string;
   RAPIDEX_HMG_OWNER_EMAIL?: string;
   RAPIDEX_HMG_OWNER_NAME?: string;
@@ -16,6 +17,8 @@ export type RapidexBindings = {
   RAPIDEX_OWNER_EMAIL?: string;
   RAPIDEX_PUBLIC_URL?: string;
   RAPIDEX_BILLING_MP_ACCESS_TOKEN?: string;
+  RAPIDEX_MP_CLIENT_ID?: string;
+  RAPIDEX_MP_CLIENT_SECRET?: string;
   RESEND_API_KEY?: string;
   RAPIDEX_EMAIL_FROM?: string;
   OPENAI_API_KEY?: string;
@@ -54,6 +57,12 @@ export function integrationReadiness() {
     nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
     billing: Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
     email: Boolean(bindings.RESEND_API_KEY && bindings.RAPIDEX_EMAIL_FROM),
+    sellerPayments: Boolean(
+      bindings.RAPIDEX_MP_CLIENT_ID &&
+        bindings.RAPIDEX_MP_CLIENT_SECRET &&
+        bindings.RAPIDEX_INTEGRATION_SECRET &&
+        bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
+    ),
     uploads: Boolean(bindings.BUCKET),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: Boolean(
@@ -62,6 +71,6 @@ export function integrationReadiness() {
         bindings.WHATSAPP_VERIFY_TOKEN &&
         bindings.WHATSAPP_APP_SECRET,
     ),
-    pix: Boolean(bindings.MERCADO_PAGO_ACCESS_TOKEN),
+    pixLegacy: Boolean(bindings.MERCADO_PAGO_ACCESS_TOKEN),
   };
 }
