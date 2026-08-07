@@ -1,4 +1,5 @@
 import { HttpError } from "./http";
+import { isRestaurantAcceptingOrders } from "./store-availability";
 import { safeSlug } from "./validation";
 
 type CandidateRow = {
@@ -16,6 +17,9 @@ type CandidateRow = {
 type RestaurantRow = {
   id: string;
   max_concurrent_orders: number;
+  is_open: number;
+  timezone: string;
+  settings_json: string;
 };
 
 export type SmartUpsell = {
@@ -38,13 +42,21 @@ export async function getSmartUpsells(
   const slug = safeSlug(restaurantSlug);
   const now = Date.now();
   const restaurant = await db.prepare(
-    `SELECT id, max_concurrent_orders FROM restaurants
+    `SELECT id, max_concurrent_orders, is_open, timezone, settings_json FROM restaurants
      WHERE slug = ? AND (
        (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
        OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?))
      ) LIMIT 1`,
   ).bind(slug, now, now).first<RestaurantRow>();
   if (!restaurant) throw new HttpError(404, "Loja não encontrada ou temporariamente indisponível.", "store_not_found");
+  if (!isRestaurantAcceptingOrders({
+    isOpen: restaurant.is_open,
+    timezone: restaurant.timezone,
+    settingsJson: restaurant.settings_json,
+    now,
+  })) {
+    throw new HttpError(409, "A loja está fechada agora.", "store_closed");
+  }
 
   const active = await db.prepare(
     `SELECT COUNT(*) AS total FROM orders
