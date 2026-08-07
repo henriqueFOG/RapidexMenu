@@ -1,0 +1,45 @@
+:root{
+  --ink:#080808;
+  --green:#0b0b0b;
+  --green2:#ff650b;
+  --lime:#ff650b;
+  --paper:#f5f5f5;
+  --white:#fff;
+  --line:#e5e5e5;
+  --muted:#6e6e6e;
+  --coral:#ff650b;
+  --yellow:#ffb347;
+}
+body{background:#f5f5f5;color:#111}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(255,101,11,.22);outline-offset:2px}
+.brand>span{background:#080808;color:#ff650b}.brand i{color:#ff650b}.brand.inverse>span{background:#ff650b;color:#080808}.brand.inverse i{color:#ff9b62}
+.primary,.limeButton{background:linear-gradient(90deg,#ff650b,#ff8125);color:#fff;box-shadow:0 12px 28px rgba(255,101,11,.2)}
+.secondary{background:#fff;border-color:#dadada}.eyebrow{border-color:#dadada;background:#fff;color:#555}.eyebrow i{background:#ff650b;box-shadow:0 0 0 4px rgba(255,101,11,.12)}
+.hero h1 em{color:#ff650b}.mock>header,.mockAi,.pillar.dark,.whatsapp{background:#080808}.miniMetrics .highlight{background:#fff2e8;border-color:#ffd3b7}.mockAi>span,.pillar.lime,.phone>header>span{background:#ff650b;color:#fff}.margin>i em{background:#080808}.sectionHead>div>small,.waCopy>small{color:#ff650b}.phone{border-color:#151515}.roi{border-color:#ececec}
+
+/* Demonstração pública do painel antigo, preservada no novo visual */
+.dashShell{--ink:#090909;--green:#090909;--green2:#ff650b;--lime:#ff650b;--paper:#f3f3f3;--line:#e2e2e2;background:#f3f3f3;color:#111}
+.sidebar{background:#080808}.sidebar .brand>span{background:#ff650b;color:#080808}.sidebar nav button.active{background:#ff650b;color:#080808}.sidebar nav button i{background:#ff650b;color:#080808}.growth>span i{background:#ff650b}.dashTop{background:rgba(255,255,255,.94);border-color:#e5e5e5}.customerView{background:#080808!important;color:#fff!important;border-color:#080808!important}.customerView:hover{background:#ff650b!important;border-color:#ff650b!important}.dashTitle>span{background:#fff3ea!important;border-color:#ffd4b9!important;color:#a8460b!important}.dashTitle>span i{background:#ff650b}.metric.lime{background:#fff1e7!important;border-color:#ffd4ba!important}.metric.lime>span{background:#080808!important;color:#ff650b!important}.metric.dark,.aiPanel{background:#080808!important}.metric.dark>span,.aiPanel>header>span{background:#ff650b!important;color:#fff!important}.aiPanel header small{color:#ff8a3d!important}.insight>span{color:#ffb06e!important}.insight a{display:flex;align-items:center;justify-content:center;margin-top:12px;padding:10px 12px;border-radius:9px;background:#ff650b;color:#fff;text-decoration:none;font-size:9px;font-weight:900}.aiRoi>span{border-color:rgba(255,101,11,.2)!important;border-top-color:#ff650b!important;border-right-color:#ff650b!important}.donut{border-color:#ececec!important;border-top-color:#ff650b!important;border-right-color:#ff650b!important}.panelTitle a{color:#ff650b;text-decoration:none;font-size:9px;font-weight:900}.c1{background:#ff650b!important}.c2{background:#111!important}.c3{background:#aaa!important}
+
+/* Painel operacional real */
+.rm-admin-shell{--rm-ink:#090909;--rm-green:#090909;--rm-lime:#ff650b;--rm-bg:#f3f3f3;--rm-line:#e1e1e1;background:#f3f3f3;color:#111}
+.rm-admin-sidebar{background:#080808}.rm-admin-brand>span{background:#ff650b;color:#080808}.rm-admin-brand i{color:#ff9658}.rm-admin-sidebar nav button{color:#bdbdbd}.rm-admin-sidebar nav button.active{background:#ff650b;color:#080808}.rm-admin-sidebar nav button>i{background:#ff650b;color:#080808}.rm-sidebar-growth>span{background:rgba(255,101,11,.14);color:#ff650b}.rm-sidebar-growth p,.rm-sidebar-user small{color:#aaa}.rm-sidebar-user>span{background:#242424}.rm-admin-topbar{background:rgba(255,255,255,.94);border-color:#e5e5e5}.rm-view-store,.rm-primary-action,.rm-row-action,.rm-product-form>button{background:#090909;color:#fff}.rm-view-store:hover,.rm-primary-action:hover,.rm-row-action:hover,.rm-product-form>button:hover{background:#ff650b}.rm-page-title small,.rm-section-head>div>small,.rm-order-card small{color:#c6520d}.rm-metric.lime{background:#fff2e9;border-color:#ffd7bf}.rm-metric.lime>span{background:#090909;color:#ff650b}.rm-metric.dark,.rm-ai-card{background:#090909;border-color:#090909}.rm-metric.dark>span,.rm-ai-card>header>span{background:#ff650b;color:#fff}.rm-ai-card>header small{color:#ff8c43}.rm-ai-actions button{background:#ff650b;color:#fff}.rm-ai-roi>span{border-color:rgba(255,101,11,.18);border-top-color:#ff650b;border-right-color:#ff650b}.rm-product-form{background:#fff3ea;border-color:#ffd6bd}.rm-order-card footer button{background:#fff0e5;color:#9a400b}.rm-live{border-color:#ffd3b7;background:#fff2e9;color:#9d440e}.rm-live i{background:#ff650b}
+
+/* Cardápio, sacola e checkout do consumidor */
+.rm-store{
+  --rm-surface:#fff;
+  --rm-surface-soft:#f7f7f7;
+  --rm-text:#0b0b0b;
+  --rm-muted:#707070;
+  --rm-border:rgba(0,0,0,.10);
+  --rm-shadow:0 18px 55px rgba(0,0,0,.08);
+  --rm-shadow-lg:0 28px 80px rgba(0,0,0,.15);
+  background:linear-gradient(180deg,#fff 0,#f5f5f5 48%,#f8f8f8 100%);
+  color:#111;
+}
+.rm-store-top{background:rgba(255,255,255,.92);border-color:rgba(0,0,0,.08)}.rm-store-powered>span{background:#090909;color:var(--store-accent,#ff650b)}.rm-store-powered i{color:#777}.rm-store-cover{background:linear-gradient(120deg,#050505 0,#131313 52%,#242424 100%)}.rm-store-info{border-color:#fff;background:rgba(255,255,255,.96)}.rm-store-tools{background:rgba(247,247,247,.92);border-color:rgba(0,0,0,.08)}.rm-store-tools nav button.active{background:#090909;color:#fff}.rm-store-products>article{background:#fff}.rm-store-product-copy footer>button,.rm-checkout-button,.rm-submit-order{background:#090909;color:#fff}.rm-store-product-copy footer>button:hover,.rm-checkout-button:not(:disabled):hover,.rm-submit-order:not(:disabled):hover{background:#ff650b}.rm-mobile-cart{background:rgba(8,8,8,.97)}.rm-checkout{background:#fafafa}.rm-checkout input:focus{border-color:#ff650b;box-shadow:0 0 0 3px rgba(255,101,11,.12)}
+.rmStoreTrust{border-color:#ffd6bd!important;background:#fff5ee!important;color:#6e2d06!important}.rmPulse{background:#ff650b!important;box-shadow:0 0 0 5px rgba(255,101,11,.12)!important}
+
+/* Superfícies auxiliares e formulários que usam estilos globais */
+input,select,textarea{accent-color:#ff650b}.rm-panel,.rm-products-table,.rm-order-list,.rm-metric{box-shadow:0 8px 30px rgba(0,0,0,.035)}
+a{scroll-margin-top:90px}
