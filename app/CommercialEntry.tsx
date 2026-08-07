@@ -10,10 +10,7 @@ const dark: CSSProperties = { background: "#171915", color: "#c9ff4a", borderRad
 
 export default function CommercialEntry({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
-  if (!enabled) return null;
-  if (pathname === "/") {
-    return <div style={wrapper}><Link href="/calculadora" style={light}>Calcular oportunidade</Link><Link href="/entrar" style={light}>Entrar</Link><Link href="/cadastro" style={dark}>Começar grátis →</Link></div>;
-  }
+  if (!enabled || pathname === "/") return null;
   if (pathname === "/admin") {
     return <div style={wrapper}><Link href="/admin/lucro" style={dark}>✦ Lucro & ROI</Link><Link href="/admin/whatsapp" style={light}>WhatsApp</Link><Link href="/admin/importar" style={light}>Importar</Link><Link href="/admin/horarios" style={light}>Horários</Link><Link href="/admin/pagamentos" style={light}>Pagamentos</Link><Link href="/admin/categorias" style={light}>Categorias</Link><Link href="/assinatura" style={light}>Assinatura</Link></div>;
   }
