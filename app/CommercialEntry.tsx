@@ -12,7 +12,7 @@ export default function CommercialEntry({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
   if (!enabled) return null;
   if (pathname === "/") {
-    return <div style={wrapper}><Link href="/entrar" style={light}>Entrar</Link><Link href="/cadastro" style={dark}>Começar grátis →</Link></div>;
+    return <div style={wrapper}><Link href="/calculadora" style={light}>Calcular oportunidade</Link><Link href="/entrar" style={light}>Entrar</Link><Link href="/cadastro" style={dark}>Começar grátis →</Link></div>;
   }
   if (pathname === "/admin") {
     return <div style={wrapper}><Link href="/admin/lucro" style={dark}>✦ Lucro & ROI</Link><Link href="/admin/categorias" style={light}>Categorias</Link><Link href="/assinatura" style={light}>Assinatura</Link></div>;
