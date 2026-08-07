@@ -59,6 +59,10 @@ export async function POST(request: Request) {
         const value = change.value;
         const phoneNumberId = value.metadata?.phone_number_id || "";
         const restaurantId = await resolveRestaurant(db, phoneNumberId);
+        // A Meta pode continuar entregando eventos por alguns instantes após uma desconexão,
+        // ou por outro número do mesmo WABA que não pertence a esta loja. Acknowledge sem retry.
+        if (!restaurantId) continue;
+
         for (const status of value.statuses || []) {
           await db
             .prepare("UPDATE messages SET status = ? WHERE provider_message_id = ?")
@@ -329,7 +333,7 @@ async function processInboundMessage(
     .run();
 }
 
-async function resolveRestaurant(db: D1Database, phoneNumberId: string) {
+async function resolveRestaurant(db: D1Database, phoneNumberId: string): Promise<string | null> {
   if (phoneNumberId) {
     const integration = await db
       .prepare(
@@ -347,7 +351,7 @@ async function resolveRestaurant(db: D1Database, phoneNumberId: string) {
   ) {
     return DEMO_RESTAURANT_ID;
   }
-  throw new HttpError(404, "Número do WhatsApp não vinculado a uma loja.", "integration_not_found");
+  return null;
 }
 
 function normalizeMemoryKind(kind: string) {
