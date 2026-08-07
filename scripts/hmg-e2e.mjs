@@ -204,7 +204,7 @@ assert.ok(profit.payload.profitEngine.addedRevenueCents >= 1200);
 console.log("[HMG E2E] status + transição inválida");
 await changeStatus(tenantA.cookie, orderId, "confirmed", [200]);
 const invalidTransition = await changeStatus(tenantA.cookie, orderId, "delivered", [409]);
-assert.equal(invalidTransition.payload.code, "invalid_status_transition");
+assert.equal(invalidTransition.payload.error?.code, "invalid_status_transition");
 await changeStatus(tenantA.cookie, orderId, "preparing", [200]);
 await changeStatus(tenantA.cookie, orderId, "ready", [200]);
 await changeStatus(tenantA.cookie, orderId, "delivered", [200]);
@@ -216,6 +216,6 @@ const tenantB = await signup({ suffix: "b", slug: "hmg-burger-b", restaurantName
 const tenantBOrders = await call("/api/admin/orders", { headers: { cookie: tenantB.cookie } }, [200]);
 assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxergar pedidos do tenant A");
 const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
-assert.equal(crossTenantMutation.payload.code, "order_not_found");
+assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
 
 console.log("[HMG E2E] PASS: signup, catálogo, recomendação, pedido, idempotência, tracking, ROI, status e isolamento multiempresa");
