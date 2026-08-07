@@ -44,7 +44,7 @@ export default function CalculatorPage() {
     <h1 className={styles.title}>Quanto vale melhorar ticket e recompra?</h1>
     <p className={styles.intro}>Use números do seu restaurante. A simulação não é promessa de resultado: ela mostra o que precisaria acontecer para a mensalidade se pagar em contribuição adicional.</p>
 
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,.9fr)", gap: 24, marginTop: 24 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 24, marginTop: 24 }}>
       <section className={styles.panel}>
         <h2>Seu cenário mensal</h2>
         <div className={styles.grid}>
