@@ -1,5 +1,5 @@
-import ApprovedLandingV4 from "./ApprovedLandingV4";
+import RapidexLanding from "./RapidexLanding";
 
 export default function HomePage() {
-  return <ApprovedLandingV4 />;
+  return <RapidexLanding />;
 }
