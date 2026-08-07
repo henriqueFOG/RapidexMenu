@@ -76,45 +76,70 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   const token = await exchangeCode(code);
   const phone = await verifyPhoneBelongsToWaba(token, wabaId, phoneNumberId);
 
-  await subscribeWaba(token, wabaId);
-  const pin = randomSixDigitPin();
-  await registerPhone(token, phoneNumberId, pin);
-
-  const encryptedToken = await encryptIntegrationSecret(token);
-  const encryptedPin = await encryptIntegrationSecret(pin);
   const db = getDatabase();
-  const now = Date.now();
   const existing = await db.prepare(
-    "SELECT id FROM restaurant_whatsapp_connections WHERE restaurant_id = ? LIMIT 1",
-  ).bind(input.restaurantId).first<{ id: string }>();
+    `SELECT id, restaurant_id, waba_id, business_id, phone_number_id, display_phone_number,
+            verified_name, access_token_ciphertext, two_factor_pin_ciphertext, status
+     FROM restaurant_whatsapp_connections WHERE restaurant_id = ? LIMIT 1`,
+  ).bind(input.restaurantId).first<WhatsAppConnectionRow>();
   const otherOwner = await db.prepare(
     "SELECT restaurant_id FROM restaurant_whatsapp_connections WHERE phone_number_id = ? AND restaurant_id <> ? LIMIT 1",
   ).bind(phoneNumberId, input.restaurantId).first<{ restaurant_id: string }>();
-  if (otherOwner) throw new HttpError(409, "Este número já está conectado a outra loja Rapidex.", "whatsapp_phone_already_connected");
+  if (otherOwner) throw new HttpError(409, "Este número já está vinculado a outra loja Rapidex.", "whatsapp_phone_already_connected");
+  if (existing?.status === "active" && existing.phone_number_id !== phoneNumberId) {
+    throw new HttpError(409, "Desconecte o WhatsApp atual antes de conectar outro número.", "whatsapp_disconnect_required");
+  }
 
+  const samePhone = existing?.phone_number_id === phoneNumberId;
+  let pin = randomSixDigitPin();
+  if (samePhone && existing?.two_factor_pin_ciphertext) {
+    try { pin = await decryptIntegrationSecret(existing.two_factor_pin_ciphertext); } catch { pin = randomSixDigitPin(); }
+  }
+  const encryptedToken = await encryptIntegrationSecret(token);
+  const encryptedPin = await encryptIntegrationSecret(pin);
+  const now = Date.now();
   const connectionId = existing?.id || crypto.randomUUID();
-  const connectionStatement = existing
-    ? db.prepare(
+
+  // Para conexão nova/retry, persistimos token+PIN criptografados antes dos efeitos externos.
+  // Assim um retry reaproveita o mesmo PIN caso o registro na Meta tenha sido concluído antes de uma falha posterior.
+  if (!existing || existing.status !== "active") {
+    if (existing) {
+      await db.prepare(
         `UPDATE restaurant_whatsapp_connections SET waba_id = ?, business_id = ?, phone_number_id = ?,
          display_phone_number = ?, verified_name = ?, access_token_ciphertext = ?, two_factor_pin_ciphertext = ?,
-         status = 'active', connected_at = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?`,
+         status = 'error', updated_at = ? WHERE id = ? AND restaurant_id = ?`,
       ).bind(
         wabaId, businessId, phoneNumberId, phone.display_phone_number || null, phone.verified_name || null,
-        encryptedToken, encryptedPin, now, now, connectionId, input.restaurantId,
-      )
-    : db.prepare(
+        encryptedToken, encryptedPin, now, connectionId, input.restaurantId,
+      ).run();
+    } else {
+      await db.prepare(
         `INSERT INTO restaurant_whatsapp_connections
          (id, restaurant_id, waba_id, business_id, phone_number_id, display_phone_number, verified_name,
           access_token_ciphertext, two_factor_pin_ciphertext, status, connected_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'error', ?, ?)`,
       ).bind(
         connectionId, input.restaurantId, wabaId, businessId, phoneNumberId,
-        phone.display_phone_number || null, phone.verified_name || null, encryptedToken, encryptedPin, now, now,
-      );
+        phone.display_phone_number || null, phone.verified_name || null,
+        encryptedToken, encryptedPin, now, now,
+      ).run();
+    }
+  }
+
+  await subscribeWaba(token, wabaId);
+  await registerPhone(token, phoneNumberId, pin);
 
   const integration = await db.prepare(
     "SELECT id FROM integrations WHERE restaurant_id = ? AND provider = 'whatsapp' LIMIT 1",
   ).bind(input.restaurantId).first<{ id: string }>();
+  const activateConnection = db.prepare(
+    `UPDATE restaurant_whatsapp_connections SET waba_id = ?, business_id = ?, phone_number_id = ?,
+     display_phone_number = ?, verified_name = ?, access_token_ciphertext = ?, two_factor_pin_ciphertext = ?,
+     status = 'active', connected_at = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?`,
+  ).bind(
+    wabaId, businessId, phoneNumberId, phone.display_phone_number || null, phone.verified_name || null,
+    encryptedToken, encryptedPin, now, now, connectionId, input.restaurantId,
+  );
   const integrationStatement = integration
     ? db.prepare(
         `UPDATE integrations SET status = 'connected', external_account_id = ?, external_phone_id = ?,
@@ -135,7 +160,7 @@ export async function completeWhatsAppEmbeddedSignup(input: {
         JSON.stringify({ businessId, displayPhoneNumber: phone.display_phone_number || null, verifiedName: phone.verified_name || null }),
         now, now, now,
       );
-  await db.batch([connectionStatement, integrationStatement]);
+  await db.batch([activateConnection, integrationStatement]);
 
   return {
     wabaId,
@@ -163,7 +188,7 @@ export async function disconnectRestaurantWhatsApp(restaurantId: string) {
   await db.batch([
     db.prepare(
       `UPDATE restaurant_whatsapp_connections SET status = 'revoked', access_token_ciphertext = '',
-       two_factor_pin_ciphertext = '', updated_at = ? WHERE restaurant_id = ?`,
+       updated_at = ? WHERE restaurant_id = ?`,
     ).bind(now, restaurantId),
     db.prepare(
       `UPDATE integrations SET status = 'disabled', secret_ref = NULL, updated_at = ?
@@ -210,10 +235,10 @@ async function registerPhone(token: string, phoneNumberId: string, pin: string) 
 
 async function graphRequest<T = Record<string, unknown>>(path: string, token: string, init: RequestInit = {}) {
   const version = getBindings().WHATSAPP_GRAPH_VERSION || "v25.0";
-  const response = await fetch(`https://graph.facebook.com/${version}${path}`, {
-    ...init,
-    headers: { authorization: `Bearer ${token}`, accept: "application/json", ...init.headers },
-  });
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  headers.set("accept", "application/json");
+  const response = await fetch(`https://graph.facebook.com/${version}${path}`, { ...init, headers });
   const payload = await response.json().catch(() => ({})) as T & { error?: { message?: string } };
   if (!response.ok) {
     console.error("Meta WhatsApp Graph request failed", response.status, payload.error?.message || "unknown");
