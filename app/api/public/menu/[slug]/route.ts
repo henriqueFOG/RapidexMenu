@@ -76,6 +76,8 @@ export async function GET(
       settingsJson: settings,
       now,
     });
+    const configuredBrandColor = typeof settings.brandColor === "string" ? settings.brandColor.toLowerCase() : "";
+    const brandColor = !configuredBrandColor || configuredBrandColor === "#c9ff4a" ? "#ff650b" : configuredBrandColor;
 
     return json({
       ok: true,
@@ -93,7 +95,7 @@ export async function GET(
         deliveryFeeCents: restaurant.delivery_fee_cents,
         minimumOrderCents: restaurant.minimum_order_cents,
         estimatedMinutes: Number(restaurant.average_prep_minutes) + Number(restaurant.delivery_minutes),
-        brandColor: settings.brandColor || "#ff650b",
+        brandColor,
         cuisine: settings.cuisine || "Restaurante",
       },
       categories: categories.results.map((category) => ({
