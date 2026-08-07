@@ -14,7 +14,7 @@ type ImportRow = {
   tag: string;
 };
 
-type Props = { onImported: () => Promise<void> | void };
+type Props = { onImported?: () => Promise<void> | void };
 
 const sample = `categoria;produto;descricao;preco;custo;preparo;emoji;selo\nHambúrgueres;Smash Clássico;Pão, carne e queijo;29,90;11,50;12;🍔;Mais pedido\nAcompanhamentos;Fritas da Casa;Porção individual;16,90;4,20;8;🍟;`;
 
@@ -64,7 +64,7 @@ export default function MenuImport({ onImported }: Props) {
       };
       if (!response.ok) throw new Error(payload.error?.message || "Não foi possível importar o cardápio.");
       setMessage(`${payload.rows || rows.length} itens processados · ${payload.productsCreated || 0} criados · ${payload.productsUpdated || 0} atualizados.`);
-      await onImported();
+      await onImported?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível importar o cardápio.");
     } finally { setBusy(false); }
