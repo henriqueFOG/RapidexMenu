@@ -68,12 +68,21 @@ test("empresa cadastra produtos, publica, cliente compra e empresa recebe", asyn
     await company.screenshot({ path: `${artifactsDir}/01-empresa-onboarding.png`, fullPage: true });
   });
 
-  await test.step("empresa publica a loja", async () => {
+  await test.step("empresa publica a loja e revisa plano", async () => {
     const publish = company.getByRole("button", { name: "Publicar minha loja →" });
     await expect(publish).toBeEnabled();
     await Promise.all([
-      company.waitForURL(/\/admin/, { timeout: 20_000 }),
+      company.waitForURL(/\/assinatura\?welcome=1/, { timeout: 20_000 }),
       publish.click(),
+    ]);
+    await expect(company.getByRole("heading", { name: "Escolha como quer crescer." })).toBeVisible();
+    await expect(company.getByText(/A cobrança recorrente ainda não está conectada neste ambiente/i)).toBeVisible();
+    await expect(company.getByText("Começo", { exact: true })).toBeVisible();
+    await company.screenshot({ path: `${artifactsDir}/01b-empresa-assinatura-hmg.png`, fullPage: true });
+
+    await Promise.all([
+      company.waitForURL(/\/admin/, { timeout: 20_000 }),
+      company.getByRole("link", { name: "Continuar meu teste →" }).click(),
     ]);
     await expect(company.getByText("Playwright Burger HMG").first()).toBeVisible();
   });
