@@ -16,6 +16,16 @@ type Product = {
   available: boolean;
   prepMinutes: number;
 };
+type SmartUpsell = {
+  id: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  emoji: string;
+  tag: string | null;
+  prepMinutes: number;
+  reason: string;
+};
 type MenuData = {
   restaurant: {
     slug: string;
@@ -24,6 +34,7 @@ type MenuData = {
     state: string;
     whatsapp: string;
     isOpen: boolean;
+    pixAvailable: boolean;
     deliveryFeeCents: number;
     minimumOrderCents: number;
     estimatedMinutes: number;
@@ -68,6 +79,8 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
+  const [recommendations, setRecommendations] = useState<SmartUpsell[]>([]);
+  const [clientOrderId] = useState(() => typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
     fetch(`/api/public/menu/${encodeURIComponent(slug)}`)
@@ -91,14 +104,55 @@ export default function StoreClient({ slug }: { slug: string }) {
     return inCategory && (!term || `${product.name} ${product.description}`.toLowerCase().includes(term));
   });
   const entries = Object.values(cart);
+  const selectedProductIds = useMemo(() => Object.keys(cart).sort(), [cart]);
+  const selectedKey = selectedProductIds.join(",");
   const itemCount = entries.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = entries.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
   const total = subtotal + (menu?.restaurant.deliveryFeeCents || 0);
+
+  useEffect(() => {
+    if (!menu || !selectedProductIds.length) {
+      setRecommendations([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch("/api/public/recommendations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          restaurantSlug: menu.restaurant.slug,
+          clientOrderId,
+          productIds: selectedProductIds,
+        }),
+      })
+        .then(async (response) => {
+          const payload = await response.json() as { recommendations?: SmartUpsell[] };
+          if (!response.ok) return [];
+          return payload.recommendations || [];
+        })
+        .then(setRecommendations)
+        .catch((reason) => { if (reason?.name !== "AbortError") setRecommendations([]); });
+    }, 350);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [menu, clientOrderId, selectedKey, selectedProductIds]);
 
   const add = (product: Product) => setCart((current) => ({
     ...current,
     [product.id]: { ...product, quantity: Math.min(20, (current[product.id]?.quantity || 0) + 1) },
   }));
+  const addUpsell = (product: SmartUpsell) => add({
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    priceCents: product.priceCents,
+    emoji: product.emoji,
+    tag: product.tag,
+    imageUrl: null,
+    available: true,
+    prepMinutes: product.prepMinutes,
+  });
   const change = (product: Product, delta: number) => setCart((current) => {
     const quantity = (current[product.id]?.quantity || 0) + delta;
     const next = { ...current };
@@ -122,19 +176,18 @@ export default function StoreClient({ slug }: { slug: string }) {
         {!visibleProducts.length && <div className="rm-store-empty">Nenhum item encontrado nessa busca.</div>}
       </section>
 
-      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.id}><span>{item.emoji}</span><div><b>{item.name}</b><small>{currency.format(item.priceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => add(item)}>+</button></div></div><em>{currency.format(item.priceCents * item.quantity / 100)}</em></article>)}</div><div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>Entrega</span><b>{currency.format(menu.restaurant.deliveryFeeCents / 100)}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < menu.restaurant.minimumOrderCents} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : subtotal < menu.restaurant.minimumOrderCents ? `Faltam ${currency.format((menu.restaurant.minimumOrderCents - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço recalculado com segurança no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
+      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.id}><span>{item.emoji}</span><div><b>{item.name}</b><small>{currency.format(item.priceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => add(item)}>+</button></div></div><em>{currency.format(item.priceCents * item.quantity / 100)}</em></article>)}</div>{recommendations.length > 0 && <div style={{ margin: "8px 16px 14px", padding: 14, borderRadius: 16, background: "#f2f8df", border: "1px solid #dbe9b5" }}><small style={{ fontWeight: 900, letterSpacing: ".08em" }}>✦ RAPIDEX SUGERE</small>{recommendations.slice(0, 1).map((product) => <div key={product.id} style={{ display: "grid", gridTemplateColumns: "42px 1fr auto", gap: 10, alignItems: "center", marginTop: 10 }}><span style={{ fontSize: 26 }}>{product.emoji}</span><div><b style={{ display: "block" }}>{product.name}</b><small>{product.reason} · {currency.format(product.priceCents / 100)}</small></div><button onClick={() => addUpsell(product)} style={{ border: 0, borderRadius: 999, padding: "8px 11px", fontWeight: 900, cursor: "pointer" }}>+ Adicionar</button></div>)}</div>}<div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>Entrega</span><b>{currency.format(menu.restaurant.deliveryFeeCents / 100)}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < menu.restaurant.minimumOrderCents} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : subtotal < menu.restaurant.minimumOrderCents ? `Faltam ${currency.format((menu.restaurant.minimumOrderCents - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço recalculado com segurança no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
     </div>
 
     {itemCount > 0 && <button className="rm-mobile-cart" onClick={() => setCartOpen(true)}><span><b>{itemCount}</b> Ver sacola</span><strong>{currency.format(total / 100)}</strong></button>}
     {cartOpen && <button className="rm-cart-backdrop" onClick={() => setCartOpen(false)} aria-label="Fechar sacola" />}
-    {checkout && <Checkout menu={menu} entries={entries} total={total} close={() => setCheckout(false)} done={(order) => { setCheckout(false); setResult(order); setCart({}); setCartOpen(false); }} />}
+    {checkout && <Checkout menu={menu} entries={entries} total={total} clientOrderId={clientOrderId} close={() => setCheckout(false)} done={(order) => { setCheckout(false); setResult(order); setCart({}); setRecommendations([]); setCartOpen(false); }} />}
     {result && <OrderSuccess result={result} close={() => setResult(null)} />}
   </main>;
 }
 
-function Checkout({ menu, entries, total, close, done }: { menu: MenuData; entries: CartEntry[]; total: number; close: () => void; done: (result: OrderResult) => void }) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [payment, setPayment] = useState("pix");
-  const [clientOrderId] = useState(() => typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+function Checkout({ menu, entries, total, clientOrderId, close, done }: { menu: MenuData; entries: CartEntry[]; total: number; clientOrderId: string; close: () => void; done: (result: OrderResult) => void }) {
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [payment, setPayment] = useState(menu.restaurant.pixAvailable ? "pix" : "card_on_delivery");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     try {
@@ -142,7 +195,7 @@ function Checkout({ menu, entries, total, close, done }: { menu: MenuData; entri
       const payload = await response.json() as OrderResult & { error?: { message?: string } }; if (!response.ok) throw new Error(payload.error?.message || "Não foi possível enviar o pedido."); done(payload);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar o pedido."); } finally { setBusy(false); }
   };
-  return <div className="rm-modal-backdrop" onMouseDown={close}><div className="rm-checkout" onMouseDown={(event) => event.stopPropagation()}><header><div><small>ÚLTIMO PASSO</small><h2>Finalizar pedido</h2><p>Total de {currency.format(total / 100)}</p></div><button onClick={close}>✕</button></header><form onSubmit={submit}><fieldset><legend>Seus dados</legend><label>Nome<input name="name" required minLength={2} autoComplete="name" /></label><label>WhatsApp<input name="phone" required inputMode="tel" autoComplete="tel" placeholder="(24) 99999-9999" /></label><label className="wide">E-mail <small>{payment === "pix" ? "necessário para gerar o Pix" : "opcional"}</small><input name="email" required={payment === "pix"} type="email" autoComplete="email" /></label></fieldset><fieldset><legend>Endereço de entrega</legend><label className="wide">Rua<input name="street" required autoComplete="address-line1" /></label><label>Número<input name="number" required /></label><label>Complemento<input name="complement" autoComplete="address-line2" /></label><label>Bairro<input name="neighborhood" required /></label><label>CEP<input name="postalCode" required inputMode="numeric" pattern="[0-9.\- ]{8,10}" autoComplete="postal-code" /></label><label>Cidade<input name="city" required defaultValue={menu.restaurant.city} autoComplete="address-level2" /></label><label>UF<input name="state" required minLength={2} maxLength={2} defaultValue={menu.restaurant.state} autoComplete="address-level1" /></label></fieldset><fieldset><legend>Pagamento</legend><div className="rm-payment-options"><label className={payment === "pix" ? "active" : ""}><input type="radio" name="payment" value="pix" checked={payment === "pix"} onChange={() => setPayment("pix")} /><span>▦</span><b>Pix</b><small>QR Code ou copia e cola</small></label><label className={payment === "cash" ? "active" : ""}><input type="radio" name="payment" value="cash" checked={payment === "cash"} onChange={() => setPayment("cash")} /><span>💵</span><b>Dinheiro</b><small>Na entrega</small></label><label className={payment === "card_on_delivery" ? "active" : ""}><input type="radio" name="payment" value="card_on_delivery" checked={payment === "card_on_delivery"} onChange={() => setPayment("card_on_delivery")} /><span>▣</span><b>Cartão</b><small>Na entrega</small></label></div></fieldset><label className="rm-consent"><input name="consent" type="checkbox" /><span>Quero receber novidades e lembretes de recompra pelo WhatsApp. Posso cancelar quando quiser.</span></label>{error && <p className="rm-checkout-error">{error}</p>}<button className="rm-submit-order" disabled={busy}>{busy ? "Criando pedido seguro…" : `Confirmar · ${currency.format(total / 100)}`}</button></form></div></div>;
+  return <div className="rm-modal-backdrop" onMouseDown={close}><div className="rm-checkout" onMouseDown={(event) => event.stopPropagation()}><header><div><small>ÚLTIMO PASSO</small><h2>Finalizar pedido</h2><p>Total de {currency.format(total / 100)}</p></div><button onClick={close}>✕</button></header><form onSubmit={submit}><fieldset><legend>Seus dados</legend><label>Nome<input name="name" required minLength={2} autoComplete="name" /></label><label>WhatsApp<input name="phone" required inputMode="tel" autoComplete="tel" placeholder="(24) 99999-9999" /></label><label className="wide">E-mail <small>{payment === "pix" ? "necessário para gerar o Pix" : "opcional"}</small><input name="email" required={payment === "pix"} type="email" autoComplete="email" /></label></fieldset><fieldset><legend>Endereço de entrega</legend><label className="wide">Rua<input name="street" required autoComplete="address-line1" /></label><label>Número<input name="number" required /></label><label>Complemento<input name="complement" autoComplete="address-line2" /></label><label>Bairro<input name="neighborhood" required /></label><label>CEP<input name="postalCode" required inputMode="numeric" pattern="[0-9.\- ]{8,10}" autoComplete="postal-code" /></label><label>Cidade<input name="city" required defaultValue={menu.restaurant.city} autoComplete="address-level2" /></label><label>UF<input name="state" required minLength={2} maxLength={2} defaultValue={menu.restaurant.state} autoComplete="address-level1" /></label></fieldset><fieldset><legend>Pagamento</legend><div className="rm-payment-options">{menu.restaurant.pixAvailable && <label className={payment === "pix" ? "active" : ""}><input type="radio" name="payment" value="pix" checked={payment === "pix"} onChange={() => setPayment("pix")} /><span>▦</span><b>Pix</b><small>QR Code ou copia e cola</small></label>}<label className={payment === "cash" ? "active" : ""}><input type="radio" name="payment" value="cash" checked={payment === "cash"} onChange={() => setPayment("cash")} /><span>💵</span><b>Dinheiro</b><small>Na entrega</small></label><label className={payment === "card_on_delivery" ? "active" : ""}><input type="radio" name="payment" value="card_on_delivery" checked={payment === "card_on_delivery"} onChange={() => setPayment("card_on_delivery")} /><span>▣</span><b>Cartão</b><small>Na entrega</small></label></div></fieldset><label className="rm-consent"><input name="consent" type="checkbox" /><span>Quero receber novidades e lembretes de recompra pelo WhatsApp. Posso cancelar quando quiser.</span></label>{error && <p className="rm-checkout-error">{error}</p>}<button className="rm-submit-order" disabled={busy}>{busy ? "Criando pedido seguro…" : `Confirmar · ${currency.format(total / 100)}`}</button></form></div></div>;
 }
 
 function OrderSuccess({ result, close }: { result: OrderResult; close: () => void }) {
