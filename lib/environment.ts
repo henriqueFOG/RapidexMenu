@@ -1,11 +1,7 @@
 export type RapidexEnvironment = "development" | "ci" | "hmg" | "production";
 
 export function normalizeRapidexEnvironment(value: unknown): RapidexEnvironment {
-  const normalized = String(value || "development").trim().toLowerCase();
-  if (["prod", "production"].includes(normalized)) return "production";
-  if (["hmg", "homologation", "homolog", "staging", "stage"].includes(normalized)) return "hmg";
-  if (normalized === "ci" || normalized === "test") return "ci";
-  return "development";
+  return parseRapidexEnvironment(value) || "development";
 }
 
 export function isProductionEnvironment(value: unknown) {
@@ -17,9 +13,15 @@ export function validateEnvironmentConfiguration(input: {
   publicUrl?: string | null;
   billingToken?: string | null;
 }) {
-  const environment = normalizeRapidexEnvironment(input.environment);
+  const parsed = parseRapidexEnvironment(input.environment);
+  const environment = parsed || "development";
   const publicUrl = String(input.publicUrl || "").trim();
+  const rawEnvironment = String(input.environment || "").trim();
   const issues: string[] = [];
+
+  if (rawEnvironment && !parsed) {
+    issues.push("RAPIDEX_ENV inválido. Use development, ci, hmg ou production.");
+  }
 
   if (environment === "production") {
     if (!publicUrl.startsWith("https://")) issues.push("Produção exige RAPIDEX_PUBLIC_URL com HTTPS.");
@@ -46,4 +48,13 @@ export function assertEnvironmentConfiguration(input: {
   const result = validateEnvironmentConfiguration(input);
   if (result.issues.length) throw new Error(`Configuração de ambiente inválida: ${result.issues.join(" ")}`);
   return result.environment;
+}
+
+function parseRapidexEnvironment(value: unknown): RapidexEnvironment | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "development" || normalized === "dev") return "development";
+  if (["prod", "production"].includes(normalized)) return "production";
+  if (["hmg", "homologation", "homolog", "staging", "stage"].includes(normalized)) return "hmg";
+  if (["ci", "test"].includes(normalized)) return "ci";
+  return null;
 }
