@@ -63,7 +63,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install HMG WebSocket client
+        run: npm install --no-save --package-lock=false ws@8.21.1
+
       - name: Build and migrate isolated HMG database
+        env:
+          NODE_OPTIONS: --import ./scripts/hmg-ws-preload.mjs
         run: npm run build:vercel
 
       - name: Verify database environment marker
@@ -72,6 +77,8 @@ jobs:
           test "$marker" = "hmg"
 
       - name: Start HMG runtime
+        env:
+          NODE_OPTIONS: --import ./scripts/hmg-ws-preload.mjs
         run: |
           nohup npx --no-install next start -H 127.0.0.1 -p 3000 > /tmp/rapidex-hmg.log 2>&1 &
           echo $! > /tmp/rapidex-hmg.pid
