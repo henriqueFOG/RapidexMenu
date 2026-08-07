@@ -6,12 +6,13 @@ function graphBase() {
   return `https://graph.facebook.com/${version}`;
 }
 
-export async function sendWhatsAppText(to: string, body: string) {
+export async function sendWhatsAppText(to: string, body: string, phoneNumberId?: string) {
   const { WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID } = getBindings();
-  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+  const senderPhoneId = phoneNumberId || WHATSAPP_PHONE_NUMBER_ID;
+  if (!WHATSAPP_ACCESS_TOKEN || !senderPhoneId) {
     throw new HttpError(503, "WhatsApp ainda não configurado.", "integration_not_configured");
   }
-  const response = await fetch(`${graphBase()}/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+  const response = await fetch(`${graphBase()}/${encodeURIComponent(senderPhoneId)}/messages`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
@@ -52,7 +53,7 @@ export async function downloadWhatsAppMedia(mediaId: string) {
     headers: { authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}` },
   });
   if (!mediaResponse.ok) {
-    throw new HttpError(502, "Não foi possível baixar o áudio.", "media_download_failed");
+    throw new HttpError(502, "Não foi possível baixar o áudio do WhatsApp.", "media_download_failed");
   }
   return {
     blob: await mediaResponse.blob(),
