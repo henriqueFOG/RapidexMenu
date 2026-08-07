@@ -75,23 +75,25 @@ export default function OnboardingClient({ userName }: { userName: string }) {
 
   async function addCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy("category"); setError(""); setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api("/api/admin/categories", { method: "POST", body: JSON.stringify({ name: form.get("category") }) });
-      event.currentTarget.reset(); setMessage("Categoria criada."); await load();
+      formElement.reset(); setMessage("Categoria criada."); await load();
     } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
   }
 
   async function addProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy("product"); setError(""); setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api("/api/admin/products", { method: "POST", body: JSON.stringify({
         name: form.get("product"), description: form.get("description"), emoji: form.get("emoji") || "🍽️",
         categoryId: form.get("categoryId") || null, priceCents: moneyToCents(form.get("price")),
         costCents: moneyToCents(form.get("cost")), prepMinutes: Number(form.get("productPrep")),
       }) });
-      event.currentTarget.reset(); setMessage("Produto cadastrado. Seu cardápio já tem conteúdo real."); await load();
+      formElement.reset(); setMessage("Produto cadastrado. Seu cardápio já tem conteúdo real."); await load();
     } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
   }
 
