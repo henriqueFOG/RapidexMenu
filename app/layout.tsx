@@ -10,6 +10,7 @@ import "./storefront-fixes.css";
 import "./conversion.css";
 import "./brand-v2.css";
 import "./identity.css";
+import "./fidelity-overrides.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
