@@ -1,5 +1,7 @@
 import {
   neon,
+  neonConfig,
+  Pool,
   type FullQueryResults,
   type NeonQueryFunction,
 } from "@neondatabase/serverless";
@@ -11,6 +13,14 @@ type CompiledStatement = {
   params: unknown[];
 };
 
+type QueryField = { name: string };
+type QueryResultLike = {
+  rows: unknown[];
+  rowCount: number | null;
+  fields: QueryField[];
+  command: string;
+};
+
 const numericColumn =
   /^(?:ok|count|total|orders|active|available|is_open|stock_control_enabled|signature_valid|whatsapp_consent|remaining|changes|row_count)$|(?:_at|_cents|_minutes|_count|_quantity|_stock|_number|_position|_percent|_revenue|_total|_expires)$/;
 
@@ -18,8 +28,10 @@ let cachedConnectionString: string | null = null;
 let cachedDatabase: D1Database | null = null;
 
 /**
- * Presents the small D1 surface used by RapidexMenu on top of Neon Postgres.
- * This keeps the API routes runtime-agnostic while HMG runs on Vercel/Neon.
+ * Presents the small D1 surface used by RapidexMenu on top of Postgres.
+ * Vercel/Neon uses SQL-over-HTTP by default. Isolated HMG/CI can set
+ * RAPIDEX_POSTGRES_WS_PROXY to route the same driver through a local
+ * WebSocket-to-TCP proxy backed by ordinary PostgreSQL.
  */
 export function getPostgresDatabase(connectionString: string): D1Database {
   if (!cachedDatabase || cachedConnectionString !== connectionString) {
@@ -31,10 +43,22 @@ export function getPostgresDatabase(connectionString: string): D1Database {
 }
 
 class PostgresD1Database {
-  readonly sql: NeonQueryFunction<false, true>;
+  readonly sql: NeonQueryFunction<false, true> | null;
+  readonly pool: Pool | null;
 
   constructor(connectionString: string) {
-    this.sql = neon<false, true>(connectionString, { fullResults: true });
+    const wsProxy = String(process.env.RAPIDEX_POSTGRES_WS_PROXY || "").trim();
+    if (wsProxy) {
+      neonConfig.wsProxy = () => wsProxy;
+      neonConfig.useSecureWebSocket = false;
+      neonConfig.pipelineConnect = false;
+      neonConfig.forceDisablePgSSL = true;
+      this.pool = new Pool({ connectionString });
+      this.sql = null;
+    } else {
+      this.sql = neon<false, true>(connectionString, { fullResults: true });
+      this.pool = null;
+    }
   }
 
   prepare(query: string) {
@@ -50,15 +74,35 @@ class PostgresD1Database {
     });
 
     const startedAt = performance.now();
-    const results = await this.sql.transaction(
-      (transaction) =>
-        postgresStatements.map((statement) =>
-          transaction.query(statement.sql, statement.params),
-        ),
-      { fullResults: true },
-    );
-    const duration = performance.now() - startedAt;
+    let results: QueryResultLike[];
 
+    if (this.pool) {
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        results = [];
+        for (const statement of postgresStatements) {
+          results.push(await client.query(statement.sql, statement.params) as QueryResultLike);
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        try { await client.query("ROLLBACK"); } catch { /* preserve original error */ }
+        throw error;
+      } finally {
+        client.release();
+      }
+    } else {
+      const sql = this.sql!;
+      results = await sql.transaction(
+        (transaction) =>
+          postgresStatements.map((statement) =>
+            transaction.query(statement.sql, statement.params),
+          ),
+        { fullResults: true },
+      ) as unknown as QueryResultLike[];
+    }
+
+    const duration = performance.now() - startedAt;
     return results.map((result) => toD1Result(result, duration));
   }
 
@@ -71,8 +115,9 @@ class PostgresD1Database {
     };
   }
 
-  async execute(query: string, params: unknown[]) {
-    return this.sql.query(query, params);
+  async execute(query: string, params: unknown[]): Promise<QueryResultLike> {
+    if (this.pool) return await this.pool.query(query, params) as unknown as QueryResultLike;
+    return await this.sql!.query(query, params) as unknown as QueryResultLike;
   }
 }
 
@@ -159,7 +204,7 @@ export function normalizePostgresRows<T extends Row>(rows: T[]): T[] {
   );
 }
 
-function toD1Result<T = Row>(result: FullQueryResults<false>, duration: number) {
+function toD1Result<T = Row>(result: QueryResultLike | FullQueryResults<false>, duration: number) {
   const rows = normalizePostgresRows(result.rows as Row[]) as T[];
   const changes = result.rowCount ?? 0;
   return {
