@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import ApprovedLandingV4 from "./ApprovedLandingV4";
 
 export default function ConversionLayer() {
   const pathname = usePathname();
@@ -17,8 +16,6 @@ export default function ConversionLayer() {
       </div>
     );
   }
-
-  if (pathname === "/") return <ApprovedLandingV4 />;
 
   return null;
 }
