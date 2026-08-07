@@ -35,14 +35,14 @@ jobs:
     env:
       RAPIDEX_RUNTIME: vercel
       RAPIDEX_ENV: hmg
-      RAPIDEX_PUBLIC_URL: http://127.0.0.1:3000
+      RAPIDEX_PUBLIC_URL: http://localhost:3000
       RAPIDEX_AUTH_MODE: native
       RAPIDEX_SIGNUP_ENABLED: "true"
       RAPIDEX_SESSION_SECRET: hmg-ci-session-secret-32-characters-minimum-only
       RAPIDEX_INTEGRATION_SECRET: hmg-ci-integration-secret-32-characters-minimum
       DATABASE_URL: postgresql://rapidex@127.0.0.1:5432/rapidex_hmg?sslmode=disable
       RAPIDEX_POSTGRES_WS_PROXY: 127.0.0.1:9876
-      RAPIDEX_E2E_URL: http://127.0.0.1:3000
+      RAPIDEX_E2E_URL: http://localhost:3000
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,7 +93,7 @@ jobs:
       - name: Wait for health
         run: |
           for attempt in $(seq 1 40); do
-            if curl --fail --silent http://127.0.0.1:3000/api/health >/tmp/rapidex-health.json; then
+            if curl --fail --silent http://localhost:3000/api/health >/tmp/rapidex-health.json; then
               cat /tmp/rapidex-health.json
               exit 0
             fi
