@@ -166,7 +166,7 @@ assert.deepEqual(settings.payload.settings.weeklyHours, alwaysOpenHours);
 
 const catalogAfterImport = await call("/api/admin/products", { headers: { cookie: tenantA.cookie } }, [200]);
 assert.equal(catalogAfterImport.payload.products.length, 3);
-assert.ok(catalogAfterImport.payload.products.some((product) => product.name === "Molho HMG" && product.price_cents === 300));
+assert.ok(catalogAfterImport.payload.products.some((product) => product.name === "Molho HMG" && product.priceCents === 300));
 
 await call(
   "/api/admin/onboarding",
