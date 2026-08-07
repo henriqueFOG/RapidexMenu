@@ -8,8 +8,32 @@ if (!connectionString) {
   throw new Error("Configure DATABASE_URL antes de executar as migracoes Postgres.");
 }
 
+const environment = normalizeEnvironment(process.env.RAPIDEX_ENV);
+if (!["hmg", "production", "development", "ci"].includes(environment)) {
+  throw new Error("RAPIDEX_ENV inválido para migrations.");
+}
+
 const migrationsDirectory = path.join(process.cwd(), "db", "postgres");
 const sql = neon(connectionString);
+
+await sql.query(`
+  CREATE TABLE IF NOT EXISTS rapidex_environment (
+    id integer PRIMARY KEY CHECK (id = 1),
+    environment text NOT NULL CHECK (environment IN ('hmg', 'production', 'development', 'ci')),
+    created_at double precision NOT NULL DEFAULT (extract(epoch FROM clock_timestamp()) * 1000),
+    updated_at double precision NOT NULL DEFAULT (extract(epoch FROM clock_timestamp()) * 1000)
+  )
+`);
+
+const databaseEnvironment = await sql.query("SELECT environment FROM rapidex_environment WHERE id = 1 LIMIT 1");
+if (!databaseEnvironment.length) {
+  await sql.query("INSERT INTO rapidex_environment (id, environment) VALUES (1, $1)", [environment]);
+  console.log(`database environment initialized: ${environment}`);
+} else if (databaseEnvironment[0].environment !== environment) {
+  throw new Error(
+    `BLOQUEADO: este banco pertence ao ambiente ${databaseEnvironment[0].environment}, mas o deploy está configurado como ${environment}.`,
+  );
+}
 
 await sql.query(`
   CREATE TABLE IF NOT EXISTS rapidex_migrations (
@@ -57,4 +81,12 @@ for (const file of files) {
   console.log(`applied ${file}`);
 }
 
-console.log(`Postgres pronto: ${files.length} migracao(oes) verificada(s).`);
+console.log(`Postgres ${environment} pronto: ${files.length} migracao(oes) verificada(s).`);
+
+function normalizeEnvironment(value) {
+  const normalized = String(value || "development").trim().toLowerCase();
+  if (["prod", "production"].includes(normalized)) return "production";
+  if (["hmg", "homologation", "homolog", "staging", "stage"].includes(normalized)) return "hmg";
+  if (["ci", "test"].includes(normalized)) return "ci";
+  return "development";
+}
