@@ -100,8 +100,6 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   const now = Date.now();
   const connectionId = existing?.id || crypto.randomUUID();
 
-  // Para conexão nova/retry, persistimos token+PIN criptografados antes dos efeitos externos.
-  // Assim um retry reaproveita o mesmo PIN caso o registro na Meta tenha sido concluído antes de uma falha posterior.
   if (!existing || existing.status !== "active") {
     if (existing) {
       await db.prepare(
@@ -175,15 +173,24 @@ export async function disconnectRestaurantWhatsApp(restaurantId: string) {
   const db = getDatabase();
   const connection = await getRestaurantWhatsAppConnection(restaurantId);
   if (!connection) return { disconnected: false };
-  let token: string | null = null;
-  try { token = await decryptIntegrationSecret(connection.access_token_ciphertext); } catch { token = null; }
-  if (token) {
-    try {
-      await graphRequest(`/${connection.waba_id}/subscribed_apps`, token, { method: "DELETE" });
-    } catch (error) {
-      console.error("WhatsApp WABA unsubscribe failed", error instanceof Error ? error.message : "unknown");
+
+  const otherActive = await db.prepare(
+    `SELECT id FROM restaurant_whatsapp_connections
+     WHERE waba_id = ? AND restaurant_id <> ? AND status = 'active' LIMIT 1`,
+  ).bind(connection.waba_id, restaurantId).first<{ id: string }>();
+
+  if (!otherActive) {
+    let token: string | null = null;
+    try { token = await decryptIntegrationSecret(connection.access_token_ciphertext); } catch { token = null; }
+    if (token) {
+      try {
+        await graphRequest(`/${connection.waba_id}/subscribed_apps`, token, { method: "DELETE" });
+      } catch (error) {
+        console.error("WhatsApp WABA unsubscribe failed", error instanceof Error ? error.message : "unknown");
+      }
     }
   }
+
   const now = Date.now();
   await db.batch([
     db.prepare(
@@ -195,7 +202,7 @@ export async function disconnectRestaurantWhatsApp(restaurantId: string) {
        WHERE restaurant_id = ? AND provider = 'whatsapp'`,
     ).bind(now, restaurantId),
   ]);
-  return { disconnected: true };
+  return { disconnected: true, sharedWabaKeptSubscribed: Boolean(otherActive) };
 }
 
 async function exchangeCode(code: string) {
