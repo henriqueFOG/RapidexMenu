@@ -20,10 +20,12 @@ export async function POST(request: Request) {
     const body = await readJson<Record<string, unknown>>(request, 120_000);
     const slug = safeSlug(body.restaurantSlug);
     const subscription = await db.prepare(
-      `SELECT id, status, trial_ends_at FROM restaurants WHERE slug = ? LIMIT 1`,
-    ).bind(slug).first<{ id: string; status: string; trial_ends_at: number | null }>();
-    const trialValid = subscription?.status === "trial" && (!subscription.trial_ends_at || Number(subscription.trial_ends_at) > Date.now());
-    if (!subscription || (subscription.status !== "active" && !trialValid)) {
+      `SELECT id, status, trial_ends_at, access_ends_at FROM restaurants WHERE slug = ? LIMIT 1`,
+    ).bind(slug).first<{ id: string; status: string; trial_ends_at: number | null; access_ends_at: number | null }>();
+    const now = Date.now();
+    const trialValid = subscription?.status === "trial" && (!subscription.trial_ends_at || Number(subscription.trial_ends_at) > now);
+    const activeValid = subscription?.status === "active" && (!subscription.access_ends_at || Number(subscription.access_ends_at) > now);
+    if (!subscription || (!activeValid && !trialValid)) {
       throw new HttpError(403, "Esta loja está temporariamente indisponível para novos pedidos.", "store_subscription_inactive");
     }
 
