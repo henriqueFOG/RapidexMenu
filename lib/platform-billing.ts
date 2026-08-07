@@ -77,6 +77,22 @@ export async function fetchProviderSubscription(providerId: string) {
   return provider;
 }
 
+export async function cancelProviderSubscription(providerId: string) {
+  const token = getBindings().RAPIDEX_BILLING_MP_ACCESS_TOKEN;
+  if (!token) throw new HttpError(503, "A cobrança recorrente ainda não foi ativada.", "billing_not_configured");
+  const response = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(providerId)}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ status: "canceled" }),
+  });
+  const provider = await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
+  if (!response.ok || !provider.id) {
+    console.error("Rapidex billing cancellation failed", response.status, provider.message || "unknown");
+    throw new HttpError(502, "Não foi possível cancelar a renovação agora.", "billing_provider_error");
+  }
+  return provider;
+}
+
 export async function syncProviderSubscription(provider: ProviderSubscription) {
   if (!provider.id || !provider.external_reference) throw new HttpError(400, "Assinatura inválida.", "invalid_subscription");
   const db = getDatabase();
@@ -87,10 +103,9 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
   if (!local || local.restaurant_id !== String(provider.external_reference)) {
     throw new HttpError(404, "Assinatura não reconhecida.", "subscription_not_found");
   }
-  const expectedAmount = PLAN_PRICES[local.plan];
   const providerAmount = Math.round(Number(provider.auto_recurring?.transaction_amount || 0) * 100);
-  if (providerAmount && providerAmount !== expectedAmount) {
-    throw new HttpError(409, "Valor da assinatura não confere com o plano.", "subscription_amount_mismatch");
+  if (providerAmount && providerAmount !== Number(local.amount_cents)) {
+    throw new HttpError(409, "Valor da assinatura não confere com o plano contratado.", "subscription_amount_mismatch");
   }
   const status = normalizeStatus(provider.status);
   const now = Date.now();
@@ -112,6 +127,7 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
 
 function normalizeStatus(value: unknown): "pending" | "authorized" | "paused" | "cancelled" | "unknown" {
   if (value === "pending" || value === "authorized" || value === "paused" || value === "cancelled") return value;
+  if (value === "canceled") return "cancelled";
   return "unknown";
 }
 
