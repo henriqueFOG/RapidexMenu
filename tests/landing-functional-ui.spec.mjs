@@ -65,7 +65,7 @@ test("landing oficial mantém CTAs e mockup íntegros no mobile", async ({ brows
   await expect(page.getByRole("heading", { name: /Cardápio Online/i })).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
   await expect(page.getByRole("link", { name: /Acessar Painel/i }).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: /Experimentar em tempo real/i }).first()).toBeVisible();
+  await expect(page.locator("a:visible").filter({ hasText: "Experimentar em tempo real" }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: /Ver painel funcionando/i }).first()).toBeVisible();
   await expectPhoneMockWithoutOverlap(page);
   await page.screenshot({ path: `${artifactsDir}/00c-landing-oficial-mobile.png`, fullPage: true });
