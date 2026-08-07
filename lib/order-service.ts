@@ -1,4 +1,6 @@
 import { HttpError } from "./http";
+import { attributeAcceptedUpsells } from "./profit-engine";
+import { isRestaurantAcceptingOrders } from "./store-availability";
 import { booleanValue, normalizePhone, optionalString, positiveInteger, requiredString, safeSlug } from "./validation";
 
 type OrderInput = {
@@ -22,6 +24,8 @@ type RestaurantRow = {
   slug: string;
   name: string;
   is_open: number;
+  timezone: string;
+  settings_json: string;
   delivery_fee_cents: number;
   minimum_order_cents: number;
   average_prep_minutes: number;
@@ -96,16 +100,27 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
   }
   const items = Array.from(compactItems.values());
 
+  const now = Date.now();
   const restaurant = await db
     .prepare(
-      `SELECT id, slug, name, is_open, delivery_fee_cents, minimum_order_cents,
+      `SELECT id, slug, name, is_open, timezone, settings_json, delivery_fee_cents, minimum_order_cents,
               average_prep_minutes, delivery_minutes, max_concurrent_orders
-       FROM restaurants WHERE slug = ? AND status IN ('trial', 'active') LIMIT 1`,
+       FROM restaurants WHERE slug = ? AND (
+         (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
+         OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?))
+       ) LIMIT 1`,
     )
-    .bind(slug)
+    .bind(slug, now, now)
     .first<RestaurantRow>();
-  if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
-  if (!restaurant.is_open) throw new HttpError(409, "A loja está fechada agora.", "store_closed");
+  if (!restaurant) throw new HttpError(403, "Esta loja está temporariamente indisponível para novos pedidos.", "store_subscription_inactive");
+  if (!isRestaurantAcceptingOrders({
+    isOpen: restaurant.is_open,
+    timezone: restaurant.timezone,
+    settingsJson: restaurant.settings_json,
+    now,
+  })) {
+    throw new HttpError(409, "A loja está fechada agora.", "store_closed");
+  }
 
   const existing = await findExistingOrder(db, restaurant, clientOrderId, email);
   if (existing) return existing;
@@ -285,6 +300,26 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     const raced = await findExistingOrder(db, restaurant, clientOrderId, email);
     if (raced) return raced;
     throw error;
+  }
+
+  try {
+    await attributeAcceptedUpsells(
+      db,
+      restaurant.id,
+      clientOrderId,
+      orderId,
+      items.map((item) => {
+        const product = products.get(item.productId)!;
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          priceCents: product.price_cents,
+          costCents: product.cost_cents,
+        };
+      }),
+    );
+  } catch (error) {
+    console.error("Profit attribution skipped", error instanceof Error ? error.message : "unknown");
   }
 
   return {

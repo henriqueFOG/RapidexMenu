@@ -1,0 +1,19 @@
+/* Storefront isolation from broad legacy landing selectors. */
+.rm-store .rm-store-product-copy footer{
+  margin:0;
+  padding:0;
+  min-height:34px;
+  border:0;
+  background:transparent;
+  color:var(--rm-text);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.rm-store .rm-store-product-copy footer strong{color:var(--rm-text)}
+.rm-store .rm-store-product-copy footer em{color:#8b4232;font-size:9px;font-style:normal;font-weight:800}
+@media(max-width:820px){
+  .rm-store .rm-cart:not(.open){visibility:hidden;pointer-events:none;opacity:0}
+  .rm-store .rm-cart.open{visibility:visible;pointer-events:auto;opacity:1}
+}

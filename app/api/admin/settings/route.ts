@@ -1,6 +1,7 @@
 import { audit, requireAdminContext, requireRole } from "@/lib/admin-auth";
-import { apiError, assertSameOrigin, json, readJson } from "@/lib/http";
+import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
+import { validateWeeklyHours } from "@/lib/store-availability";
 import { booleanValue, cents, normalizePhone, optionalString, positiveInteger, requiredString } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,8 @@ export async function GET() {
       .prepare("SELECT * FROM restaurants WHERE id = ?")
       .bind(context.restaurantId)
       .first<Record<string, unknown>>();
-    return json({ ok: true, restaurant });
+    const settings = safeJson(restaurant?.settings_json);
+    return json({ ok: true, restaurant, settings });
   } catch (error) {
     return apiError(error);
   }
@@ -48,6 +50,12 @@ export async function PATCH(request: Request) {
             : null;
     if (body.brandColor !== undefined) settings.brandColor = optionalString(body.brandColor, "Cor", 20);
     if (body.cuisine !== undefined) settings.cuisine = optionalString(body.cuisine, "Categoria", 80);
+    if (body.weeklyHours !== undefined) {
+      try { settings.weeklyHours = validateWeeklyHours(body.weeklyHours); }
+      catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : "Horários inválidos.", "validation_error", { field: "weeklyHours" });
+      }
+    }
     await db
       .prepare(
         `UPDATE restaurants SET name = ?, phone = ?, whatsapp = ?, city = ?, state = ?,

@@ -1,0 +1,125 @@
+name: RapidexMenu HMG E2E
+
+on:
+  push:
+    branches: [hmg, agent/commercial-ready]
+  pull_request:
+    branches: [hmg]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rapidex-hmg-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rapidex
+          POSTGRES_DB: rapidex_hmg
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U rapidex -d rapidex_hmg"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      RAPIDEX_RUNTIME: vercel
+      RAPIDEX_ENV: hmg
+      RAPIDEX_PUBLIC_URL: http://localhost:3000
+      RAPIDEX_AUTH_MODE: native
+      RAPIDEX_SIGNUP_ENABLED: "true"
+      RAPIDEX_SESSION_SECRET: hmg-ci-session-secret-32-characters-minimum-only
+      RAPIDEX_INTEGRATION_SECRET: hmg-ci-integration-secret-32-characters-minimum
+      DATABASE_URL: postgresql://rapidex@127.0.0.1:5432/rapidex_hmg?sslmode=disable
+      RAPIDEX_POSTGRES_WS_PROXY: 127.0.0.1:9876
+      RAPIDEX_E2E_URL: http://localhost:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: |
+          npm install --no-save --package-lock=false @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Start disposable HMG database proxy
+        run: |
+          nohup node scripts/hmg-wsproxy.mjs > /tmp/rapidex-hmg-wsproxy.log 2>&1 &
+          echo $! > /tmp/rapidex-hmg-wsproxy.pid
+          for attempt in $(seq 1 20); do
+            if grep -q "ws://127.0.0.1:9876" /tmp/rapidex-hmg-wsproxy.log 2>/dev/null; then
+              cat /tmp/rapidex-hmg-wsproxy.log
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/rapidex-hmg-wsproxy.log || true
+          exit 1
+
+      - name: Build and migrate isolated HMG database
+        run: npm run build:vercel
+
+      - name: Verify database environment marker
+        run: |
+          marker="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -tAc "SELECT environment FROM rapidex_environment WHERE id = 1")"
+          test "$marker" = "hmg"
+
+      - name: Start HMG runtime
+        run: |
+          nohup npx --no-install next start -H 127.0.0.1 -p 3000 > /tmp/rapidex-hmg.log 2>&1 &
+          echo $! > /tmp/rapidex-hmg.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://localhost:3000/api/health >/tmp/rapidex-health.json; then
+              cat /tmp/rapidex-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "HMG runtime did not become healthy"
+          cat /tmp/rapidex-hmg.log || true
+          exit 1
+
+      - name: Run API commercial HMG E2E
+        run: node scripts/hmg-e2e.mjs
+
+      - name: Run Playwright full UI HMG E2E
+        run: npx playwright test tests/hmg-ui-e2e.spec.mjs --reporter=line
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapidexmenu-hmg-playwright-evidence
+          path: |
+            playwright-artifacts/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Runtime log on failure
+        if: failure()
+        run: |
+          cat /tmp/rapidex-hmg.log || true
+          cat /tmp/rapidex-hmg-wsproxy.log || true

@@ -1,6 +1,7 @@
 import type { CreatedOrder } from "../order-service";
 import { HttpError } from "../http";
 import { getBindings } from "../runtime";
+import { getSellerAccessToken } from "../mercado-pago-seller";
 import { hmacSha256Hex, constantTimeEqual } from "../security";
 
 type MercadoPagoOrder = Record<string, unknown> & {
@@ -21,8 +22,8 @@ type MercadoPagoOrder = Record<string, unknown> & {
 };
 
 export async function createPixOrder(order: CreatedOrder) {
-  const { MERCADO_PAGO_ACCESS_TOKEN } = getBindings();
-  if (!MERCADO_PAGO_ACCESS_TOKEN) return null;
+  const accessToken = await getSellerAccessToken(order.restaurantId);
+  if (!accessToken) return null;
   if (!order.customerEmail) {
     throw new HttpError(400, "E-mail é necessário para gerar o Pix.", "email_required_for_pix");
   }
@@ -31,7 +32,7 @@ export async function createPixOrder(order: CreatedOrder) {
   const response = await fetch("https://api.mercadopago.com/v1/orders", {
     method: "POST",
     headers: {
-      authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`,
+      authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
       "x-idempotency-key": idempotencyKey,
     },
@@ -60,14 +61,14 @@ export async function createPixOrder(order: CreatedOrder) {
   return normalizePix(payload, idempotencyKey);
 }
 
-export async function getMercadoPagoOrder(providerOrderId: string) {
-  const { MERCADO_PAGO_ACCESS_TOKEN } = getBindings();
-  if (!MERCADO_PAGO_ACCESS_TOKEN) {
-    throw new HttpError(503, "Mercado Pago ainda não configurado.", "integration_not_configured");
+export async function getMercadoPagoOrder(providerOrderId: string, restaurantId: string) {
+  const accessToken = await getSellerAccessToken(restaurantId);
+  if (!accessToken) {
+    throw new HttpError(503, "Mercado Pago não está conectado para esta loja.", "integration_not_configured");
   }
   const response = await fetch(
     `https://api.mercadopago.com/v1/orders/${encodeURIComponent(providerOrderId)}`,
-    { headers: { authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}` } },
+    { headers: { authorization: `Bearer ${accessToken}` } },
   );
   if (!response.ok) throw new HttpError(502, "Falha ao consultar o pagamento.", "pix_lookup_failed");
   return (await response.json()) as MercadoPagoOrder;

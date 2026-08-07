@@ -1,11 +1,26 @@
 import { HttpError } from "../http";
 import { getBindings } from "../runtime";
 
+export type SalesCheckout = {
+  address: {
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    complement: string;
+  };
+  paymentMethod: "" | "cash" | "card_on_delivery";
+  confirm: boolean;
+};
+
 export type SalesReply = {
   reply: string;
   intent: "menu" | "repeat" | "order" | "track" | "human";
   suggestedProductIds: string[];
   cartItems: Array<{ productId: string; quantity: number; notes: string }>;
+  checkout: SalesCheckout;
   requiresHuman: boolean;
   memory: Array<{ kind: string; value: string }>;
   decisionReason: string;
@@ -25,7 +40,36 @@ type SalesContext = {
     available: boolean;
   }>;
   recentOrders: Array<{ orderNumber: number; items: string[]; totalCents: number }>;
+  currentCart?: Array<{ productId: string; name: string; quantity: number; notes: string; priceCents: number }>;
+  currentCheckout?: {
+    address: SalesCheckout["address"];
+    paymentMethod: SalesCheckout["paymentMethod"];
+  };
 };
+
+const checkoutSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    address: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        street: { type: "string" },
+        number: { type: "string" },
+        neighborhood: { type: "string" },
+        city: { type: "string" },
+        state: { type: "string" },
+        postalCode: { type: "string" },
+        complement: { type: "string" },
+      },
+      required: ["street", "number", "neighborhood", "city", "state", "postalCode", "complement"],
+    },
+    paymentMethod: { type: "string", enum: ["", "cash", "card_on_delivery"] },
+    confirm: { type: "boolean" },
+  },
+  required: ["address", "paymentMethod", "confirm"],
+} as const;
 
 const schema = {
   type: "object",
@@ -47,6 +91,7 @@ const schema = {
         required: ["productId", "quantity", "notes"],
       },
     },
+    checkout: checkoutSchema,
     requiresHuman: { type: "boolean" },
     memory: {
       type: "array",
@@ -64,6 +109,7 @@ const schema = {
     "intent",
     "suggestedProductIds",
     "cartItems",
+    "checkout",
     "requiresHuman",
     "memory",
     "decisionReason",
@@ -83,7 +129,7 @@ export async function generateSalesReply(context: SalesContext): Promise<SalesRe
     body: JSON.stringify({
       model: OPENAI_MODEL || "gpt-5-mini",
       instructions:
-        "Você é o vendedor do restaurante no WhatsApp. Responda em português brasileiro, de forma curta, calorosa e objetiva. Nunca invente item, preço, disponibilidade ou status. Só use IDs do cardápio fornecido. Preserve preferências do cliente. Não confirme nem conclua compra sem confirmação explícita. Se houver dúvida, reclamação, alergia, pedido fora do cardápio ou necessidade de reembolso, marque requiresHuman. Sugira no máximo dois itens e preserve margem: não ofereça desconto; prefira itens disponíveis com margem saudável. decisionReason deve explicar em uma frase operacional a decisão, sem raciocínio interno detalhado.",
+        "Você é o vendedor do restaurante no WhatsApp. Responda em português brasileiro, de forma curta, calorosa e objetiva. Nunca invente item, preço, disponibilidade, endereço, pagamento ou status. Só use IDs do cardápio fornecido. Preserve preferências do cliente. currentCart é o carrinho já salvo. Quando interpretar inclusão, remoção ou alteração, cartItems deve representar o carrinho COMPLETO desejado após a mensagem; não remova itens existentes sem pedido explícito. Se a mensagem não alterar o carrinho, preserve currentCart. Em checkout.address, copie apenas dados explicitamente fornecidos pelo cliente ou já existentes em currentCheckout; use string vazia no que faltar. paymentMethod só pode ser cash ou card_on_delivery e só quando o cliente escolher explicitamente. Pix não é fechado automaticamente no WhatsApp. checkout.confirm só pode ser true se o cliente estiver explicitamente confirmando/finalizando o pedido; o servidor ainda fará uma confirmação independente. Não confirme nem conclua compra no texto sem confirmação explícita. Se houver dúvida, reclamação, alergia, pedido fora do cardápio ou necessidade de reembolso, marque requiresHuman. Sugira no máximo dois itens e preserve margem: não ofereça desconto; prefira itens disponíveis com margem saudável. decisionReason deve explicar em uma frase operacional a decisão, sem raciocínio interno detalhado.",
       input: JSON.stringify(context),
       text: {
         format: {
@@ -106,7 +152,8 @@ export async function generateSalesReply(context: SalesContext): Promise<SalesRe
   if (!outputText) return fallbackReply(context);
 
   try {
-    return JSON.parse(outputText) as SalesReply;
+    const parsed = JSON.parse(outputText) as SalesReply;
+    return sanitizeReply(parsed, context);
   } catch {
     return fallbackReply(context);
   }
@@ -136,6 +183,45 @@ export async function transcribeAudio(blob: Blob, filename = "pedido.ogg") {
   const payload = (await response.json()) as { text?: string };
   if (!payload.text) throw new HttpError(502, "Transcrição vazia.", "transcription_failed");
   return payload.text.trim();
+}
+
+function sanitizeReply(reply: SalesReply, context: SalesContext): SalesReply {
+  const productIds = new Set(context.products.filter((product) => product.available).map((product) => product.id));
+  const cartItems = Array.isArray(reply.cartItems)
+    ? reply.cartItems.filter((item) => productIds.has(item.productId) && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20)
+    : [];
+  const suggestedProductIds = Array.isArray(reply.suggestedProductIds)
+    ? reply.suggestedProductIds.filter((id) => productIds.has(id)).slice(0, 2)
+    : [];
+  const checkout = normalizeCheckout(reply.checkout, context.currentCheckout);
+  return {
+    reply: typeof reply.reply === "string" ? reply.reply.slice(0, 3500) : "",
+    intent: ["menu", "repeat", "order", "track", "human"].includes(reply.intent) ? reply.intent : "human",
+    suggestedProductIds,
+    cartItems,
+    checkout,
+    requiresHuman: Boolean(reply.requiresHuman),
+    memory: Array.isArray(reply.memory) ? reply.memory.slice(0, 5) : [],
+    decisionReason: typeof reply.decisionReason === "string" ? reply.decisionReason.slice(0, 300) : "Resposta estruturada validada pelo servidor.",
+  };
+}
+
+function normalizeCheckout(value: SalesCheckout | undefined, current?: SalesContext["currentCheckout"]): SalesCheckout {
+  const address = value?.address || current?.address || emptyAddress();
+  const payment = value?.paymentMethod;
+  return {
+    address: {
+      street: text(address.street),
+      number: text(address.number),
+      neighborhood: text(address.neighborhood),
+      city: text(address.city),
+      state: text(address.state).toUpperCase().slice(0, 2),
+      postalCode: text(address.postalCode).replace(/\D/g, "").slice(0, 8),
+      complement: text(address.complement),
+    },
+    paymentMethod: payment === "cash" || payment === "card_on_delivery" ? payment : (current?.paymentMethod || ""),
+    confirm: Boolean(value?.confirm),
+  };
 }
 
 function extractOutputText(payload: Record<string, unknown>) {
@@ -171,9 +257,19 @@ function fallbackReply(context: SalesContext): SalesReply {
             : "Posso te mostrar o cardápio disponível agora.",
     intent: wantsHuman ? "human" : wantsTrack ? "track" : wantsRepeat ? "repeat" : "menu",
     suggestedProductIds: best ? [best.id] : [],
-    cartItems: [],
+    cartItems: (context.currentCart || []).map((item) => ({ productId: item.productId, quantity: item.quantity, notes: item.notes })),
+    checkout: {
+      address: context.currentCheckout?.address || emptyAddress(),
+      paymentMethod: context.currentCheckout?.paymentMethod || "",
+      confirm: false,
+    },
     requiresHuman: wantsHuman,
     memory: [],
     decisionReason: "Resposta segura gerada pelas regras operacionais locais.",
   };
 }
+
+function emptyAddress(): SalesCheckout["address"] {
+  return { street: "", number: "", neighborhood: "", city: "", state: "", postalCode: "", complement: "" };
+}
+function text(value: unknown) { return typeof value === "string" ? value.trim().slice(0, 160) : ""; }

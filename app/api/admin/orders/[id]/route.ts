@@ -2,6 +2,7 @@ import { audit, requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
 import { requiredString } from "@/lib/validation";
+import { notifyWhatsAppOrderStatus } from "@/lib/whatsapp-order-status";
 
 const transitions: Record<string, string[]> = {
   received: ["confirmed", "preparing", "canceled"],
@@ -61,7 +62,8 @@ export async function PATCH(
       )
       .run();
     await audit(context, "order.status_changed", "order", id, { from: current.status, to: nextStatus });
-    return json({ ok: true, status: nextStatus });
+    const notification = await notifyWhatsAppOrderStatus(db, context.restaurantId, id, nextStatus);
+    return json({ ok: true, status: nextStatus, notification });
   } catch (error) {
     return apiError(error);
   }

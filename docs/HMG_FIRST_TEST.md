@@ -2,9 +2,20 @@
 
 Este roteiro valida o produto sem depender de WhatsApp, OpenAI ou Pix reais. Use **pagamento na entrega** no primeiro pedido.
 
+## Papel da HMG nesta fase
+
+A HMG é o ambiente oficial do **beta fechado do RapidexMenu** enquanto ainda não há clientes pagantes.
+
+- pode receber restaurantes reais convidados para teste e validação;
+- pode receber pedidos reais de teste combinados com esses restaurantes;
+- deve permanecer em infraestrutura gratuita enquanto o volume permitir;
+- dados da HMG são de homologação e não devem ser tratados como dados definitivos de produção;
+- não anunciar como ativas integrações que ainda não estejam realmente configuradas;
+- produção só será criada depois que a jornada estiver estável e validada com os primeiros testers.
+
 ## Pré-condições
 
-- deploy da branch principal em estado `READY`;
+- deploy da branch `hmg` em estado `READY`;
 - `DATABASE_URL` e variáveis de acesso da HMG configuradas como segredos;
 - `npm run hmg:setup` concluído sem erro;
 - `GET /api/health` retornando `ok: true`, `integrations.database: true` e `integrations.databaseEngine: postgres`.

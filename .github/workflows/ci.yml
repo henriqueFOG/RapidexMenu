@@ -1,0 +1,47 @@
+name: RapidexMenu CI
+
+on:
+  pull_request:
+    branches: [master, hmg]
+  push:
+    branches: [master, hmg, agent/commercial-ready]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rapidex-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAPIDEX_RUNTIME: vercel
+      RAPIDEX_ENV: ci
+      RAPIDEX_AUTH_MODE: native
+      RAPIDEX_SESSION_SECRET: ci-only-session-secret-32-characters-minimum
+      RAPIDEX_SIGNUP_ENABLED: "true"
+      RAPIDEX_PUBLIC_URL: http://localhost:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build:vercel

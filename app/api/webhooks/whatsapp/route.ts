@@ -4,6 +4,8 @@ import { generateSalesReply, transcribeAudio } from "@/lib/integrations/openai";
 import { downloadWhatsAppMedia, sendWhatsAppText } from "@/lib/integrations/whatsapp";
 import { getBindings, getDatabase } from "@/lib/runtime";
 import { sha256Hex, verifyHmacSha256 } from "@/lib/security";
+import { applyWhatsAppOrderFlow, cartContext, getWhatsAppTrackingReply, latestRepeatCart } from "@/lib/whatsapp-order-flow";
+import { getWhatsAppDraft } from "@/lib/whatsapp-order-draft";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,10 @@ export async function POST(request: Request) {
         const value = change.value;
         const phoneNumberId = value.metadata?.phone_number_id || "";
         const restaurantId = await resolveRestaurant(db, phoneNumberId);
+        // A Meta pode continuar entregando eventos por alguns instantes após uma desconexão,
+        // ou por outro número do mesmo WABA que não pertence a esta loja. Acknowledge sem retry.
+        if (!restaurantId) continue;
+
         for (const status of value.statuses || []) {
           await db
             .prepare("UPDATE messages SET status = ? WHERE provider_message_id = ?")
@@ -86,6 +92,7 @@ export async function POST(request: Request) {
             await processInboundMessage(
               db,
               restaurantId,
+              phoneNumberId,
               message,
               value.contacts?.[0]?.profile?.name || null,
             );
@@ -122,6 +129,7 @@ export async function POST(request: Request) {
 async function processInboundMessage(
   db: D1Database,
   restaurantId: string,
+  phoneNumberId: string,
   message: WhatsAppMessage,
   profileName: string | null,
 ) {
@@ -129,7 +137,7 @@ async function processInboundMessage(
   if (!phone) throw new HttpError(400, "Contato do WhatsApp ausente.", "invalid_webhook");
   let text = message.text?.body?.trim() || message.interactive?.button_reply?.title?.trim() || "";
   if (message.type === "audio" && message.audio?.id) {
-    const media = await downloadWhatsAppMedia(message.audio.id);
+    const media = await downloadWhatsAppMedia(message.audio.id, phoneNumberId);
     text = await transcribeAudio(media.blob, `pedido.${extensionFor(media.mimeType)}`);
   }
   if (!text) return;
@@ -179,21 +187,29 @@ async function processInboundMessage(
       message.id,
       message.type === "audio" ? "audio" : "text",
       text,
-      JSON.stringify({ transcribed: message.type === "audio" }),
+      JSON.stringify({ transcribed: message.type === "audio", phoneNumberId }),
       timestamp,
     )
     .run();
   if (conversation.status === "human") return;
 
+  const draft = await getWhatsAppDraft(db, restaurantId, customer.id, conversation.id);
   const [restaurant, productRows, preferences, recentOrders] = await Promise.all([
-    db.prepare("SELECT name FROM restaurants WHERE id = ?").bind(restaurantId).first<{ name: string }>(),
+    db.prepare("SELECT name, slug FROM restaurants WHERE id = ?").bind(restaurantId).first<{ name: string; slug: string }>(),
     db
       .prepare(
         `SELECT id, name, description, price_cents, cost_cents, available
          FROM products WHERE restaurant_id = ? AND active = 1 ORDER BY position`,
       )
       .bind(restaurantId)
-      .all<Record<string, unknown>>(),
+      .all<{
+        id: string;
+        name: string;
+        description: string;
+        price_cents: number;
+        cost_cents: number;
+        available: number;
+      }>(),
     db
       .prepare("SELECT kind, value FROM customer_preferences WHERE customer_id = ?")
       .bind(customer.id)
@@ -206,6 +222,8 @@ async function processInboundMessage(
       .bind(customer.id)
       .all<{ id: string; order_number: number; total_cents: number }>(),
   ]);
+  if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
+
   const orderIds = recentOrders.results.map((order) => order.id);
   const recentItems = orderIds.length
     ? await db
@@ -218,14 +236,14 @@ async function processInboundMessage(
         .all<{ order_id: string; product_name: string }>()
     : { results: [] as Array<{ order_id: string; product_name: string }> };
   const reply = await generateSalesReply({
-    restaurantName: restaurant?.name || "Restaurante",
+    restaurantName: restaurant.name,
     message: text,
     customerName: customer.name,
     preferences: preferences.results,
     products: productRows.results.map((product) => ({
-      id: String(product.id),
-      name: String(product.name),
-      description: String(product.description),
+      id: product.id,
+      name: product.name,
+      description: product.description,
       priceCents: Number(product.price_cents),
       marginPercent: Math.round(
         ((Number(product.price_cents) - Number(product.cost_cents)) / Number(product.price_cents)) * 100,
@@ -239,6 +257,11 @@ async function processInboundMessage(
         .filter((item) => item.order_id === order.id)
         .map((item) => item.product_name),
     })),
+    currentCart: cartContext(draft, productRows.results),
+    currentCheckout: {
+      address: draft.address,
+      paymentMethod: draft.paymentMethod || "",
+    },
   });
 
   for (const memory of reply.memory.slice(0, 5)) {
@@ -259,11 +282,33 @@ async function processInboundMessage(
       )
       .run();
   }
+
+  let outboundText = reply.reply;
+  let orderId: string | null = null;
   if (reply.requiresHuman) {
     await db
       .prepare("UPDATE conversations SET status = 'human', updated_at = ? WHERE id = ?")
       .bind(Date.now(), conversation.id)
       .run();
+  } else if (reply.intent === "track") {
+    outboundText = await getWhatsAppTrackingReply(db, restaurantId, customer.id, text);
+  } else {
+    let salesReply = reply;
+    if (reply.intent === "repeat" && reply.cartItems.length === 0) {
+      salesReply = { ...reply, cartItems: await latestRepeatCart(db, restaurantId, customer.id) };
+    }
+    const flow = await applyWhatsAppOrderFlow({
+      db,
+      draft,
+      salesReply,
+      message: text,
+      restaurantSlug: restaurant.slug,
+      customerName: customer.name,
+      customerPhone: phone,
+      products: productRows.results,
+    });
+    outboundText = flow.reply;
+    orderId = flow.order?.id || null;
   }
 
   const outboundId = crypto.randomUUID();
@@ -276,19 +321,19 @@ async function processInboundMessage(
     .bind(
       outboundId,
       conversation.id,
-      reply.reply,
-      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason }),
+      outboundText,
+      JSON.stringify({ replyTo: message.id, intent: reply.intent, reason: reply.decisionReason, phoneNumberId, orderId }),
       Date.now(),
     )
     .run();
-  const sent = await sendWhatsAppText(phone, reply.reply);
+  const sent = await sendWhatsAppText(phone, outboundText, phoneNumberId);
   await db
     .prepare("UPDATE messages SET provider_message_id = ?, status = 'sent' WHERE id = ?")
     .bind(sent.providerMessageId, outboundId)
     .run();
 }
 
-async function resolveRestaurant(db: D1Database, phoneNumberId: string) {
+async function resolveRestaurant(db: D1Database, phoneNumberId: string): Promise<string | null> {
   if (phoneNumberId) {
     const integration = await db
       .prepare(
@@ -299,10 +344,14 @@ async function resolveRestaurant(db: D1Database, phoneNumberId: string) {
       .first<{ restaurant_id: string }>();
     if (integration) return integration.restaurant_id;
   }
-  if (!phoneNumberId || phoneNumberId === getBindings().WHATSAPP_PHONE_NUMBER_ID) {
+  const bindings = getBindings();
+  if (
+    bindings.RAPIDEX_AUTH_MODE === "hmg-access-code" &&
+    (!phoneNumberId || phoneNumberId === bindings.WHATSAPP_PHONE_NUMBER_ID)
+  ) {
     return DEMO_RESTAURANT_ID;
   }
-  throw new HttpError(404, "Número do WhatsApp não vinculado.", "integration_not_found");
+  return null;
 }
 
 function normalizeMemoryKind(kind: string) {
