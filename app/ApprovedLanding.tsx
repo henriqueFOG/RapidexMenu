@@ -77,7 +77,17 @@ export default function ApprovedLanding() {
             <div><span><Icon name="report"/></span><p><b>Relatórios e controle</b><small>na palma da mão</small></p></div>
           </div>
         </div>
-        <div className={styles.heroVisual} role="img" aria-label="Cardápio RapidexMenu no celular ao lado de um hambúrguer" />
+        <div className={styles.heroVisual} aria-label="Cardápio RapidexMenu no celular ao lado de um hambúrguer">
+          <img className={styles.burgerPhoto} src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1100&q=92" alt="Hambúrguer artesanal" />
+          <div className={styles.phoneMock}>
+            <div className={styles.phoneBar}><span>3:03</span><i>● ● ●</i></div>
+            <div className={styles.phoneRestaurant}><div><b>Sabor & Arte</b><small>Restaurante</small><em>Aberto agora até 23:00</em></div><span>🍕</span></div>
+            <div className={styles.phoneDelivery}>● Entrega · 30–50 min · R$ 5,00</div>
+            <h3>Destaques</h3>
+            {[ ["🍔","X-Burguer Artesanal","Pão brioche, 180g de carne, queijo cheddar, alface, tomate e molho especial.","R$ 29,90"],["🍕","Pizza Calabresa","Massa artesanal, molho de tomate, mussarela e calabresa.","R$ 34,90"],["🥤","Combo Família","2 pizzas grandes + refrigerante 2L grátis","R$ 89,90"] ].map(item=><article key={item[1]}><span>{item[0]}</span><div><b>{item[1]}</b><small>{item[2]}</small><strong>{item[3]}</strong></div><button>+</button></article>)}
+            <footer><span>⌂<small>Início</small></span><span>▱<small>Cardápio</small></span><span>▤<small>Meu pedido</small></span><span>♙<small>Conta</small></span></footer>
+          </div>
+        </div>
       </div>
     </section>
 
