@@ -4,6 +4,7 @@ import { createPixOrder } from "@/lib/integrations/mercado-pago";
 import { createOrder } from "@/lib/order-service";
 import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getBindings, getDatabase } from "@/lib/runtime";
+import { safeSlug } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,15 @@ export async function POST(request: Request) {
     }
     await ensureDemoData(db);
     const body = await readJson<Record<string, unknown>>(request, 120_000);
+    const slug = safeSlug(body.restaurantSlug);
+    const subscription = await db.prepare(
+      `SELECT status, trial_ends_at FROM restaurants WHERE slug = ? LIMIT 1`,
+    ).bind(slug).first<{ status: string; trial_ends_at: number | null }>();
+    const trialValid = subscription?.status === "trial" && (!subscription.trial_ends_at || Number(subscription.trial_ends_at) > Date.now());
+    if (!subscription || (subscription.status !== "active" && !trialValid)) {
+      throw new HttpError(403, "Esta loja está temporariamente indisponível para novos pedidos.", "store_subscription_inactive");
+    }
+
     const wantsPix = (body.paymentMethod ?? "pix") === "pix";
     const email = (body.customer as Record<string, unknown> | undefined)?.email;
     if (wantsPix && getBindings().MERCADO_PAGO_ACCESS_TOKEN && !email) {
@@ -75,10 +85,7 @@ export async function POST(request: Request) {
                 pix.pixCode,
                 pix.ticketUrl,
                 expiresAt,
-                JSON.stringify({
-                  providerStatus: pix.providerStatus,
-                  providerStatusDetail: pix.providerStatusDetail,
-                }),
+                JSON.stringify({ providerStatus: pix.providerStatus, providerStatusDetail: pix.providerStatusDetail }),
                 Date.now(),
                 Date.now(),
               )
