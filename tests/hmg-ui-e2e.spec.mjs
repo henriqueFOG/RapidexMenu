@@ -3,12 +3,13 @@ import { test, expect } from "@playwright/test";
 
 const baseURL = process.env.RAPIDEX_E2E_URL || "http://127.0.0.1:3000";
 const artifactsDir = "playwright-artifacts";
+const menuWorkbookBase64 = "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";
 mkdirSync(artifactsDir, { recursive: true });
 
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
 test.setTimeout(120_000);
 
-test("empresa cadastra produtos, publica, cliente compra e empresa recebe", async ({ browser }) => {
+test("empresa importa Excel, publica, cliente compra e empresa recebe", async ({ browser }) => {
   const companyContext = await browser.newContext();
   const company = await companyContext.newPage();
 
@@ -42,29 +43,20 @@ test("empresa cadastra produtos, publica, cliente compra e empresa recebe", asyn
     await expect(company.getByText("Dados da operação salvos.")).toBeVisible();
   });
 
-  await test.step("empresa cadastra categoria e produtos", async () => {
-    await company.locator('input[name="category"]').fill("Hambúrgueres");
-    await company.getByRole("button", { name: "+ Categoria" }).click();
-    await expect(company.getByText("Categoria criada.")).toBeVisible();
-
-    await company.locator('input[name="product"]').fill("Smash Playwright");
-    await company.locator('select[name="categoryId"]').selectOption({ label: "Hambúrgueres" });
-    await company.locator('input[name="price"]').fill("29.90");
-    await company.locator('input[name="cost"]').fill("10.00");
-    await company.locator('input[name="productPrep"]').fill("12");
-    await company.locator('input[name="description"]').fill("Pão brioche, carne, queijo e molho da casa.");
-    await company.getByRole("button", { name: "+ Adicionar produto" }).click();
-    await expect(company.getByText("Produto cadastrado. Seu cardápio já tem conteúdo real.")).toBeVisible();
+  await test.step("empresa importa produtos de um Excel real", async () => {
+    const fileInput = company.locator('input[type="file"][accept*=".xlsx"]');
+    await fileInput.setInputFiles({
+      name: "cardapio-playwright.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: Buffer.from(menuWorkbookBase64, "base64"),
+    });
+    await expect(company.getByText(/2 produtos/).first()).toBeVisible();
     await expect(company.getByText("Smash Playwright")).toBeVisible();
-
-    await company.locator('input[name="product"]').fill("Batata Playwright");
-    await company.locator('select[name="categoryId"]').selectOption({ label: "Hambúrgueres" });
-    await company.locator('input[name="price"]').fill("14.90");
-    await company.locator('input[name="cost"]').fill("4.00");
-    await company.locator('input[name="productPrep"]').fill("8");
-    await company.locator('input[name="description"]').fill("Batata crocante com tempero especial.");
-    await company.getByRole("button", { name: "+ Adicionar produto" }).click();
     await expect(company.getByText("Batata Playwright")).toBeVisible();
+    await company.getByRole("button", { name: "Importar 2 produtos →" }).click();
+    await expect(company.getByText(/2 itens processados/i)).toBeVisible({ timeout: 15_000 });
+    await expect(company.getByText("Smash Playwright").first()).toBeVisible();
+    await expect(company.getByText("Batata Playwright").first()).toBeVisible();
     await company.screenshot({ path: `${artifactsDir}/01-empresa-onboarding.png`, fullPage: true });
   });
 
