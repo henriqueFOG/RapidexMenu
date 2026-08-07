@@ -1,8 +1,9 @@
-<svg width="560" height="144" viewBox="0 0 560 144" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="144" height="144" rx="40" fill="#102119"/>
-  <path d="M81 18L39 78H68L57 126L105 62H76L81 18Z" fill="#CAFF58"/>
-  <path d="M95 33L72 66H87L81 89L108 53H93L95 33Z" fill="white" fill-opacity="0.18"/>
-  <text x="174" y="78" fill="#102119" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="900" letter-spacing="-2.8">Rapidex</text>
-  <text x="174" y="116" fill="#235B47" font-family="Arial, Helvetica, sans-serif" font-size="37" font-weight="700" letter-spacing="-1.8">Menu</text>
-  <circle cx="526" cy="42" r="8" fill="#CAFF58"/>
+<svg width="620" height="144" viewBox="0 0 620 144" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="144" height="144" rx="40" fill="#050505"/>
+  <path d="M34 93H111" stroke="#FF650B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M42 85C45 54 58 34 72 34C91 34 105 55 108 85H42Z" stroke="#FF650B" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M72 34V23M63 23H81" stroke="#FF650B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M25 61H40M17 72H37" stroke="#FF650B" stroke-width="6" stroke-linecap="round"/>
+  <text x="172" y="91" fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="900" letter-spacing="-2.8">RAPIDEX</text>
+  <text x="397" y="91" fill="#FF650B" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="900" letter-spacing="-2.8">MENU</text>
 </svg>
