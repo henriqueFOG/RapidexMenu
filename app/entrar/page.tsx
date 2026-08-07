@@ -37,10 +37,12 @@ function LoginForm() {
       <small className={styles.kicker}>PAINEL DO RESTAURANTE</small>
       <h1 className={styles.title}>Bem-vindo de volta.</h1>
       <p className={styles.intro}>Entre para acompanhar pedidos, editar seu cardápio e cuidar da operação.</p>
+      {query.get("senha") === "alterada" && <p className={styles.success}>Senha alterada. Você já pode entrar com a nova senha.</p>}
       {error && <p className={styles.error}>{error}</p>}
       <form onSubmit={submit} className={styles.grid}>
         <label className={`${styles.field} ${styles.wide}`}>E-mail<input name="email" type="email" required autoComplete="email" /></label>
         <label className={`${styles.field} ${styles.wide}`}>Senha<input name="password" type="password" required autoComplete="current-password" /></label>
+        <div className={styles.wide} style={{ textAlign: "right" }}><Link className={styles.linkButton} href="/esqueci-senha">Esqueci minha senha</Link></div>
         <button className={`${styles.button} ${styles.wide}`} disabled={busy}>{busy ? "Entrando…" : "Entrar →"}</button>
       </form>
       <Link className={styles.secondary} href="/cadastro">Ainda não tenho conta · Testar por 14 dias</Link>
