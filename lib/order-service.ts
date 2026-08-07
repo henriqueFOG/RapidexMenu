@@ -100,19 +100,24 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
   }
   const items = Array.from(compactItems.values());
 
+  const now = Date.now();
   const restaurant = await db
     .prepare(
       `SELECT id, slug, name, is_open, timezone, settings_json, delivery_fee_cents, minimum_order_cents,
               average_prep_minutes, delivery_minutes, max_concurrent_orders
-       FROM restaurants WHERE slug = ? AND status IN ('trial', 'active') LIMIT 1`,
+       FROM restaurants WHERE slug = ? AND (
+         (status = 'active' AND (access_ends_at IS NULL OR access_ends_at > ?))
+         OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?))
+       ) LIMIT 1`,
     )
-    .bind(slug)
+    .bind(slug, now, now)
     .first<RestaurantRow>();
-  if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
+  if (!restaurant) throw new HttpError(403, "Esta loja está temporariamente indisponível para novos pedidos.", "store_subscription_inactive");
   if (!isRestaurantAcceptingOrders({
     isOpen: restaurant.is_open,
     timezone: restaurant.timezone,
     settingsJson: restaurant.settings_json,
+    now,
   })) {
     throw new HttpError(409, "A loja está fechada agora.", "store_closed");
   }
