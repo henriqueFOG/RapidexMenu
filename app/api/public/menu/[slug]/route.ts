@@ -17,11 +17,13 @@ export async function GET(
       .prepare(
         `SELECT id, slug, name, city, state, phone, whatsapp, delivery_fee_cents,
                 minimum_order_cents, average_prep_minutes, delivery_minutes, is_open, settings_json
-         FROM restaurants WHERE slug = ? AND status IN ('trial', 'active') LIMIT 1`,
+         FROM restaurants
+         WHERE slug = ? AND (status = 'active' OR (status = 'trial' AND (trial_ends_at IS NULL OR trial_ends_at > ?)))
+         LIMIT 1`,
       )
-      .bind(slug)
+      .bind(slug, Date.now())
       .first<Record<string, unknown>>();
-    if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
+    if (!restaurant) throw new HttpError(404, "Loja não encontrada ou temporariamente indisponível.", "store_not_found");
 
     const categories = await db
       .prepare(
@@ -53,11 +55,7 @@ export async function GET(
       }>();
 
     let settings: Record<string, unknown> = {};
-    try {
-      settings = JSON.parse(String(restaurant.settings_json || "{}"));
-    } catch {
-      settings = {};
-    }
+    try { settings = JSON.parse(String(restaurant.settings_json || "{}")); } catch { settings = {}; }
 
     return json({
       ok: true,
@@ -72,17 +70,14 @@ export async function GET(
         isOpen: Boolean(restaurant.is_open),
         deliveryFeeCents: restaurant.delivery_fee_cents,
         minimumOrderCents: restaurant.minimum_order_cents,
-        estimatedMinutes:
-          Number(restaurant.average_prep_minutes) + Number(restaurant.delivery_minutes),
+        estimatedMinutes: Number(restaurant.average_prep_minutes) + Number(restaurant.delivery_minutes),
         brandColor: settings.brandColor || "#c9ff4a",
         cuisine: settings.cuisine || "Restaurante",
       },
       categories: categories.results.map((category) => ({
         id: category.id,
         name: category.name,
-        products: products.results
-          .filter((product) => product.category_id === category.id)
-          .map(publicProduct),
+        products: products.results.filter((product) => product.category_id === category.id).map(publicProduct),
       })),
       uncategorized: products.results.filter((product) => !product.category_id).map(publicProduct),
     });
