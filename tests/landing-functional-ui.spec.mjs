@@ -39,6 +39,8 @@ test("landing oficial é única, estável e expõe todos os caminhos reais", asy
   const livePage = await page.context().newPage();
   await livePage.goto(new URL(await live.getAttribute("href"), baseURL).toString());
   await expect(livePage.getByRole("heading", { name: /Serra Burger/i })).toBeVisible();
+  const accent = await livePage.locator(".rm-store").evaluate((element) => getComputedStyle(element).getPropertyValue("--store-accent").trim().toLowerCase());
+  expect(accent).toBe("#ff650b");
   await livePage.close();
 
   const demoPage = await page.context().newPage();
@@ -69,5 +71,9 @@ test("landing oficial mantém CTAs e mockup íntegros no mobile", async ({ brows
   await expect(page.getByRole("link", { name: /Ver painel funcionando/i }).first()).toBeVisible();
   await expectPhoneMockWithoutOverlap(page);
   await page.screenshot({ path: `${artifactsDir}/00c-landing-oficial-mobile.png`, fullPage: true });
+
+  await page.goto(`${baseURL}/loja/serra-burger`);
+  await expect(page.locator(".rm-store-powered")).toBeVisible();
+  await expect(page.locator(".rmStoreTrust")).toBeHidden();
   await context.close();
 });
