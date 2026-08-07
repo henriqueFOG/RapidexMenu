@@ -1,5 +1,6 @@
 import { HttpError } from "./http";
 import { attributeAcceptedUpsells } from "./profit-engine";
+import { isRestaurantAcceptingOrders } from "./store-availability";
 import { booleanValue, normalizePhone, optionalString, positiveInteger, requiredString, safeSlug } from "./validation";
 
 type OrderInput = {
@@ -23,6 +24,8 @@ type RestaurantRow = {
   slug: string;
   name: string;
   is_open: number;
+  timezone: string;
+  settings_json: string;
   delivery_fee_cents: number;
   minimum_order_cents: number;
   average_prep_minutes: number;
@@ -99,14 +102,20 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
 
   const restaurant = await db
     .prepare(
-      `SELECT id, slug, name, is_open, delivery_fee_cents, minimum_order_cents,
+      `SELECT id, slug, name, is_open, timezone, settings_json, delivery_fee_cents, minimum_order_cents,
               average_prep_minutes, delivery_minutes, max_concurrent_orders
        FROM restaurants WHERE slug = ? AND status IN ('trial', 'active') LIMIT 1`,
     )
     .bind(slug)
     .first<RestaurantRow>();
   if (!restaurant) throw new HttpError(404, "Loja não encontrada.", "store_not_found");
-  if (!restaurant.is_open) throw new HttpError(409, "A loja está fechada agora.", "store_closed");
+  if (!isRestaurantAcceptingOrders({
+    isOpen: restaurant.is_open,
+    timezone: restaurant.timezone,
+    settingsJson: restaurant.settings_json,
+  })) {
+    throw new HttpError(409, "A loja está fechada agora.", "store_closed");
+  }
 
   const existing = await findExistingOrder(db, restaurant, clientOrderId, email);
   if (existing) return existing;
