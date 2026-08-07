@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import styles from "../commercial.module.css";
+import MenuImport from "./MenuImport";
 
 type Restaurant = {
   id: string;
@@ -107,7 +108,7 @@ export default function OnboardingClient({ userName }: { userName: string }) {
       <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
       <small className={styles.kicker}>ATIVAÇÃO DA SUA LOJA</small>
       <h1 className={styles.title}>Vamos colocar {restaurant?.name || "seu restaurante"} no ar.</h1>
-      <p className={styles.intro}>Olá, {userName}. São três passos. No final você terá um link público pronto para receber o primeiro pedido.</p>
+      <p className={styles.intro}>Olá, {userName}. Configure a operação, importe seu cardápio e publique. O objetivo é chegar ao primeiro pedido sem depender de suporte.</p>
       <div className={styles.steps}>
         <div className={`${styles.step} ${readiness?.hasLocation && readiness?.hasWhatsapp ? styles.done : ""}`}>01<strong>Operação</strong></div>
         <div className={`${styles.step} ${readiness?.hasProduct ? styles.done : ""}`}>02<strong>Cardápio</strong></div>
@@ -131,8 +132,10 @@ export default function OnboardingClient({ userName }: { userName: string }) {
         <button className={styles.button} disabled={Boolean(busy)}>{busy === "operation" ? "Salvando…" : "Salvar operação"}</button>
       </form>}
 
+      <MenuImport onImported={load} />
+
       <section className={styles.panel}>
-        <h2>2. Monte o primeiro cardápio</h2><p>Uma categoria e um produto disponível já são suficientes para publicar. Depois você adiciona o restante pelo painel.</p>
+        <h2>Ou adicione itens manualmente</h2><p>Use este caminho para ajustes rápidos ou quando seu cardápio tiver poucos produtos.</p>
         <form className={styles.row} onSubmit={addCategory}>
           <label className={styles.field}>Nova categoria<input name="category" minLength={2} required placeholder="Ex.: Hambúrgueres" /></label>
           <button disabled={Boolean(busy)}>{busy === "category" ? "Criando…" : "+ Categoria"}</button>
