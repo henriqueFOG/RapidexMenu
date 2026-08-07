@@ -116,6 +116,58 @@ const friesId = await createProduct(tenantA.cookie, categoryId, {
   prepMinutes: 5,
 });
 
+console.log("[HMG E2E] importação de cardápio + horários");
+const imported = await call(
+  "/api/admin/menu-import",
+  {
+    method: "POST",
+    headers: jsonHeaders(tenantA.cookie),
+    body: JSON.stringify({
+      rows: [
+        {
+          category: "Extras",
+          name: "Molho HMG",
+          description: "Item importado pelo fluxo comercial E2E",
+          priceCents: 300,
+          costCents: 250,
+          prepMinutes: 1,
+          emoji: "🥫",
+          tag: "Importado",
+        },
+      ],
+    }),
+  },
+  [201],
+);
+assert.equal(imported.payload.ok, true);
+assert.equal(imported.payload.productsCreated, 1);
+assert.equal(imported.payload.rows, 1);
+
+const alwaysOpenHours = {
+  sun: [{ open: "00:00", close: "00:00" }],
+  mon: [{ open: "00:00", close: "00:00" }],
+  tue: [{ open: "00:00", close: "00:00" }],
+  wed: [{ open: "00:00", close: "00:00" }],
+  thu: [{ open: "00:00", close: "00:00" }],
+  fri: [{ open: "00:00", close: "00:00" }],
+  sat: [{ open: "00:00", close: "00:00" }],
+};
+await call(
+  "/api/admin/settings",
+  {
+    method: "PATCH",
+    headers: jsonHeaders(tenantA.cookie),
+    body: JSON.stringify({ weeklyHours: alwaysOpenHours }),
+  },
+  [200],
+);
+const settings = await call("/api/admin/settings", { headers: { cookie: tenantA.cookie } }, [200]);
+assert.deepEqual(settings.payload.settings.weeklyHours, alwaysOpenHours);
+
+const catalogAfterImport = await call("/api/admin/products", { headers: { cookie: tenantA.cookie } }, [200]);
+assert.equal(catalogAfterImport.payload.products.length, 3);
+assert.ok(catalogAfterImport.payload.products.some((product) => product.name === "Molho HMG" && product.price_cents === 300));
+
 await call(
   "/api/admin/onboarding",
   { method: "PATCH", headers: jsonHeaders(tenantA.cookie), body: "{}" },
@@ -126,8 +178,9 @@ console.log("[HMG E2E] cardápio público + recomendação");
 const menu = await call("/api/public/menu/hmg-burger-a", {}, [200]);
 assert.equal(menu.payload.restaurant.isOpen, true);
 const publicProducts = [...menu.payload.categories.flatMap((category) => category.products), ...(menu.payload.uncategorized || [])];
-assert.equal(publicProducts.length, 2);
+assert.equal(publicProducts.length, 3);
 assert.ok(publicProducts.some((product) => product.id === burgerId && product.priceCents === 2500));
+assert.ok(publicProducts.some((product) => product.name === "Molho HMG" && product.priceCents === 300));
 
 const clientOrderId = "hmg-e2e-order-0001";
 const recommendation = await call(
@@ -218,4 +271,4 @@ assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxerga
 const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
 assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
 
-console.log("[HMG E2E] PASS: signup, catálogo, recomendação, pedido, idempotência, tracking, ROI, status e isolamento multiempresa");
+console.log("[HMG E2E] PASS: signup, importação, horários, catálogo, recomendação, pedido, idempotência, tracking, ROI, status e isolamento multiempresa");
