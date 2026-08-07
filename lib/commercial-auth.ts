@@ -122,8 +122,9 @@ function requireSessionSecret() {
 
 async function derivePassword(password: string, salt: Uint8Array, iterations: number) {
   const material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const saltBuffer = new Uint8Array(salt).buffer;
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations },
     material,
     256,
   );
