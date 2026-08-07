@@ -1,0 +1,45 @@
+/* Final fidelity layer for the approved RapidexMenu black + orange system.
+   Green is intentionally kept only where it communicates a real positive/status state. */
+
+/* Public storefront */
+.rm-store-cover:before,.rm-store-cover:after{border-color:rgba(255,101,11,.13)!important}
+.rm-store-info>div:nth-child(2)>small,.rm-cart>header small,.rm-checkout>header small,.rm-success-modal>small{color:#c6520d!important}
+.rm-store-tools>label,.rm-store-tools nav button,.rm-cart,.rm-cart-items article,.rm-checkout fieldset{border-color:#e2e2e2!important}
+.rm-cart-items article>span,.rm-cart-empty>span{background:#f1f1f1!important}
+.rm-payment-options label.active{border-color:#ff650b!important;background:#fff3ea!important;box-shadow:0 0 0 1px #ff650b!important}
+.rm-modal-backdrop,.rm-cart-backdrop{background:rgba(5,5,5,.62)!important}
+.rm-checkout{background:#fafafa!important}
+.rm-checkout input{background:#fbfbfb!important;border-color:#dedede!important}
+.rm-success-modal>span{background:#ff650b!important;color:#fff!important}
+.rm-pix-code button{background:#080808!important;color:#fff!important}
+.rm-pix-link,.rm-track-link{color:#c6520d!important}
+.rm-mobile-cart span b{background:#ff650b!important;color:#fff!important}
+.rm-store-state,.rm-track-state{background:#f5f5f5!important;color:#111!important}
+.rm-state-logo,.rm-track-state>span{background:#080808!important;color:#ff650b!important}
+.rm-store-state a,.rm-track-state a{color:#c6520d!important}
+
+/* Order tracking: neutral product shell; green remains only for completed/positive statuses. */
+.rm-tracking{background:#f5f5f5!important;color:#111!important}
+.rm-tracking>header{border-color:#e2e2e2!important;background:#fff!important}
+.rm-tracking-head small{color:#c6520d!important}
+.rm-track-order{background:#f7f7f7!important}
+.rm-refresh-track{border-color:#ddd!important;background:#fff!important;color:#111!important}
+.rm-refresh-track:hover{border-color:#ff650b!important;color:#c6520d!important}
+.rm-timeline>div.current>span{border-color:#ff650b!important;background:#ff650b!important;color:#fff!important;box-shadow:0 0 0 6px rgba(255,101,11,.15)!important}
+
+/* HMG fallback access screen */
+.rm-hmg-login{background:radial-gradient(circle at 82% 8%,rgba(255,101,11,.13),transparent 30%),#080808!important;color:#fff!important}
+.rm-hmg-login>section{border-color:#2b2b2b!important;background:#111!important;box-shadow:0 28px 80px rgba(0,0,0,.42)!important}
+.rm-hmg-brand{color:#fff!important}
+.rm-hmg-brand>span{font-size:0!important;color:transparent!important;background:#050505 url('/favicon.svg') center/100% 100% no-repeat!important}
+.rm-hmg-brand i{color:#ff650b!important}
+.rm-hmg-login>section>small{color:#ff8a3d!important}
+.rm-hmg-login>section>p,.rm-hmg-login label{color:#aaa!important}
+.rm-hmg-login input{border-color:#343434!important;background:#181818!important;color:#fff!important}
+.rm-hmg-login input:focus{border-color:#ff650b!important;box-shadow:0 0 0 3px rgba(255,101,11,.16)!important}
+.rm-hmg-login form button{background:#ff650b!important;color:#fff!important}
+.rm-hmg-back{color:#ff8a3d!important}
+
+@media(max-width:720px){
+  .rmStoreTrust{display:none!important}
+}
