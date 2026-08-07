@@ -49,7 +49,7 @@ class PostgresD1Database {
   constructor(connectionString: string) {
     const wsProxy = String(process.env.RAPIDEX_POSTGRES_WS_PROXY || "").trim();
     if (wsProxy) {
-      neonConfig.wsProxy = () => wsProxy;
+      neonConfig.wsProxy = wsProxy;
       neonConfig.useSecureWebSocket = false;
       neonConfig.pipelineConnect = false;
       neonConfig.forceDisablePgSSL = true;
