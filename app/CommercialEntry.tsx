@@ -15,7 +15,7 @@ export default function CommercialEntry({ enabled }: { enabled: boolean }) {
     return <div style={wrapper}><Link href="/calculadora" style={light}>Calcular oportunidade</Link><Link href="/entrar" style={light}>Entrar</Link><Link href="/cadastro" style={dark}>Começar grátis →</Link></div>;
   }
   if (pathname === "/admin") {
-    return <div style={wrapper}><Link href="/admin/lucro" style={dark}>✦ Lucro & ROI</Link><Link href="/admin/pagamentos" style={light}>Pagamentos</Link><Link href="/admin/categorias" style={light}>Categorias</Link><Link href="/assinatura" style={light}>Assinatura</Link></div>;
+    return <div style={wrapper}><Link href="/admin/lucro" style={dark}>✦ Lucro & ROI</Link><Link href="/admin/importar" style={light}>Importar cardápio</Link><Link href="/admin/pagamentos" style={light}>Pagamentos</Link><Link href="/admin/categorias" style={light}>Categorias</Link><Link href="/assinatura" style={light}>Assinatura</Link></div>;
   }
   return null;
 }
