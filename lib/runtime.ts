@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { assertEnvironmentConfiguration, normalizeRapidexEnvironment, validateEnvironmentConfiguration } from "./environment";
 import { getPostgresDatabase } from "./postgres-d1";
 
 export type RapidexBindings = {
@@ -42,8 +43,18 @@ export function getBindings(): RapidexBindings {
   return env as unknown as RapidexBindings;
 }
 
+export function getRapidexEnvironment() {
+  return normalizeRapidexEnvironment(getBindings().RAPIDEX_ENV);
+}
+
 export function getDatabase(): D1Database {
   const bindings = getBindings();
+  assertEnvironmentConfiguration({
+    environment: bindings.RAPIDEX_ENV,
+    publicUrl: bindings.RAPIDEX_PUBLIC_URL,
+    billingToken: bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN,
+  });
+
   if (bindings.DB) return bindings.DB;
 
   const connectionString = bindings.DATABASE_URL || bindings.POSTGRES_URL;
@@ -54,6 +65,11 @@ export function getDatabase(): D1Database {
 
 export function integrationReadiness() {
   const bindings = getBindings();
+  const environmentCheck = validateEnvironmentConfiguration({
+    environment: bindings.RAPIDEX_ENV,
+    publicUrl: bindings.RAPIDEX_PUBLIC_URL,
+    billingToken: bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN,
+  });
   const whatsappLegacy = Boolean(
     bindings.WHATSAPP_ACCESS_TOKEN &&
       bindings.WHATSAPP_PHONE_NUMBER_ID &&
@@ -70,11 +86,13 @@ export function integrationReadiness() {
       bindings.WHATSAPP_APP_SECRET,
   );
   return {
-    environment: bindings.RAPIDEX_ENV || "development",
+    environment: environmentCheck.environment,
+    environmentSafe: environmentCheck.issues.length === 0,
+    environmentIssues: environmentCheck.issues,
     database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
     databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
     nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
-    billing: Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
+    billing: environmentCheck.environment === "production" && Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
     email: Boolean(bindings.RESEND_API_KEY && bindings.RAPIDEX_EMAIL_FROM),
     sellerPayments: Boolean(
       bindings.RAPIDEX_MP_CLIENT_ID &&
