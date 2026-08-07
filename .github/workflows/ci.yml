@@ -2,9 +2,9 @@ name: RapidexMenu CI
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hmg]
   push:
-    branches: [master, agent/commercial-ready]
+    branches: [master, hmg, agent/commercial-ready]
 
 permissions:
   contents: read
