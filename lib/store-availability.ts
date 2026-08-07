@@ -13,8 +13,9 @@ type AvailabilityInput = {
 export function isRestaurantAcceptingOrders(input: AvailabilityInput) {
   if (!Boolean(input.isOpen)) return false;
   const settings = readSettings(input.settingsJson);
-  const weeklyHours = normalizeWeeklyHours(settings.weeklyHours);
-  if (!weeklyHours) return true;
+  if (settings.weeklyHours === undefined || settings.weeklyHours === null) return true;
+  let weeklyHours: WeeklyHours;
+  try { weeklyHours = validateWeeklyHours(settings.weeklyHours) || {}; } catch { return false; }
 
   const local = localParts(input.now ?? Date.now(), input.timezone || "America/Sao_Paulo");
   const todayIndex = local.weekday;
@@ -57,10 +58,6 @@ export function validateWeeklyHours(value: unknown): WeeklyHours | null {
     });
   }
   return normalized;
-}
-
-function normalizeWeeklyHours(value: unknown): WeeklyHours | null {
-  try { return validateWeeklyHours(value); } catch { return null; }
 }
 
 function readSettings(value: unknown): Record<string, unknown> {
