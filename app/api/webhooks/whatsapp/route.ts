@@ -4,7 +4,7 @@ import { generateSalesReply, transcribeAudio } from "@/lib/integrations/openai";
 import { downloadWhatsAppMedia, sendWhatsAppText } from "@/lib/integrations/whatsapp";
 import { getBindings, getDatabase } from "@/lib/runtime";
 import { sha256Hex, verifyHmacSha256 } from "@/lib/security";
-import { applyWhatsAppOrderFlow, cartContext } from "@/lib/whatsapp-order-flow";
+import { applyWhatsAppOrderFlow, cartContext, getWhatsAppTrackingReply, latestRepeatCart } from "@/lib/whatsapp-order-flow";
 import { getWhatsAppDraft } from "@/lib/whatsapp-order-draft";
 
 export const dynamic = "force-dynamic";
@@ -286,11 +286,17 @@ async function processInboundMessage(
       .prepare("UPDATE conversations SET status = 'human', updated_at = ? WHERE id = ?")
       .bind(Date.now(), conversation.id)
       .run();
+  } else if (reply.intent === "track") {
+    outboundText = await getWhatsAppTrackingReply(db, restaurantId, customer.id, text);
   } else {
+    let salesReply = reply;
+    if (reply.intent === "repeat" && reply.cartItems.length === 0) {
+      salesReply = { ...reply, cartItems: await latestRepeatCart(db, restaurantId, customer.id) };
+    }
     const flow = await applyWhatsAppOrderFlow({
       db,
       draft,
-      salesReply: reply,
+      salesReply,
       message: text,
       restaurantSlug: restaurant.slug,
       customerName: customer.name,
