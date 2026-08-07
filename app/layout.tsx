@@ -68,6 +68,8 @@ const hmgBadge: React.CSSProperties = {
   top: 118,
   left: 10,
   zIndex: 9999,
+  pointerEvents: "none",
+  userSelect: "none",
   borderRadius: 999,
   padding: "7px 11px",
   background: "#171717",
