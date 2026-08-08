@@ -45,7 +45,7 @@ test("landing oficial é única e todos os CTAs navegam por clique real", async 
 
   await clickLandingRoute(page.context(), /Experimentar em tempo real/i, "/loja/serra-burger", async (livePage) => {
     await expect(livePage.getByRole("heading", { name: /Serra Burger/i })).toBeVisible({ timeout: 20_000 });
-    await expect(livePage.getByText(/Smash da Serra/i)).toBeVisible();
+    await expect(livePage.getByRole("heading", { name: "Smash da Serra", exact: true })).toBeVisible();
     const accent = await livePage.locator(".rm-store").evaluate((element) => getComputedStyle(element).getPropertyValue("--store-accent").trim().toLowerCase());
     expect(accent).toBe("#ff650b");
   });
