@@ -1,0 +1,3 @@
+RapidexMenu HMG build verification
+Requested: 2026-08-07 22:39 America/Sao_Paulo
+Purpose: dashboard redesign deployment verification.
