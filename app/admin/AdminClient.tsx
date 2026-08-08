@@ -5,6 +5,7 @@ import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import AdminOverviewV2 from "./AdminOverviewV2";
 import shellStyles from "./AdminShellV2.module.css";
+import topbarStyles from "./AdminTopbarV2.module.css";
 
 type Section = "overview" | "orders" | "menu" | "customers" | "automations" | "settings";
 type Overview = {
@@ -111,6 +112,7 @@ export default function AdminClient({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [mobileNav, setMobileNav] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState(false);
 
   const refresh = useCallback(async () => {
     setError("");
@@ -135,6 +137,24 @@ export default function AdminClient({
     setMobileNav(false);
   };
 
+  const shareStore = async () => {
+    if (!data?.restaurant.slug) return;
+    const url = `${window.location.origin}/loja/${data.restaurant.slug}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: data.restaurant.name, text: `Peça direto pelo cardápio do ${data.restaurant.name}`, url });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        window.prompt("Copie o link do seu cardápio", url);
+      }
+      setShareFeedback(true);
+      window.setTimeout(() => setShareFeedback(false), 1800);
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === "AbortError") return;
+    }
+  };
+
   return (
     <main className={`rm-admin-shell ${shellStyles.shell}`}>
       <aside className={`rm-admin-sidebar ${mobileNav ? "open" : ""}`}>
@@ -145,7 +165,7 @@ export default function AdminClient({
           <b>Rapidex<i>Menu</i></b>
         </Link>
         <nav>
-          <Nav active={section === "overview"} icon="▦" onClick={() => navigate("overview")}>Dashboard</Nav>
+          <Nav active={section === "overview"} icon="▦" ariaLabel="Visão geral" onClick={() => navigate("overview")}>Dashboard</Nav>
           <Nav active={section === "orders"} icon="▤" count={data?.restaurant.activeOrders} onClick={() => navigate("orders")}>Pedidos</Nav>
           <Nav active={section === "menu"} icon="▣" onClick={() => navigate("menu")}>Cardápio</Nav>
           <Nav active={section === "automations"} icon="✦" badge="IA" onClick={() => navigate("automations")}>Automações</Nav>
@@ -165,13 +185,18 @@ export default function AdminClient({
       </aside>
 
       <section className="rm-admin-main">
-        <header className="rm-admin-topbar">
+        <header className={`rm-admin-topbar ${topbarStyles.topbar}`}>
           <button className="rm-mobile-trigger" onClick={() => setMobileNav(!mobileNav)} aria-label="Abrir navegação">☰</button>
-          <div>
-            {environment === "homologation" && <span className="rm-hmg-badge">HMG</span>}
-            <span className="rm-live"><i /> Dados reais</span>
-            <button onClick={refresh} title="Atualizar dados" aria-label="Atualizar dados">↻</button>
-            <a className="rm-view-store" href={`/loja/${data?.restaurant.slug || "serra-burger"}`}>Ver loja ↗</a>
+          <div className={topbarStyles.restaurant}>
+            <a href={`/loja/${data?.restaurant.slug || "serra-burger"}`} title="Abrir cardápio público">{data?.restaurant.name || "RapidexMenu"}</a>
+            {data && <span className={`${topbarStyles.status} ${data.restaurant.isOpen ? topbarStyles.open : topbarStyles.closed}`}><i />{data.restaurant.isOpen ? "Loja aberta" : "Loja fechada"}</span>}
+          </div>
+          <div className={topbarStyles.actions}>
+            {environment === "homologation" && <span className={topbarStyles.hmg}>HMG</span>}
+            <button className={topbarStyles.refresh} onClick={refresh} title="Atualizar dados" aria-label="Atualizar dados">↻</button>
+            <button className={`${topbarStyles.share} ${shareFeedback ? topbarStyles.shareFeedback : ""}`} onClick={() => void shareStore()} aria-label="Compartilhar cardápio"><b aria-hidden="true">↗</b><span>{shareFeedback ? "Link pronto" : "Compartilhar cardápio"}</span></button>
+            <a className={topbarStyles.store} href={`/loja/${data?.restaurant.slug || "serra-burger"}`}><b aria-hidden="true">▣</b><span>Abrir loja</span></a>
+            <a className={topbarStyles.report} href="/admin/lucro"><b aria-hidden="true">▥</b><span>Ver relatórios</span></a>
           </div>
         </header>
 
@@ -191,8 +216,8 @@ export default function AdminClient({
   );
 }
 
-function Nav({ active, icon, count, badge, onClick, children }: { active: boolean; icon: string; count?: number; badge?: string; onClick: () => void; children: ReactNode }) {
-  return <button className={active ? "active" : ""} onClick={onClick}><span>{icon}</span><b>{children}</b>{count ? <em>{count}</em> : badge ? <i>{badge}</i> : null}</button>;
+function Nav({ active, icon, count, badge, ariaLabel, onClick, children }: { active: boolean; icon: string; count?: number; badge?: string; ariaLabel?: string; onClick: () => void; children: ReactNode }) {
+  return <button aria-label={ariaLabel} className={active ? "active" : ""} onClick={onClick}><span>{icon}</span><b>{children}</b>{count ? <em>{count}</em> : badge ? <i>{badge}</i> : null}</button>;
 }
 
 function OpportunityCard({ opportunity, refresh, roi, recovered }: { opportunity: Automation | null; refresh: () => Promise<void>; roi: number; recovered: number }) {
