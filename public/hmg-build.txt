@@ -1,0 +1,3 @@
+RapidexMenu HMG build verification
+Requested: 2026-08-07 22:14 America/Sao_Paulo
+Purpose: verify Vercel Git deploy after removing duplicate projects.
