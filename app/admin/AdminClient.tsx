@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
+import AdminOverviewV2 from "./AdminOverviewV2";
+import shellStyles from "./AdminShellV2.module.css";
 
 type Section = "overview" | "orders" | "menu" | "customers" | "automations" | "settings";
 type Overview = {
@@ -26,6 +28,21 @@ type Overview = {
     recoveredRevenueCents: number;
     rapidexRoi: number;
   };
+  analytics?: {
+    hourlySales: Array<{ hour: number; revenueCents: number; orders: number }>;
+    yesterdayHourlySales: Array<{ hour: number; revenueCents: number; orders: number }>;
+    revenueDeltaPct: number | null;
+    ordersDeltaPct: number | null;
+    ticketDeltaPct: number | null;
+    yesterdayRevenueCents: number;
+    yesterdayOrderCount: number;
+    averagePrepMinutes: number;
+    lateOrders: number;
+    peakHour: { hour: number; revenueCents: number; orders: number } | null;
+    todayStatusCounts: Record<string, number>;
+    topProducts: Array<{ name: string; quantity: number }>;
+  };
+  statusCounts?: Record<string, number>;
   orders: Order[];
   channels: Array<{ name: string; revenueCents: number; orders: number; share: number }>;
   opportunity: Automation | null;
@@ -119,14 +136,16 @@ export default function AdminClient({
   };
 
   return (
-    <main className="rm-admin-shell">
+    <main className={`rm-admin-shell ${shellStyles.shell}`}>
       <aside className={`rm-admin-sidebar ${mobileNav ? "open" : ""}`}>
         <Link className="rm-admin-brand" href="/" aria-label="RapidexMenu">
-          <span>⚡</span>
+          <span aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 17h16M6 15a6 6 0 0 1 12 0H6ZM12 9V6M10 6h4M3 20h18"/></svg>
+          </span>
           <b>Rapidex<i>Menu</i></b>
         </Link>
         <nav>
-          <Nav active={section === "overview"} icon="▦" onClick={() => navigate("overview")}>Visão geral</Nav>
+          <Nav active={section === "overview"} icon="▦" onClick={() => navigate("overview")}>Dashboard</Nav>
           <Nav active={section === "orders"} icon="▤" count={data?.restaurant.activeOrders} onClick={() => navigate("orders")}>Pedidos</Nav>
           <Nav active={section === "menu"} icon="▣" onClick={() => navigate("menu")}>Cardápio</Nav>
           <Nav active={section === "automations"} icon="✦" badge="IA" onClick={() => navigate("automations")}>Automações</Nav>
@@ -147,11 +166,11 @@ export default function AdminClient({
 
       <section className="rm-admin-main">
         <header className="rm-admin-topbar">
-          <button className="rm-mobile-trigger" onClick={() => setMobileNav(!mobileNav)}>☰</button>
+          <button className="rm-mobile-trigger" onClick={() => setMobileNav(!mobileNav)} aria-label="Abrir navegação">☰</button>
           <div>
             {environment === "homologation" && <span className="rm-hmg-badge">HMG</span>}
             <span className="rm-live"><i /> Dados reais</span>
-            <button onClick={refresh} title="Atualizar">↻</button>
+            <button onClick={refresh} title="Atualizar dados" aria-label="Atualizar dados">↻</button>
             <a className="rm-view-store" href={`/loja/${data?.restaurant.slug || "serra-burger"}`}>Ver loja ↗</a>
           </div>
         </header>
@@ -159,7 +178,7 @@ export default function AdminClient({
         <div className="rm-admin-content">
           {loading && <Loading />}
           {error && <ErrorState message={error} retry={refresh} />}
-          {!loading && !error && data && section === "overview" && <OverviewView data={data} refresh={refresh} />}
+          {!loading && !error && data && section === "overview" && <AdminOverviewV2 data={data} refresh={refresh} onOpenOrders={() => navigate("orders")} />}
           {!loading && !error && data && section === "orders" && <OrdersView orders={data.orders} refresh={refresh} />}
           {!loading && !error && section === "menu" && <ProductManager />}
           {!loading && !error && section === "customers" && <CustomersView />}
@@ -174,57 +193,6 @@ export default function AdminClient({
 
 function Nav({ active, icon, count, badge, onClick, children }: { active: boolean; icon: string; count?: number; badge?: string; onClick: () => void; children: ReactNode }) {
   return <button className={active ? "active" : ""} onClick={onClick}><span>{icon}</span><b>{children}</b>{count ? <em>{count}</em> : badge ? <i>{badge}</i> : null}</button>;
-}
-
-function OverviewView({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
-  const firstName = data.user.name.split(" ")[0];
-  const orderGroups = useMemo(() => [
-    { key: "received", title: "Recebidos", tone: "coral", items: data.orders.filter((order) => ["received", "confirmed"].includes(order.status)) },
-    { key: "preparing", title: "Na cozinha", tone: "yellow", items: data.orders.filter((order) => ["preparing", "ready"].includes(order.status)) },
-    { key: "route", title: "Em rota", tone: "green", items: data.orders.filter((order) => order.status === "out_for_delivery") },
-  ], [data.orders]);
-  return <>
-    <div className="rm-page-title">
-      <div><small>{new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long" }).format(new Date()).toUpperCase()}</small><h1>Boa tarde, {firstName}.</h1><p>Sua operação em uma tela, com lucro e recompra visíveis.</p></div>
-      <span className={data.restaurant.isOpen ? "open" : "closed"}><i /> {data.restaurant.isOpen ? "Loja aberta" : "Loja fechada"}</span>
-    </div>
-    <section className="rm-metrics">
-      <Metric icon="◉" label="Vendas hoje" value={currency.format(data.metrics.revenueCents / 100)} foot={`${data.metrics.orderCount} pedidos`} tone="lime" />
-      <Metric icon="▤" label="Pedidos ativos" value={String(data.restaurant.activeOrders)} foot={`${data.metrics.orderCount} recebidos hoje`} />
-      <Metric icon="▣" label="Ticket médio" value={currency.format(data.metrics.averageTicketCents / 100)} foot="Calculado pelos pedidos reais" />
-      <Metric icon="✦" label="Receita recuperada" value={currency.format(data.metrics.recoveredRevenueCents / 100)} foot={`${data.metrics.rapidexRoi}x de ROI`} tone="dark" />
-    </section>
-    <div className="rm-overview-grid">
-      <section className="rm-panel rm-live-orders">
-        <PanelTitle title="Pedidos agora" text="Atualização automática a cada 30 segundos." />
-        <div className="rm-kanban">
-          {orderGroups.map((group) => <div className="rm-kanban-col" key={group.key}><header><i className={group.tone} /><b>{group.title}</b><span>{group.items.length}</span></header>{group.items.length ? group.items.slice(0, 4).map((order) => <OrderCard key={order.id} order={order} refresh={refresh} />) : <div className="rm-empty-small">Fila livre</div>}</div>)}
-        </div>
-      </section>
-      <OpportunityCard opportunity={data.opportunity} refresh={refresh} roi={data.metrics.rapidexRoi} recovered={data.metrics.recoveredRevenueCents} />
-    </div>
-    <div className="rm-bottom-grid">
-      <section className="rm-panel"><PanelTitle title="Origem das vendas" text="Participação por canal nos últimos 7 dias." /><div className="rm-channels">{data.channels.length ? data.channels.map((channel) => <div key={channel.name}><span><i /><b>{channelName(channel.name)}</b><small>{channel.orders} pedidos · {currency.format(channel.revenueCents / 100)}</small></span><strong>{channel.share}%</strong></div>) : <Empty text="Os canais aparecem após o primeiro pedido." />}</div></section>
-      <section className="rm-panel"><PanelTitle title="Clientes que voltaram" text="Recompras que constroem seu ativo." />{data.returningCustomers.length ? data.returningCustomers.map((customer) => <div className="rm-returning" key={customer.id}><span>{initials(customer.name)}</span><p><b>{customer.name}</b><small>{customer.orderCount} pedidos · final {customer.phoneSuffix}</small></p><strong>{currency.format(customer.lifetimeValueCents / 100)}</strong></div>) : <Empty text="As recompras aparecerão aqui." />}</section>
-    </div>
-  </>;
-}
-
-function Metric({ icon, label, value, foot, tone = "" }: { icon: string; label: string; value: string; foot: string; tone?: string }) {
-  return <article className={`rm-metric ${tone}`}><span>{icon}</span><small>{label}</small><b>{value}</b><em>{foot}</em></article>;
-}
-
-function PanelTitle({ title, text }: { title: string; text: string }) { return <header className="rm-panel-title"><div><h2>{title}</h2><p>{text}</p></div></header>; }
-
-function OrderCard({ order, refresh }: { order: Order; refresh: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const advance = async () => {
-    const next = nextStatus[order.status];
-    if (!next) return;
-    setBusy(true);
-    try { await api(`/api/admin/orders/${order.id}`, { method: "PATCH", body: JSON.stringify({ status: next.status }) }); await refresh(); } finally { setBusy(false); }
-  };
-  return <article className="rm-order-card"><div><small>#{order.number}</small><em>{relativeTime(order.createdAt)}</em></div><h3>{order.customerName}</h3><p>{order.items.map((item) => `${item.quantity}× ${item.name}`).join(" · ") || channelName(order.source)}</p><footer><strong>{currency.format(order.totalCents / 100)}</strong>{nextStatus[order.status] && <button disabled={busy} onClick={advance}>{busy ? "…" : nextStatus[order.status]!.label}</button>}</footer></article>;
 }
 
 function OpportunityCard({ opportunity, refresh, roi, recovered }: { opportunity: Automation | null; refresh: () => Promise<void>; roi: number; recovered: number }) {
@@ -288,7 +256,6 @@ async function api<T = Record<string, unknown>>(url: string, init?: RequestInit)
   return payload as T;
 }
 function initials(name: string) { return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "RM"; }
-function relativeTime(value: number) { const minutes = Math.max(0, Math.round((Date.now() - value) / 60_000)); return minutes < 1 ? "agora" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`; }
 function channelName(value: string) { return ({ menu: "Cardápio", whatsapp: "WhatsApp", link: "Link próprio", counter: "Balcão", admin: "Gestão" } as Record<string, string>)[value] || value; }
 function statusAutomation(value: string) { return ({ approved: "Aprovada", sent: "Enviada", converted: "Convertida", failed: "Descartada" } as Record<string, string>)[value] || value; }
 function integrationName(value: string) { return ({ database: "Banco multiempresa", uploads: "Fotos e arquivos", openai: "Vendedor com IA", whatsapp: "WhatsApp oficial", pix: "Pix Mercado Pago" } as Record<string, string>)[value] || value; }
