@@ -1,0 +1,73 @@
+name: RapidexMenu Public HMG E2E
+
+on:
+  push:
+    branches: [hmg]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rapidex-public-hmg-e2e
+  cancel-in-progress: true
+
+env:
+  RAPIDEX_E2E_URL: https://rapidexmenu-hmg.vercel.app
+
+jobs:
+  public-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: |
+          npm install --no-save --package-lock=false @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Wait until public HMG serves this exact commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            body="$(curl --fail --silent --show-error --max-time 15 "$RAPIDEX_E2E_URL/api/health?attempt=$attempt" || true)"
+            sha="$(node -e 'try { const payload = JSON.parse(process.argv[1] || "{}"); process.stdout.write(payload.build?.sha || ""); } catch {}' "$body")"
+            echo "attempt=$attempt expected=$GITHUB_SHA deployed=${sha:-unknown}"
+            if [ "$sha" = "$GITHUB_SHA" ]; then
+              echo "$body"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public HMG did not reach commit $GITHUB_SHA"
+          curl --silent --show-error "$RAPIDEX_E2E_URL/api/health" || true
+          exit 1
+
+      - name: Run Playwright against published HMG
+        env:
+          RAPIDEX_PUBLIC_E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: npx playwright test tests/landing-functional-ui.spec.mjs tests/hmg-public-e2e.spec.mjs --reporter=line
+
+      - name: Upload public HMG evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapidexmenu-public-hmg-playwright-evidence
+          path: |
+            playwright-artifacts/
+            playwright-public-artifacts/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
