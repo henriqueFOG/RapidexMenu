@@ -85,12 +85,13 @@ export function integrationReadiness() {
       bindings.WHATSAPP_VERIFY_TOKEN &&
       bindings.WHATSAPP_APP_SECRET,
   );
+  const postgresConfigured = Boolean(bindings.DATABASE_URL || bindings.POSTGRES_URL);
   return {
     environment: environmentCheck.environment,
     environmentSafe: environmentCheck.issues.length === 0,
     environmentIssues: environmentCheck.issues,
-    database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
-    databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
+    database: Boolean(bindings.DB || postgresConfigured),
+    databaseEngine: bindings.DB ? "d1" : postgresConfigured ? "postgres" : null,
     nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
     billing: environmentCheck.environment === "production" && Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
     email: Boolean(bindings.RESEND_API_KEY && bindings.RAPIDEX_EMAIL_FROM),
@@ -101,7 +102,7 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
     metaEmbeddedSignup,
-    uploads: Boolean(bindings.BUCKET),
+    uploads: Boolean(bindings.BUCKET || postgresConfigured),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: whatsappLegacy || metaEmbeddedSignup,
     whatsappLegacy,
