@@ -1,12 +1,16 @@
 import { requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json } from "@/lib/http";
-import { getBindings } from "@/lib/runtime";
+import { getBindings, getDatabase } from "@/lib/runtime";
+import { Buffer } from "node:buffer";
 
 const allowedTypes: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
 };
+
+const MAX_BUCKET_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_DATABASE_FILE_SIZE = 2 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
 
@@ -15,18 +19,49 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const context = await requireAdminContext();
     requireRole(context, ["owner", "manager"]);
-    const bucket = getBindings().BUCKET;
-    if (!bucket) throw new HttpError(503, "Uploads ainda não configurados.", "integration_not_configured");
+    const bindings = getBindings();
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new HttpError(400, "Selecione uma imagem.", "validation_error");
     if (!allowedTypes[file.type]) throw new HttpError(415, "Use JPG, PNG ou WebP.", "unsupported_media");
-    if (file.size > 5 * 1024 * 1024) throw new HttpError(413, "Imagem acima de 5 MB.", "file_too_large");
+
+    const postgresFallback = !bindings.BUCKET && Boolean(bindings.DATABASE_URL || bindings.POSTGRES_URL);
+    const maxSize = postgresFallback ? MAX_DATABASE_FILE_SIZE : MAX_BUCKET_FILE_SIZE;
+    if (file.size > maxSize) {
+      throw new HttpError(
+        413,
+        postgresFallback ? "Imagem acima de 2 MB. Reduza o arquivo e tente novamente." : "Imagem acima de 5 MB.",
+        "file_too_large",
+      );
+    }
+
     const key = `public/restaurants/${context.restaurantId}/products/${crypto.randomUUID()}.${allowedTypes[file.type]}`;
-    await bucket.put(key, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type, cacheControl: "public, max-age=86400" },
-      customMetadata: { restaurantId: context.restaurantId, uploadedBy: context.user.email },
-    });
+    const bytes = await file.arrayBuffer();
+
+    if (bindings.BUCKET) {
+      await bindings.BUCKET.put(key, bytes, {
+        httpMetadata: { contentType: file.type, cacheControl: "public, max-age=86400" },
+        customMetadata: { restaurantId: context.restaurantId, uploadedBy: context.user.email },
+      });
+    } else if (postgresFallback) {
+      await getDatabase()
+        .prepare(
+          `INSERT INTO media_blobs (key, restaurant_id, content_type, data_base64, size_bytes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          key,
+          context.restaurantId,
+          file.type,
+          Buffer.from(bytes).toString("base64"),
+          file.size,
+          Date.now(),
+        )
+        .run();
+    } else {
+      throw new HttpError(503, "Uploads ainda não configurados.", "integration_not_configured");
+    }
+
     return json({ ok: true, key, url: `/api/public/media/${key}` }, { status: 201 });
   } catch (error) {
     return apiError(error);
