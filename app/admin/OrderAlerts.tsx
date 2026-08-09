@@ -18,8 +18,10 @@ export default function OrderAlerts() {
   const pathname = usePathname();
   const [enabled, setEnabled] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [latest, setLatest] = useState<OrderRow | null>(null);
   const seen = useRef<Set<string> | null>(null);
   const audio = useRef<AudioContext | null>(null);
+  const dismissTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof Notification === "undefined") {
@@ -45,15 +47,23 @@ export default function OrderAlerts() {
         }
         const fresh = orders.filter((order) => !seen.current!.has(order.id));
         for (const order of orders) seen.current.add(order.id);
-        if (!enabled || disposed) return;
-        for (const order of fresh.reverse()) announce(order);
+        if (!fresh.length || disposed) return;
+
+        setLatest(fresh[0]);
+        if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
+        dismissTimer.current = window.setTimeout(() => setLatest(null), 12_000);
+        if (enabled) for (const order of fresh.reverse()) announce(order);
       } catch {
         // O painel principal continua operando mesmo se o alerta auxiliar falhar.
       }
     }
     void poll();
     const interval = window.setInterval(() => void poll(), 8_000);
-    return () => { disposed = true; window.clearInterval(interval); };
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
+    };
   }, [enabled, pathname]);
 
   async function enableAlerts() {
@@ -71,7 +81,7 @@ export default function OrderAlerts() {
       if (audio.current.state === "suspended") await audio.current.resume();
       beep();
     } catch {
-      // Som é complementar; a notificação visual continua funcionando.
+      // Som é complementar; o alerta dentro do painel continua funcionando.
     }
   }
 
@@ -108,11 +118,19 @@ export default function OrderAlerts() {
     oscillator.stop(context.currentTime + 0.23);
   }
 
-  if (pathname === "/admin/login" || permission === "denied" || permission === "unsupported") return null;
-  if (enabled) return <div style={badgeStyle} role="status">🔔 Alertas ativos</div>;
-  return <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title="Receber alerta quando chegar pedido novo">
-    🔔 Ativar alertas
-  </button>;
+  if (pathname === "/admin/login") return null;
+  const canEnable = permission !== "denied" && permission !== "unsupported";
+
+  return <>
+    {latest && <div role="alert" aria-live="assertive" style={toastStyle}>
+      <span style={toastIconStyle}>✓</span>
+      <div><b>{`Novo pedido #${latest.order_number || ""}`.trim()}</b><small>{Number(latest.total_cents || 0) > 0 ? `${(Number(latest.total_cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · recebido agora` : "Recebido agora"}</small></div>
+      <a href="/admin" style={toastLinkStyle}>Ver pedido →</a>
+    </div>}
+    {canEnable && (enabled
+      ? <div style={badgeStyle} role="status">🔔 Alertas ativos</div>
+      : <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title="Ativar som e notificação do navegador para novos pedidos">🔔 Ativar alertas</button>)}
+  </>;
 }
 
 const buttonStyle: React.CSSProperties = {
@@ -123,3 +141,14 @@ const buttonStyle: React.CSSProperties = {
 const badgeStyle: React.CSSProperties = {
   ...buttonStyle, background: "#111", borderColor: "#222", color: "#ff7a1a", cursor: "default",
 };
+const toastStyle: React.CSSProperties = {
+  position: "fixed", right: 18, bottom: 70, zIndex: 90, width: "min(370px, calc(100vw - 36px))",
+  display: "grid", gridTemplateColumns: "38px 1fr auto", alignItems: "center", gap: 10,
+  padding: 14, borderRadius: 16, background: "#111", color: "white", border: "1px solid #2b2b2b",
+  boxShadow: "0 18px 42px rgba(0,0,0,.22)",
+};
+const toastIconStyle: React.CSSProperties = {
+  width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center",
+  background: "#ff6b0a", color: "white", fontWeight: 950,
+};
+const toastLinkStyle: React.CSSProperties = { color: "#ff8a3d", fontSize: 11, fontWeight: 900, textDecoration: "none" };
