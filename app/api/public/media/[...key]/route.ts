@@ -1,5 +1,6 @@
+import { Buffer } from "node:buffer";
 import { apiError, HttpError } from "@/lib/http";
-import { getBindings } from "@/lib/runtime";
+import { getBindings, getDatabase } from "@/lib/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -12,16 +13,37 @@ export async function GET(
     if (!key.startsWith("public/") || key.includes("..")) {
       throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
     }
-    const bucket = getBindings().BUCKET;
-    if (!bucket) throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
-    const object = await bucket.get(key);
-    if (!object) throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("etag", object.httpEtag);
-    headers.set("cache-control", "public, max-age=86400, immutable");
-    headers.set("x-content-type-options", "nosniff");
-    return new Response(object.body, { headers });
+
+    const bindings = getBindings();
+    const bucket = bindings.BUCKET;
+    if (bucket) {
+      const object = await bucket.get(key);
+      if (!object) throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("etag", object.httpEtag);
+      headers.set("cache-control", "public, max-age=86400, immutable");
+      headers.set("x-content-type-options", "nosniff");
+      return new Response(object.body, { headers });
+    }
+
+    if (bindings.DATABASE_URL || bindings.POSTGRES_URL) {
+      const object = await getDatabase()
+        .prepare("SELECT content_type, data_base64 FROM media_blobs WHERE key = ? LIMIT 1")
+        .bind(key)
+        .first<{ content_type: string; data_base64: string }>();
+      if (!object) throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
+      const bytes = Buffer.from(object.data_base64, "base64");
+      return new Response(bytes, {
+        headers: {
+          "content-type": object.content_type,
+          "cache-control": "public, max-age=86400, immutable",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    }
+
+    throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
   } catch (error) {
     return apiError(error);
   }
