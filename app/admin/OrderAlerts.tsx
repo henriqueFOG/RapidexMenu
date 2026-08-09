@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type OrderRow = {
@@ -11,17 +12,26 @@ type OrderRow = {
 
 type OrdersPayload = { orders?: OrderRow[] };
 
+const preferenceKey = "rapidex-order-alerts";
+
 export default function OrderAlerts() {
+  const pathname = usePathname();
   const [enabled, setEnabled] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const seen = useRef<Set<string> | null>(null);
   const audio = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    setPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+    if (typeof Notification === "undefined") {
+      setPermission("unsupported");
+      return;
+    }
+    setPermission(Notification.permission);
+    setEnabled(Notification.permission === "granted" && window.localStorage.getItem(preferenceKey) === "1");
   }, []);
 
   useEffect(() => {
+    if (pathname === "/admin/login") return;
     let disposed = false;
     async function poll() {
       try {
@@ -42,9 +52,9 @@ export default function OrderAlerts() {
       }
     }
     void poll();
-    const interval = window.setInterval(() => void poll(), 10_000);
+    const interval = window.setInterval(() => void poll(), 8_000);
     return () => { disposed = true; window.clearInterval(interval); };
-  }, [enabled]);
+  }, [enabled, pathname]);
 
   async function enableAlerts() {
     if (typeof Notification === "undefined") {
@@ -54,13 +64,14 @@ export default function OrderAlerts() {
     const next = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
     setPermission(next);
     if (next !== "granted") return;
+    window.localStorage.setItem(preferenceKey, "1");
     setEnabled(true);
     try {
       audio.current = audio.current || new AudioContext();
       if (audio.current.state === "suspended") await audio.current.resume();
       beep();
     } catch {
-      // Som é opcional; a notificação visual continua funcionando.
+      // Som é complementar; a notificação visual continua funcionando.
     }
   }
 
@@ -69,10 +80,16 @@ export default function OrderAlerts() {
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       const total = Number(order.total_cents || 0) / 100;
       const notification = new Notification(`Novo pedido #${order.order_number || ""}`.trim(), {
-        body: total > 0 ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.` : "Abra o painel para conferir.",
+        body: total > 0
+          ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.`
+          : "Abra o painel para conferir.",
         tag: `rapidex-order-${order.id}`,
       });
-      notification.onclick = () => { window.focus(); notification.close(); };
+      notification.onclick = () => {
+        window.focus();
+        window.location.assign("/admin");
+        notification.close();
+      };
     }
   }
 
@@ -91,15 +108,15 @@ export default function OrderAlerts() {
     oscillator.stop(context.currentTime + 0.23);
   }
 
-  if (permission === "denied" || permission === "unsupported") return null;
-  if (enabled) return <div style={badgeStyle}>🔔 Alertas ativos</div>;
+  if (pathname === "/admin/login" || permission === "denied" || permission === "unsupported") return null;
+  if (enabled) return <div style={badgeStyle} role="status">🔔 Alertas ativos</div>;
   return <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title="Receber alerta quando chegar pedido novo">
     🔔 Ativar alertas
   </button>;
 }
 
 const buttonStyle: React.CSSProperties = {
-  position: "fixed", right: 18, bottom: 72, zIndex: 85, border: "1px solid #e3e3df", borderRadius: 999,
+  position: "fixed", right: 18, bottom: 18, zIndex: 85, border: "1px solid #e3e3df", borderRadius: 999,
   padding: "10px 13px", background: "white", color: "#333", fontSize: 11, fontWeight: 850, cursor: "pointer",
   boxShadow: "0 10px 28px rgba(0,0,0,.08)",
 };
