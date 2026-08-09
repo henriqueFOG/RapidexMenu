@@ -35,6 +35,13 @@ export async function PATCH(
     const price = cents(body.priceCents ?? current.price_cents, "Preço", 100);
     const cost = cents(body.costCents ?? current.cost_cents, "Custo", 0);
     if (cost >= price) throw new HttpError(400, "O preço precisa ser maior que o custo.", "invalid_margin");
+    const imageKey =
+      body.imageKey === null
+        ? null
+        : optionalString(body.imageKey ?? current.image_key, "Imagem", 300);
+    if (imageKey && !imageKey.startsWith(`public/restaurants/${context.restaurantId}/products/`)) {
+      throw new HttpError(400, "Imagem inválida para este restaurante.", "invalid_media_owner");
+    }
     const timestamp = Date.now();
     await db
       .prepare(
@@ -51,7 +58,7 @@ export async function PATCH(
         cost,
         optionalString(body.emoji ?? current.emoji, "Emoji", 8) || "🍽️",
         optionalString(body.tag ?? current.tag, "Selo", 60),
-        optionalString(body.imageKey ?? current.image_key, "Imagem", 300),
+        imageKey,
         body.available === undefined ? Number(current.available) : booleanValue(body.available) ? 1 : 0,
         body.stockControlEnabled === undefined
           ? Number(current.stock_control_enabled)
