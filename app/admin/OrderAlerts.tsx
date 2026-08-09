@@ -91,17 +91,18 @@ export default function OrderAlerts() {
     oscillator.stop(context.currentTime + 0.23);
   }
 
+  if (permission === "denied" || permission === "unsupported") return null;
   if (enabled) return <div style={badgeStyle}>🔔 Alertas ativos</div>;
-  return <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title={permission === "denied" ? "Permissão de notificação bloqueada no navegador" : "Receber alerta quando chegar pedido novo"}>
-    {permission === "denied" ? "🔕 Alertas bloqueados" : permission === "unsupported" ? "Painel sem notificações" : "🔔 Ativar alertas de pedido"}
+  return <button type="button" onClick={() => void enableAlerts()} style={buttonStyle} title="Receber alerta quando chegar pedido novo">
+    🔔 Ativar alertas
   </button>;
 }
 
 const buttonStyle: React.CSSProperties = {
-  position: "fixed", left: 18, bottom: 18, zIndex: 90, border: "1px solid #dfe3d7", borderRadius: 999,
-  padding: "11px 14px", background: "white", color: "#171915", fontWeight: 850, cursor: "pointer",
-  boxShadow: "0 10px 30px rgba(0,0,0,.09)",
+  position: "fixed", right: 18, bottom: 72, zIndex: 85, border: "1px solid #e3e3df", borderRadius: 999,
+  padding: "10px 13px", background: "white", color: "#333", fontSize: 11, fontWeight: 850, cursor: "pointer",
+  boxShadow: "0 10px 28px rgba(0,0,0,.08)",
 };
 const badgeStyle: React.CSSProperties = {
-  ...buttonStyle, background: "#171915", color: "#c9ff4a", cursor: "default",
+  ...buttonStyle, background: "#111", borderColor: "#222", color: "#ff7a1a", cursor: "default",
 };
