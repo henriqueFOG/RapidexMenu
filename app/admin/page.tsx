@@ -1,18 +1,14 @@
 import { chatGPTSignOutPath, requireChatGPTUser } from "@/app/chatgpt-auth";
 import { getBindings } from "@/lib/runtime";
 import AdminClient from "./AdminClient";
-import OrderAlerts from "./OrderAlerts";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const user = await requireChatGPTUser("/admin");
-  return <>
-    <AdminClient
-      initialUser={{ name: user.displayName, email: user.email }}
-      signOutHref={chatGPTSignOutPath("/")}
-      environment={getBindings().RAPIDEX_ENV || "development"}
-    />
-    <OrderAlerts />
-  </>;
+  return <AdminClient
+    initialUser={{ name: user.displayName, email: user.email }}
+    signOutHref={chatGPTSignOutPath("/")}
+    environment={getBindings().RAPIDEX_ENV || "development"}
+  />;
 }

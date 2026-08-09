@@ -1,7 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import styles from "./AdminOverviewV2.module.css";
 
 type Order = {
@@ -20,6 +18,7 @@ type Order = {
 type HourBucket = { hour: number; revenueCents: number; orders: number };
 
 type DashboardOverviewData = {
+  user?: { name: string; email: string; role: string };
   restaurant: {
     name: string;
     slug: string;
@@ -35,8 +34,6 @@ type DashboardOverviewData = {
     rapidexRoi: number;
   };
   orders: Order[];
-  channels: Array<{ name: string; revenueCents: number; orders: number; share: number }>;
-  statusCounts?: Record<string, number>;
   analytics?: {
     hourlySales: HourBucket[];
     yesterdayHourlySales: HourBucket[];
@@ -60,435 +57,211 @@ type Props = {
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const nextStatus: Record<string, { status: string; label: string } | undefined> = {
-  received: { status: "confirmed", label: "Confirmar" },
-  confirmed: { status: "preparing", label: "Iniciar preparo" },
-  preparing: { status: "ready", label: "Marcar pronto" },
-  ready: { status: "out_for_delivery", label: "Saiu para entrega" },
-  out_for_delivery: { status: "delivered", label: "Concluir" },
+const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+const statusMap: Record<string, { label: string; tone: string }> = {
+  received: { label: "Recebido", tone: "orange" },
+  confirmed: { label: "Confirmado", tone: "blue" },
+  preparing: { label: "Em preparo", tone: "amber" },
+  ready: { label: "Pronto", tone: "purple" },
+  out_for_delivery: { label: "Em entrega", tone: "green" },
+  delivered: { label: "Entregue", tone: "green" },
+  canceled: { label: "Cancelado", tone: "red" },
 };
 
 export default function AdminOverviewV2({ data, refresh, onOpenOrders }: Props) {
   const analytics = data.analytics ?? emptyAnalytics();
-  const orderGroups = useMemo(
-    () => [
-      {
-        key: "received",
-        title: "Recebidos",
-        tone: "orange",
-        items: data.orders.filter((order) => ["received", "confirmed"].includes(order.status)),
-      },
-      {
-        key: "kitchen",
-        title: "Na cozinha",
-        tone: "yellow",
-        items: data.orders.filter((order) => ["preparing", "ready"].includes(order.status)),
-      },
-      {
-        key: "route",
-        title: "Em rota",
-        tone: "green",
-        items: data.orders.filter((order) => order.status === "out_for_delivery"),
-      },
-    ],
-    [data.orders],
-  );
-
-  const topProduct = analytics.topProducts[0] ?? null;
-  const peak = analytics.peakHour;
+  const firstName = (data.user?.name || "").trim().split(/\s+/)[0] || "Olá";
+  const activeStatuses = statusRows(analytics.todayStatusCounts);
+  const recentOrders = [...data.orders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
 
   return (
     <div className={styles.dashboard}>
-      <section className={styles.kpis} aria-label="Indicadores de hoje">
-        <KpiCard
-          icon="$"
-          tone="green"
-          label="Vendas hoje"
-          value={currency.format(data.metrics.revenueCents / 100)}
-          foot={deltaCopy(analytics.revenueDeltaPct, "vs ontem")}
-          positive={analytics.revenueDeltaPct !== null ? analytics.revenueDeltaPct >= 0 : undefined}
-        />
-        <KpiCard
-          icon="▤"
-          tone="orange"
-          label="Pedidos hoje"
-          value={String(data.metrics.orderCount)}
-          foot={deltaCopy(analytics.ordersDeltaPct, "vs ontem")}
-          positive={analytics.ordersDeltaPct !== null ? analytics.ordersDeltaPct >= 0 : undefined}
-        />
-        <KpiCard
-          icon="◇"
-          tone="amber"
-          label="Ticket médio"
-          value={currency.format(data.metrics.averageTicketCents / 100)}
-          foot={deltaCopy(analytics.ticketDeltaPct, "vs ontem")}
-          positive={analytics.ticketDeltaPct !== null ? analytics.ticketDeltaPct >= 0 : undefined}
-        />
-        <KpiCard
-          icon="◷"
-          tone="blue"
-          label="Tempo de preparo"
-          value={analytics.averagePrepMinutes ? `${analytics.averagePrepMinutes} min` : "—"}
-          foot="Meta operacional configurada"
-        />
-        <KpiCard
-          icon="!"
-          tone={analytics.lateOrders ? "red" : "green"}
-          label="Atrasados"
-          value={String(analytics.lateOrders)}
-          foot={analytics.lateOrders ? "Requer atenção agora" : "Tudo dentro do prazo"}
-          positive={!analytics.lateOrders}
-        />
+      <header className={styles.hero}>
+        <div>
+          <h1>{firstName === "Olá" ? "Olá!" : `Olá, ${firstName}!`} <span aria-hidden="true">👋</span></h1>
+          <p>Aqui está o resumo da sua operação hoje.</p>
+        </div>
+        <div className={styles.heroActions}>
+          <span className={`${styles.storeState} ${data.restaurant.isOpen ? styles.open : styles.closed}`}><i />{data.restaurant.isOpen ? "Loja online" : "Loja fechada"}</span>
+          <button type="button" onClick={() => void refresh()} aria-label="Atualizar dashboard">↻ Atualizar</button>
+        </div>
+      </header>
+
+      <section className={styles.kpis} aria-label="Resumo de hoje">
+        <MetricCard icon="bag" label="Pedidos hoje" value={String(data.metrics.orderCount)} delta={analytics.ordersDeltaPct} suffix="vs. ontem" />
+        <MetricCard icon="wallet" label="Faturamento" value={currency.format(data.metrics.revenueCents / 100)} delta={analytics.revenueDeltaPct} suffix="vs. ontem" />
+        <MetricCard icon="ticket" label="Ticket médio" value={currency.format(data.metrics.averageTicketCents / 100)} delta={analytics.ticketDeltaPct} suffix="vs. ontem" />
+        <MetricCard icon="clock" label="Tempo médio" value={analytics.averagePrepMinutes ? `${analytics.averagePrepMinutes} min` : "—"} note={analytics.averagePrepMinutes ? "preparo dos pedidos" : "aguardando pedidos concluídos"} />
       </section>
 
       <section className={styles.analyticsGrid}>
-        <article className={`${styles.panel} ${styles.salesPanel}`}>
-          <header className={styles.panelHead}>
+        <article className={`${styles.card} ${styles.salesCard}`}>
+          <header className={styles.cardHeader}>
             <div>
-              <h2>Vendas por hora</h2>
-              <p>Hoje comparado com ontem</p>
+              <h2>Vendas hoje</h2>
+              <p>Faturamento ao longo do dia</p>
             </div>
-            <span className={styles.livePill}>Hoje</span>
+            <div className={styles.salesSummary}><b>{currency.format(data.metrics.revenueCents / 100)}</b><span className={deltaClass(analytics.revenueDeltaPct)}>{deltaLabel(analytics.revenueDeltaPct)}</span></div>
           </header>
-          <SalesLineChart today={analytics.hourlySales} yesterday={analytics.yesterdayHourlySales} peak={peak} />
+          <SalesChart today={analytics.hourlySales} yesterday={analytics.yesterdayHourlySales} />
         </article>
 
-        <article className={`${styles.panel} ${styles.channelPanel}`}>
-          <header className={styles.panelHead}>
+        <article className={`${styles.card} ${styles.statusCard}`}>
+          <header className={styles.cardHeader}>
             <div>
-              <h2>Canais de venda</h2>
-              <p>Participação nos últimos 7 dias</p>
+              <h2>Pedidos por status</h2>
+              <p>Distribuição da operação de hoje</p>
             </div>
+            <button className={styles.linkButton} type="button" onClick={onOpenOrders}>Ver pedidos →</button>
           </header>
-          <ChannelBars channels={data.channels} />
-        </article>
-
-        <article className={`${styles.panel} ${styles.statusPanel}`}>
-          <header className={styles.panelHead}>
-            <div>
-              <h2>Status dos pedidos</h2>
-              <p>Movimento de hoje</p>
-            </div>
-          </header>
-          <StatusDonut counts={analytics.todayStatusCounts} />
-        </article>
-
-        <article className={`${styles.panel} ${styles.productsPanel}`}>
-          <header className={styles.panelHead}>
-            <div>
-              <h2>Top produtos</h2>
-              <p>Mais vendidos hoje</p>
-            </div>
-          </header>
-          <TopProducts products={analytics.topProducts} />
+          <StatusDonut rows={activeStatuses} total={data.metrics.orderCount} />
         </article>
       </section>
 
-      <section className={styles.operationGrid}>
-        <article className={`${styles.panel} ${styles.ordersPanel}`}>
-          <header className={styles.ordersHead}>
-            <div>
-              <h2>Pedidos agora</h2>
-              <p>Acompanhe em tempo real e gerencie cada etapa do pedido.</p>
-            </div>
-            <button type="button" onClick={onOpenOrders}>Ver todos os pedidos</button>
-          </header>
-          <div className={styles.kanban}>
-            {orderGroups.map((group) => {
-              const totalCents = group.items.reduce((sum, order) => sum + Number(order.totalCents), 0);
-              return (
-                <section className={styles.kanbanColumn} key={group.key}>
-                  <header>
-                    <span className={`${styles.statusDot} ${styles[group.tone]}`} />
-                    <b>{group.title}</b>
-                    <em>{group.items.length}</em>
-                    <small>{currency.format(totalCents / 100)}</small>
-                  </header>
-                  <div className={styles.orderStack}>
-                    {group.items.length ? (
-                      group.items.slice(0, 3).map((order) => (
-                        <LiveOrderCard key={order.id} order={order} refresh={refresh} />
-                      ))
-                    ) : (
-                      <div className={styles.freeQueue}>
-                        <span>✓</span>
-                        <b>Fila livre</b>
-                        <small>Nenhum pedido nesta etapa.</small>
-                      </div>
-                    )}
-                  </div>
-                  {group.items.length > 3 && (
-                    <button type="button" className={styles.moreOrders} onClick={onOpenOrders}>
-                      + {group.items.length - 3} {group.items.length - 3 === 1 ? "pedido" : "pedidos"}
-                    </button>
-                  )}
-                </section>
-              );
-            })}
+      <article className={`${styles.card} ${styles.ordersCard}`}>
+        <header className={styles.cardHeader}>
+          <div>
+            <h2>Pedidos recentes</h2>
+            <p>Últimos pedidos recebidos pela sua loja</p>
           </div>
-        </article>
+          <button className={styles.linkButton} type="button" onClick={onOpenOrders}>Ver todos →</button>
+        </header>
 
-        <aside className={`${styles.panel} ${styles.insightsPanel}`}>
-          <header className={styles.insightsHead}>
-            <span>↗</span>
-            <div>
-              <h2>Insights de hoje</h2>
-              <p>Sinais úteis, sem números inventados.</p>
-            </div>
-          </header>
-
-          <Insight
-            icon="↗"
-            tone="green"
-            label="Vendas"
-            value={
-              analytics.revenueDeltaPct === null
-                ? "Comparação disponível amanhã"
-                : `${Math.abs(analytics.revenueDeltaPct)}% ${analytics.revenueDeltaPct >= 0 ? "a mais" : "a menos"} que ontem`
-            }
-            text={
-              analytics.revenueDeltaPct === null
-                ? "Precisamos de um dia anterior com vendas para comparar."
-                : analytics.revenueDeltaPct >= 0
-                  ? "Seu canal próprio ganhou tração hoje."
-                  : "Vale revisar horário, oferta e canais com mais conversão."
-            }
-          />
-          <Insight
-            icon="◷"
-            tone="orange"
-            label="Pico de pedidos"
-            value={peak ? `${String(peak.hour).padStart(2, "0")}h` : "Ainda sem pico"}
-            text={peak ? `${peak.orders} pedidos e ${currency.format(peak.revenueCents / 100)} nessa hora.` : "O horário de pico aparece conforme os pedidos entram."}
-          />
-          <Insight
-            icon="★"
-            tone="amber"
-            label="Produto campeão"
-            value={topProduct?.name ?? "Aguardando vendas"}
-            text={topProduct ? `${topProduct.quantity} ${topProduct.quantity === 1 ? "unidade vendida" : "unidades vendidas"} hoje.` : "O ranking nasce automaticamente a partir dos pedidos reais."}
-          />
-
-          <div className={styles.insightFooter}>
-            <div>
-              <small>Receita recuperada</small>
-              <b>{currency.format(data.metrics.recoveredRevenueCents / 100)}</b>
-            </div>
-            <div>
-              <small>ROI Rapidex</small>
-              <b>{data.metrics.rapidexRoi}x</b>
-            </div>
+        {recentOrders.length ? (
+          <div className={styles.tableWrap}>
+            <table>
+              <thead><tr><th>Pedido</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Horário</th></tr></thead>
+              <tbody>{recentOrders.map((order) => {
+                const status = statusMap[order.status] ?? { label: order.status, tone: "neutral" };
+                return <tr key={order.id}>
+                  <td><b>#{order.number}</b><small>{order.items.slice(0, 2).map((item) => `${item.quantity}× ${item.name}`).join(" · ") || "Pedido"}</small></td>
+                  <td>{order.customerName}</td>
+                  <td><span className={`${styles.statusPill} ${styles[status.tone]}`}>{status.label}</span></td>
+                  <td><strong>{currency.format(order.totalCents / 100)}</strong></td>
+                  <td>{formatTime(order.createdAt)}</td>
+                </tr>;
+              })}</tbody>
+            </table>
           </div>
-        </aside>
-      </section>
-    </div>
-  );
-}
-
-function KpiCard({
-  icon,
-  tone,
-  label,
-  value,
-  foot,
-  positive,
-}: {
-  icon: string;
-  tone: "green" | "orange" | "amber" | "blue" | "red";
-  label: string;
-  value: string;
-  foot: string;
-  positive?: boolean;
-}) {
-  return (
-    <article className={styles.kpiCard}>
-      <span className={`${styles.kpiIcon} ${styles[tone]}`}>{icon}</span>
-      <div>
-        <small>{label}</small>
-        <b>{value}</b>
-        <em className={positive === undefined ? styles.neutral : positive ? styles.positive : styles.negative}>{foot}</em>
-      </div>
-    </article>
-  );
-}
-
-function SalesLineChart({ today, yesterday, peak }: { today: HourBucket[]; yesterday: HourBucket[]; peak: HourBucket | null }) {
-  const width = 640;
-  const height = 206;
-  const padX = 18;
-  const padY = 20;
-  const max = Math.max(1, ...today.map((row) => row.revenueCents), ...yesterday.map((row) => row.revenueCents));
-  const todayPoints = chartPoints(today, width, height, padX, padY, max);
-  const yesterdayPoints = chartPoints(yesterday, width, height, padX, padY, max);
-  const peakPoint = peak ? pointFor(peak, width, height, padX, padY, max) : null;
-  const labels = [0, 6, 12, 18, 23];
-
-  return (
-    <div className={styles.chartWrap}>
-      <div className={styles.chartLegend}><span><i className={styles.todayLegend} />Hoje</span><span><i className={styles.yesterdayLegend} />Ontem</span></div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de vendas por hora">
-        {[0.25, 0.5, 0.75, 1].map((ratio) => (
-          <line key={ratio} x1={padX} x2={width - padX} y1={height - padY - ratio * (height - padY * 2)} y2={height - padY - ratio * (height - padY * 2)} className={styles.gridLine} />
-        ))}
-        <polyline points={yesterdayPoints} className={styles.yesterdayLine} />
-        <polyline points={todayPoints} className={styles.todayLine} />
-        {peakPoint && (
-          <>
-            <circle cx={peakPoint.x} cy={peakPoint.y} r="7" className={styles.peakHalo} />
-            <circle cx={peakPoint.x} cy={peakPoint.y} r="4" className={styles.peakPoint} />
-          </>
+        ) : (
+          <div className={styles.emptyState}><span>▤</span><b>Os pedidos vão aparecer aqui</b><p>Assim que a primeira venda entrar, este painel passa a mostrar a operação em tempo real.</p></div>
         )}
-        {labels.map((hour) => {
-          const x = padX + (hour / 23) * (width - padX * 2);
-          return <text key={hour} x={x} y={height - 2} textAnchor={hour === 0 ? "start" : hour === 23 ? "end" : "middle"} className={styles.axisLabel}>{String(hour).padStart(2, "0")}h</text>;
-        })}
-      </svg>
-      {peak && <div className={styles.chartPeak}><small>Pico</small><b>{String(peak.hour).padStart(2, "0")}h · {currency.format(peak.revenueCents / 100)}</b></div>}
+      </article>
     </div>
   );
 }
 
-function ChannelBars({ channels }: { channels: DashboardOverviewData["channels"] }) {
-  const visible = channels.slice(0, 4);
-  if (!visible.length) return <EmptyMini text="Os canais aparecem depois do primeiro pedido." />;
-  return (
-    <div className={styles.channelChart}>
-      {visible.map((channel, index) => (
-        <div className={styles.channelItem} key={channel.name}>
-          <strong>{channel.share}%</strong>
-          <div className={styles.channelTrack}><span className={styles[`bar${index}`]} style={{ height: `${Math.max(6, channel.share)}%` }} /></div>
-          <b>{channelName(channel.name)}</b>
-          <small>{channel.orders} pedidos</small>
-        </div>
-      ))}
-    </div>
-  );
+function MetricCard({ icon, label, value, delta, suffix, note }: { icon: "bag" | "wallet" | "ticket" | "clock"; label: string; value: string; delta?: number | null; suffix?: string; note?: string }) {
+  return <article className={styles.metricCard}>
+    <div className={styles.metricTop}><MetricIcon name={icon} /><span className={styles.metricMenu}>•••</span></div>
+    <small>{label}</small>
+    <b>{value}</b>
+    {delta !== undefined ? <p><span className={deltaClass(delta)}>{deltaLabel(delta)}</span>{suffix && <em>{suffix}</em>}</p> : <p><em>{note}</em></p>}
+  </article>;
 }
 
-function StatusDonut({ counts }: { counts: Record<string, number> }) {
-  const rows = [
-    { key: "delivered", label: "Concluídos", color: "#20b26b", count: Number(counts.delivered || 0) },
-    { key: "kitchen", label: "Em preparo", color: "#ff650b", count: Number(counts.preparing || 0) + Number(counts.ready || 0) },
-    { key: "route", label: "Em rota", color: "#4d7fe5", count: Number(counts.out_for_delivery || 0) },
-    { key: "waiting", label: "Aguardando", color: "#f0ad1d", count: Number(counts.received || 0) + Number(counts.confirmed || 0) },
-    { key: "canceled", label: "Cancelados", color: "#e74b4b", count: Number(counts.canceled || 0) },
-  ].filter((row) => row.count > 0);
-  const total = rows.reduce((sum, row) => sum + row.count, 0);
-  const style = donutStyle(rows, total);
-  if (!total) return <EmptyMini text="O status aparece conforme os pedidos entram." />;
-  return (
-    <div className={styles.donutLayout}>
-      <div className={styles.donut} style={style}><span><small>Total</small><b>{total}</b></span></div>
-      <div className={styles.donutLegend}>
-        {rows.map((row) => <div key={row.key}><i style={{ background: row.color }} /><span>{row.label}</span><b>{row.count} <small>({Math.round((row.count / total) * 100)}%)</small></b></div>)}
-      </div>
-    </div>
-  );
+function MetricIcon({ name }: { name: "bag" | "wallet" | "ticket" | "clock" }) {
+  if (name === "bag") return <span className={styles.metricIcon}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 11H7L6 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg></span>;
+  if (name === "wallet") return <span className={styles.metricIcon}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15a2 2 0 0 1 2 2v9H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h13"/><path d="M16 11h5v4h-5a2 2 0 1 1 0-4Z"/></svg></span>;
+  if (name === "ticket") return <span className={styles.metricIcon}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v4a2 2 0 0 0 0 4v6H5v-6a2 2 0 0 0 0-4V5Z"/><path d="M12 8v8"/></svg></span>;
+  return <span className={styles.metricIcon}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span>;
 }
 
-function TopProducts({ products }: { products: Array<{ name: string; quantity: number }> }) {
-  if (!products.length) return <EmptyMini text="O ranking aparece após as primeiras vendas do dia." />;
-  return (
-    <div className={styles.topProducts}>
-      {products.slice(0, 4).map((product, index) => (
-        <div key={product.name}>
-          <span>{index + 1}</span>
-          <p><b>{product.name}</b><small>{product.quantity} {product.quantity === 1 ? "vendido" : "vendidos"}</small></p>
-        </div>
-      ))}
-    </div>
-  );
+function SalesChart({ today, yesterday }: { today: HourBucket[]; yesterday: HourBucket[] }) {
+  const width = 760;
+  const height = 250;
+  const padX = 34;
+  const padTop = 18;
+  const padBottom = 34;
+  const normalizedToday = normalizeHours(today);
+  const normalizedYesterday = normalizeHours(yesterday);
+  const max = Math.max(1, ...normalizedToday.map((row) => row.revenueCents), ...normalizedYesterday.map((row) => row.revenueCents));
+  const points = normalizedToday.map((row, index) => point(index, row.revenueCents, width, height, padX, padTop, padBottom, max));
+  const yesterdayPoints = normalizedYesterday.map((row, index) => point(index, row.revenueCents, width, height, padX, padTop, padBottom, max));
+  const line = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const previous = yesterdayPoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const area = `${padX},${height - padBottom} ${line} ${width - padX},${height - padBottom}`;
+  const yLabels = [1, .66, .33, 0];
+  const xLabels = [0, 6, 12, 18, 23];
+
+  return <div className={styles.chart}>
+    <div className={styles.chartLegend}><span><i className={styles.todayDot}/>Hoje</span><span><i className={styles.previousDot}/>Ontem</span></div>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Faturamento por hora de hoje comparado com ontem">
+      <defs><linearGradient id="rapidexSalesArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#ff6b0a" stopOpacity=".22"/><stop offset="100%" stopColor="#ff6b0a" stopOpacity="0"/></linearGradient></defs>
+      {yLabels.map((ratio) => {
+        const y = padTop + (1 - ratio) * (height - padTop - padBottom);
+        return <g key={ratio}><line x1={padX} x2={width - padX} y1={y} y2={y} className={styles.gridLine}/><text x="0" y={y + 4} className={styles.axisText}>{compactCurrency.format((max * ratio) / 100)}</text></g>;
+      })}
+      <polygon points={area} fill="url(#rapidexSalesArea)"/>
+      <polyline points={previous} className={styles.previousLine}/>
+      <polyline points={line} className={styles.todayLine}/>
+      {points.filter((_, index) => [6, 12, 18].includes(index)).map((p) => <circle key={p.x} cx={p.x} cy={p.y} r="4" className={styles.chartPoint}/>)}
+      {xLabels.map((hour) => {
+        const x = padX + (hour / 23) * (width - padX * 2);
+        return <text key={hour} x={x} y={height - 8} textAnchor={hour === 0 ? "start" : hour === 23 ? "end" : "middle"} className={styles.axisText}>{String(hour).padStart(2, "0")}h</text>;
+      })}
+    </svg>
+  </div>;
 }
 
-function LiveOrderCard({ order, refresh }: { order: Order; refresh: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const next = nextStatus[order.status];
-  const itemCount = order.items.reduce((sum, item) => sum + Number(item.quantity), 0);
-  const overdue = Date.now() > Number(order.createdAt) + Number(order.promisedToMinutes || 0) * 60_000;
-  const advance = async () => {
-    if (!next) return;
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/admin/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: next.status }),
-      });
-      if (!response.ok) throw new Error("Não foi possível avançar o pedido.");
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <article className={`${styles.liveOrder} ${overdue ? styles.overdue : ""}`}>
-      <header><b>#{order.number}</b><small>{overdue ? "Atrasado · " : ""}{relativeTime(order.createdAt)}</small></header>
-      <div className={styles.orderMain}><h3>{order.customerName}</h3><strong>{currency.format(order.totalCents / 100)}</strong></div>
-      <p>{itemCount} {itemCount === 1 ? "item" : "itens"} <i>•</i> {channelName(order.source)}</p>
-      <div className={styles.orderFooter}>
-        <span className={styles.orderProgress}><i style={{ width: progressWidth(order.status) }} /></span>
-        {next ? <button type="button" disabled={busy} onClick={advance}>{busy ? "Atualizando…" : next.label}<span>›</span></button> : <em>Concluído</em>}
-      </div>
-    </article>
-  );
-}
-
-function Insight({ icon, tone, label, value, text }: { icon: string; tone: "green" | "orange" | "amber"; label: string; value: string; text: string }) {
-  return <article className={styles.insight}><span className={`${styles.insightIcon} ${styles[tone]}`}>{icon}</span><div><small>{label}</small><b>{value}</b><p>{text}</p></div></article>;
-}
-
-function EmptyMini({ text }: { text: string }) {
-  return <div className={styles.emptyMini}><span>◎</span><p>{text}</p></div>;
-}
-
-function chartPoints(rows: HourBucket[], width: number, height: number, padX: number, padY: number, max: number) {
-  const normalized = rows.length === 24 ? rows : Array.from({ length: 24 }, (_, hour) => rows.find((row) => row.hour === hour) ?? { hour, revenueCents: 0, orders: 0 });
-  return normalized.map((row) => {
-    const point = pointFor(row, width, height, padX, padY, max);
-    return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-  }).join(" ");
-}
-
-function pointFor(row: HourBucket, width: number, height: number, padX: number, padY: number, max: number) {
-  return {
-    x: padX + (row.hour / 23) * (width - padX * 2),
-    y: height - padY - (row.revenueCents / max) * (height - padY * 2),
-  };
-}
-
-function donutStyle(rows: Array<{ color: string; count: number }>, total: number): CSSProperties {
+function StatusDonut({ rows, total }: { rows: Array<{ label: string; count: number; color: string }>; total: number }) {
+  const sum = rows.reduce((acc, row) => acc + row.count, 0);
   let cursor = 0;
-  const stops = rows.map((row) => {
-    const start = cursor;
-    cursor += (row.count / total) * 100;
-    return `${row.color} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+  const segments = rows.map((row) => {
+    const start = sum ? (cursor / sum) * 360 : 0;
+    cursor += row.count;
+    const end = sum ? (cursor / sum) * 360 : 0;
+    return `${row.color} ${start}deg ${end}deg`;
   });
-  return { background: `conic-gradient(${stops.join(",")})` };
+  const background = sum ? `conic-gradient(${segments.join(",")})` : "#ededeb";
+
+  return <div className={styles.donutArea}>
+    <div className={styles.donut} style={{ background }}><div><b>{total}</b><span>pedidos</span></div></div>
+    <div className={styles.donutLegend}>{rows.map((row) => <div key={row.label}><i style={{ background: row.color }}/><span>{row.label}</span><b>{row.count}</b></div>)}</div>
+  </div>;
 }
 
-function deltaCopy(value: number | null, suffix: string) {
-  if (value === null) return "Comparação disponível amanhã";
-  if (value === 0) return `Mesmo resultado ${suffix}`;
-  return `${value > 0 ? "+" : ""}${value}% ${suffix} ${value > 0 ? "↗" : "↘"}`;
+function statusRows(counts: Record<string, number>) {
+  return [
+    { label: "Recebidos", count: Number(counts.received || 0) + Number(counts.confirmed || 0), color: "#ff6b0a" },
+    { label: "Em preparo", count: Number(counts.preparing || 0), color: "#f4b23d" },
+    { label: "Prontos", count: Number(counts.ready || 0), color: "#8b6ce8" },
+    { label: "Em entrega", count: Number(counts.out_for_delivery || 0), color: "#2fb36f" },
+    { label: "Entregues", count: Number(counts.delivered || 0), color: "#24324a" },
+  ];
 }
 
-function relativeTime(value: number) {
-  const minutes = Math.max(0, Math.round((Date.now() - Number(value)) / 60_000));
-  return minutes < 1 ? "agora" : minutes < 60 ? `há ${minutes} min` : `há ${Math.floor(minutes / 60)} h`;
+function normalizeHours(rows: HourBucket[]) {
+  const map = new Map(rows.map((row) => [row.hour, row]));
+  return Array.from({ length: 24 }, (_, hour) => map.get(hour) ?? { hour, revenueCents: 0, orders: 0 });
 }
 
-function channelName(value: string) {
-  return ({ menu: "Cardápio", whatsapp: "WhatsApp", link: "Link", counter: "Balcão", admin: "Gestão" } as Record<string, string>)[value] || value;
+function point(index: number, value: number, width: number, height: number, padX: number, padTop: number, padBottom: number, max: number) {
+  return { x: padX + (index / 23) * (width - padX * 2), y: padTop + (1 - value / max) * (height - padTop - padBottom) };
 }
 
-function progressWidth(status: string) {
-  return ({ received: "16%", confirmed: "32%", preparing: "52%", ready: "68%", out_for_delivery: "88%", delivered: "100%" } as Record<string, string>)[status] || "8%";
+function deltaLabel(value: number | null | undefined) {
+  if (value === null || value === undefined) return "Sem comparação";
+  if (value === 0) return "0%";
+  return `${value > 0 ? "+" : ""}${value}%`;
+}
+
+function deltaClass(value: number | null | undefined) {
+  if (value === null || value === undefined || value === 0) return styles.neutralDelta;
+  return value > 0 ? styles.positiveDelta : styles.negativeDelta;
+}
+
+function formatTime(value: number) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function emptyAnalytics(): NonNullable<DashboardOverviewData["analytics"]> {
   return {
-    hourlySales: Array.from({ length: 24 }, (_, hour) => ({ hour, revenueCents: 0, orders: 0 })),
-    yesterdayHourlySales: Array.from({ length: 24 }, (_, hour) => ({ hour, revenueCents: 0, orders: 0 })),
+    hourlySales: [],
+    yesterdayHourlySales: [],
     revenueDeltaPct: null,
     ordersDeltaPct: null,
     ticketDeltaPct: null,
