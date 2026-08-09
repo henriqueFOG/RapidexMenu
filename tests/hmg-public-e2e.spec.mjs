@@ -13,6 +13,7 @@ const customerPhone = `24${(`800000000${suffix}`).slice(-9)}`;
 const smashName = `Smash E2E ${suffix}`;
 const friesName = `Fritas E2E ${suffix}`;
 const csv = `categoria;produto;descricao;preco;custo;preparo;emoji;selo\nHambúrgueres;${smashName};Pão brioche, carne e queijo;29,90;11,50;12;🍔;Destaque\nAcompanhamentos;${friesName};Batata crocante;14,90;4,20;8;🍟;Vai bem junto`;
+const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4xQAAAAASUVORK5CYII=", "base64");
 
 mkdirSync(artifactsDir, { recursive: true });
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
@@ -64,7 +65,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await company.screenshot({ path: `${artifactsDir}/01-public-empresa-importou.png`, fullPage: true });
   });
 
-  await test.step("empresa publica e entra no painel real", async () => {
+  await test.step("empresa publica, ativa alertas e adiciona foto real pelo painel", async () => {
     const publish = company.getByRole("button", { name: "Publicar minha loja →" });
     await expect(publish).toBeEnabled();
     await Promise.all([
@@ -81,6 +82,25 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await expect(storeLink).toBeVisible();
     storePath = await storeLink.getAttribute("href");
     expect(storePath).toMatch(/^\/loja\//);
+
+    const alerts = company.getByRole("button", { name: /Ativar alertas de novos pedidos/i });
+    await expect(alerts).toBeVisible();
+    await alerts.click();
+    await expect(company.getByRole("button", { name: /Desativar alertas de novos pedidos/i })).toBeVisible();
+
+    await company.getByRole("button", { name: "Cardápio", exact: true }).click();
+    const productRow = company.locator(".rm-products-table>article").filter({ hasText: smashName });
+    await expect(productRow).toBeVisible();
+    await productRow.locator('input[type="file"]').setInputFiles({ name: "smash-e2e.png", mimeType: "image/png", buffer: tinyPng });
+    const productImage = productRow.locator('img[src*="/api/public/media/"]');
+    await expect(productImage).toBeVisible({ timeout: 30_000 });
+    const imageSrc = await productImage.getAttribute("src");
+    expect(imageSrc).toMatch(/^\/api\/public\/media\/public\/restaurants\//);
+    const imageResponse = await companyContext.request.get(imageSrc);
+    expect(imageResponse.status()).toBe(200);
+    expect(imageResponse.headers()["content-type"]).toContain("image/png");
+
+    await company.getByRole("button", { name: "Visão geral" }).click();
     await company.screenshot({ path: `${artifactsDir}/02-public-painel.png`, fullPage: true });
   });
 
@@ -89,7 +109,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
   let trackingPath = "";
   let orderNumber = "";
 
-  await test.step("cliente abre a loja publicada e monta o carrinho", async () => {
+  await test.step("cliente abre a loja publicada, vê a foto e monta o carrinho", async () => {
     await consumer.goto(storePath, { waitUntil: "domcontentloaded" });
     await expect(consumer.getByRole("heading", { name: restaurantName })).toBeVisible({ timeout: 30_000 });
     await expect(consumer.getByText("● Aberto")).toBeVisible();
@@ -97,13 +117,14 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     const fries = consumer.locator("article").filter({ hasText: friesName });
     await expect(smash).toBeVisible();
     await expect(fries).toBeVisible();
+    await expect(smash.locator('img[src*="/api/public/media/"]')).toBeVisible();
     await smash.getByRole("button", { name: "Adicionar +" }).click();
     await fries.getByRole("button", { name: "Adicionar +" }).click();
     await expect(consumer.getByText("R$ 44,80").first()).toBeVisible();
     await consumer.screenshot({ path: `${artifactsDir}/03-public-cardapio-carrinho.png`, fullPage: true });
   });
 
-  await test.step("cliente conclui o pedido", async () => {
+  await test.step("cliente conclui o pedido e empresa é alertada automaticamente", async () => {
     await consumer.getByRole("button", { name: "Finalizar pedido →" }).click();
     await expect(consumer.getByRole("heading", { name: "Finalizar pedido" })).toBeVisible();
     const checkout = consumer.locator(".rm-checkout");
@@ -124,11 +145,12 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     expect(orderNumber).toMatch(/^Pedido #\d+$/);
     trackingPath = await consumer.locator("a.rm-track-link").getAttribute("href");
     expect(trackingPath).toMatch(/^\/acompanhar\//);
+    await expect(company.getByText("NOVO PEDIDO", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(company.getByText(`Cliente E2E ${suffix}`, { exact: false })).toBeVisible();
     await consumer.screenshot({ path: `${artifactsDir}/04-public-pedido-criado.png`, fullPage: true });
   });
 
   await test.step("empresa recebe o pedido no painel", async () => {
-    await company.reload({ waitUntil: "networkidle" });
     await company.getByRole("button", { name: /Pedidos/ }).click();
     await expect(company.getByText(`Cliente E2E ${suffix}`)).toBeVisible({ timeout: 30_000 });
     await expect(company.getByText(new RegExp(`1× ${smashName}`))).toBeVisible();
