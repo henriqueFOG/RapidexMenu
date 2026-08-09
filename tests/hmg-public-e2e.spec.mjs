@@ -77,7 +77,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
       company.getByRole("link", { name: "Continuar meu teste →" }).click(),
     ]);
     await expect(company.getByText(restaurantName).first()).toBeVisible({ timeout: 30_000 });
-    const storeLink = company.getByRole("link", { name: /Ver loja/i });
+    const storeLink = company.getByRole("link", { name: /Abrir loja/i });
     await expect(storeLink).toBeVisible();
     storePath = await storeLink.getAttribute("href");
     expect(storePath).toMatch(/^\/loja\//);
