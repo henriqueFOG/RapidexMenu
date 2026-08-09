@@ -22,6 +22,10 @@ function jsonHeaders(cookie) {
   };
 }
 
+function formHeaders(cookie) {
+  return { origin, ...(cookie ? { cookie } : {}) };
+}
+
 function sessionCookie(response) {
   const raw = response.headers.get("set-cookie") || "";
   const match = raw.match(/(?:^|,\s*)([^=;,\s]+=[^;,]+)/);
@@ -39,8 +43,8 @@ async function signup({ suffix, slug, restaurantName }) {
         ownerName: `Owner ${suffix}`,
         email: `owner-${suffix}@rapidex-hmg.test`,
         password: "RapidexHmg12345",
-        phone: "+5524999990001",
-        whatsapp: "+5524999990001",
+        phone: `+55249999900${suffix === "a" ? "01" : "02"}`,
+        whatsapp: `+55249999900${suffix === "a" ? "01" : "02"}`,
         restaurantName,
         slug,
         city: "Petrópolis",
@@ -83,6 +87,57 @@ async function changeStatus(cookie, orderId, status, expectedStatuses = [200]) {
   );
 }
 
+async function updateProduct(cookie, productId, body, expectedStatuses = [200]) {
+  return call(
+    `/api/admin/products/${encodeURIComponent(productId)}`,
+    { method: "PATCH", headers: jsonHeaders(cookie), body: JSON.stringify(body) },
+    expectedStatuses,
+  );
+}
+
+async function createPublicOrder({ slug, productId, clientOrderId, name, email, phone }) {
+  return call(
+    "/api/public/orders",
+    {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        restaurantSlug: slug,
+        clientOrderId,
+        source: "menu",
+        customer: {
+          name,
+          phone,
+          email,
+          whatsappConsent: false,
+          address: {
+            street: "Rua do Teste",
+            number: "10",
+            neighborhood: "Centro",
+            city: "Petrópolis",
+            state: "RJ",
+            postalCode: "25600000",
+            complement: "E2E",
+          },
+        },
+        items: [{ productId, quantity: 1, priceCents: 1 }],
+        paymentMethod: "cash",
+      }),
+    },
+    [201],
+  );
+}
+
+const alwaysOpenHours = {
+  sun: [{ open: "00:00", close: "00:00" }],
+  mon: [{ open: "00:00", close: "00:00" }],
+  tue: [{ open: "00:00", close: "00:00" }],
+  wed: [{ open: "00:00", close: "00:00" }],
+  thu: [{ open: "00:00", close: "00:00" }],
+  fri: [{ open: "00:00", close: "00:00" }],
+  sat: [{ open: "00:00", close: "00:00" }],
+};
+
 console.log("[HMG E2E] health");
 {
   const { payload } = await call("/api/health", {}, [200]);
@@ -90,6 +145,8 @@ console.log("[HMG E2E] health");
   assert.equal(payload.integrations?.environment, "hmg");
   assert.equal(payload.integrations?.database, true);
   assert.equal(payload.integrations?.databaseEngine, "postgres");
+  assert.equal(payload.integrations?.uploads, true, "piloto deve aceitar fotos sem credencial externa");
+  assert.equal(payload.integrations?.uploadStorage, "database");
 }
 
 console.log("[HMG E2E] tenant A signup + catálogo");
@@ -115,6 +172,23 @@ const friesId = await createProduct(tenantA.cookie, categoryId, {
   emoji: "🍟",
   prepMinutes: 5,
 });
+
+console.log("[HMG E2E] upload de foto persistente");
+const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4xQAAAAASUVORK5CYII=", "base64");
+const uploadForm = new FormData();
+uploadForm.set("file", new Blob([tinyPng], { type: "image/png" }), "burger-hmg.png");
+const uploaded = await call(
+  "/api/admin/uploads",
+  { method: "POST", headers: formHeaders(tenantA.cookie), body: uploadForm },
+  [201],
+);
+assert.equal(uploaded.payload.ok, true);
+assert.match(uploaded.payload.key, /^public\/restaurants\/.+\/products\/.+\.png$/);
+await updateProduct(tenantA.cookie, burgerId, { imageKey: uploaded.payload.key }, [200]);
+const mediaResponse = await fetch(`${baseUrl}${uploaded.payload.url}`);
+assert.equal(mediaResponse.status, 200);
+assert.equal(mediaResponse.headers.get("content-type"), "image/png");
+assert.deepEqual(Buffer.from(await mediaResponse.arrayBuffer()), tinyPng);
 
 console.log("[HMG E2E] importação de cardápio + horários");
 const imported = await call(
@@ -143,15 +217,6 @@ assert.equal(imported.payload.ok, true);
 assert.equal(imported.payload.productsCreated, 1);
 assert.equal(imported.payload.rows, 1);
 
-const alwaysOpenHours = {
-  sun: [{ open: "00:00", close: "00:00" }],
-  mon: [{ open: "00:00", close: "00:00" }],
-  tue: [{ open: "00:00", close: "00:00" }],
-  wed: [{ open: "00:00", close: "00:00" }],
-  thu: [{ open: "00:00", close: "00:00" }],
-  fri: [{ open: "00:00", close: "00:00" }],
-  sat: [{ open: "00:00", close: "00:00" }],
-};
 await call(
   "/api/admin/settings",
   {
@@ -167,6 +232,7 @@ assert.deepEqual(settings.payload.settings.weeklyHours, alwaysOpenHours);
 const catalogAfterImport = await call("/api/admin/products", { headers: { cookie: tenantA.cookie } }, [200]);
 assert.equal(catalogAfterImport.payload.products.length, 3);
 assert.ok(catalogAfterImport.payload.products.some((product) => product.name === "Molho HMG" && product.priceCents === 300));
+assert.equal(catalogAfterImport.payload.products.find((product) => product.id === burgerId)?.imageKey, uploaded.payload.key);
 
 await call(
   "/api/admin/onboarding",
@@ -180,6 +246,7 @@ assert.equal(menu.payload.restaurant.isOpen, true);
 const publicProducts = [...menu.payload.categories.flatMap((category) => category.products), ...(menu.payload.uncategorized || [])];
 assert.equal(publicProducts.length, 3);
 assert.ok(publicProducts.some((product) => product.id === burgerId && product.priceCents === 2500));
+assert.equal(publicProducts.find((product) => product.id === burgerId)?.imageUrl, uploaded.payload.url);
 assert.ok(publicProducts.some((product) => product.name === "Molho HMG" && product.priceCents === 300));
 
 const clientOrderId = "hmg-e2e-order-0001";
@@ -264,11 +331,69 @@ await changeStatus(tenantA.cookie, orderId, "delivered", [200]);
 const deliveredTracking = await call(`/api/public/orders/${trackingToken}`, {}, [200]);
 assert.equal(deliveredTracking.payload.order.status, "delivered");
 
-console.log("[HMG E2E] tenant B isolation");
+console.log("[HMG E2E] tenant B + isolamento forte");
 const tenantB = await signup({ suffix: "b", slug: "hmg-burger-b", restaurantName: "HMG Burger B" });
+const tenantBCatalogInitial = await call("/api/admin/products", { headers: { cookie: tenantB.cookie } }, [200]);
+assert.equal(tenantBCatalogInitial.payload.products.length, 0, "tenant B não pode enxergar produtos do tenant A");
+const categoryBId = tenantBCatalogInitial.payload.categories[0].id;
+const bProductId = await createProduct(tenantB.cookie, categoryBId, {
+  name: "Pizza Tenant B",
+  description: "Produto exclusivo do tenant B",
+  priceCents: 3900,
+  costCents: 1400,
+  emoji: "🍕",
+  prepMinutes: 15,
+});
+await call(
+  "/api/admin/settings",
+  { method: "PATCH", headers: jsonHeaders(tenantB.cookie), body: JSON.stringify({ weeklyHours: alwaysOpenHours }) },
+  [200],
+);
+await call("/api/admin/onboarding", { method: "PATCH", headers: jsonHeaders(tenantB.cookie), body: "{}" }, [200]);
+
+const tenantAProducts = await call("/api/admin/products", { headers: { cookie: tenantA.cookie } }, [200]);
+const tenantBProducts = await call("/api/admin/products", { headers: { cookie: tenantB.cookie } }, [200]);
+assert.equal(tenantAProducts.payload.products.some((product) => product.id === bProductId), false);
+assert.equal(tenantBProducts.payload.products.some((product) => product.id === burgerId), false);
+
+const crossProductPatch = await updateProduct(tenantA.cookie, bProductId, { available: false }, [404]);
+assert.equal(crossProductPatch.payload.error?.code, "product_not_found");
+const crossProductDelete = await call(
+  `/api/admin/products/${encodeURIComponent(bProductId)}`,
+  { method: "DELETE", headers: formHeaders(tenantA.cookie) },
+  [404],
+);
+assert.equal(crossProductDelete.payload.error?.code, "product_not_found");
+
+const crossImageAttach = await updateProduct(tenantB.cookie, bProductId, { imageKey: uploaded.payload.key }, [400]);
+assert.equal(crossImageAttach.payload.error?.code, "validation_error", "tenant B não pode anexar foto do tenant A");
+
+const bOrder = await createPublicOrder({
+  slug: "hmg-burger-b",
+  productId: bProductId,
+  clientOrderId: "hmg-e2e-order-b-0001",
+  name: "Cliente Tenant B",
+  email: "cliente-b@rapidex-hmg.test",
+  phone: "+5524977770002",
+});
+const bOrderId = bOrder.payload.order.id;
+
 const tenantBOrders = await call("/api/admin/orders", { headers: { cookie: tenantB.cookie } }, [200]);
-assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxergar pedidos do tenant A");
+assert.equal(tenantBOrders.payload.orders.some((order) => order.id === orderId), false, "tenant B não pode enxergar pedidos do tenant A");
+assert.equal(tenantBOrders.payload.orders.some((order) => order.id === bOrderId), true);
+const tenantAOrders = await call("/api/admin/orders", { headers: { cookie: tenantA.cookie } }, [200]);
+assert.equal(tenantAOrders.payload.orders.some((order) => order.id === bOrderId), false, "tenant A não pode enxergar pedidos do tenant B");
+
 const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
 assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
+const reverseCrossTenantMutation = await changeStatus(tenantA.cookie, bOrderId, "confirmed", [404]);
+assert.equal(reverseCrossTenantMutation.payload.error?.code, "order_not_found");
 
-console.log("[HMG E2E] PASS: signup, importação, horários, catálogo, recomendação, pedido, idempotência, tracking, ROI, status e isolamento multiempresa");
+const customersA = await call("/api/admin/customers", { headers: { cookie: tenantA.cookie } }, [200]);
+const customersB = await call("/api/admin/customers", { headers: { cookie: tenantB.cookie } }, [200]);
+assert.equal(JSON.stringify(customersA.payload).includes("Cliente Tenant B"), false, "tenant A não pode enxergar cliente do tenant B");
+assert.equal(JSON.stringify(customersB.payload).includes("Cliente HMG"), false, "tenant B não pode enxergar cliente do tenant A");
+assert.equal(JSON.stringify(customersA.payload).includes("Cliente HMG"), true);
+assert.equal(JSON.stringify(customersB.payload).includes("Cliente Tenant B"), true);
+
+console.log("[HMG E2E] PASS: signup, upload de foto, importação, horários, catálogo, pedido, tracking, ROI, status e isolamento multiempresa forte");
