@@ -10,6 +10,7 @@ const allowedTypes: Record<string, string> = {
 
 const bucketLimit = 5 * 1024 * 1024;
 const databaseLimit = 2 * 1024 * 1024;
+const databaseRestaurantQuota = 30 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,20 @@ export async function POST(request: Request) {
         customMetadata: { restaurantId: context.restaurantId, uploadedBy: context.user.email },
       });
     } else {
-      await getDatabase()
+      const db = getDatabase();
+      const usage = await db
+        .prepare("SELECT COALESCE(SUM(size_bytes), 0) AS total_bytes FROM media_assets WHERE restaurant_id = ?")
+        .bind(context.restaurantId)
+        .first<{ total_bytes: number | string }>();
+      const usedBytes = Number(usage?.total_bytes || 0);
+      if (usedBytes + file.size > databaseRestaurantQuota) {
+        throw new HttpError(
+          413,
+          "Limite de fotos do piloto atingido. Remova imagens antigas ou fale com o suporte RapidexMenu.",
+          "media_quota_exceeded",
+        );
+      }
+      await db
         .prepare(
           `INSERT INTO media_assets
            (key, restaurant_id, content_type, data_base64, size_bytes, created_at)
