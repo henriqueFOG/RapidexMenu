@@ -70,6 +70,7 @@ export function integrationReadiness() {
     publicUrl: bindings.RAPIDEX_PUBLIC_URL,
     billingToken: bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN,
   });
+  const databaseReady = Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL);
   const whatsappLegacy = Boolean(
     bindings.WHATSAPP_ACCESS_TOKEN &&
       bindings.WHATSAPP_PHONE_NUMBER_ID &&
@@ -89,7 +90,7 @@ export function integrationReadiness() {
     environment: environmentCheck.environment,
     environmentSafe: environmentCheck.issues.length === 0,
     environmentIssues: environmentCheck.issues,
-    database: Boolean(bindings.DB || bindings.DATABASE_URL || bindings.POSTGRES_URL),
+    database: databaseReady,
     databaseEngine: bindings.DB ? "d1" : bindings.DATABASE_URL || bindings.POSTGRES_URL ? "postgres" : null,
     nativeAuth: Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32),
     billing: environmentCheck.environment === "production" && Boolean(bindings.RAPIDEX_BILLING_MP_ACCESS_TOKEN),
@@ -101,7 +102,8 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
     metaEmbeddedSignup,
-    uploads: Boolean(bindings.BUCKET),
+    uploads: Boolean(bindings.BUCKET || databaseReady),
+    uploadStorage: bindings.BUCKET ? "bucket" : databaseReady ? "database" : null,
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: whatsappLegacy || metaEmbeddedSignup,
     whatsappLegacy,
