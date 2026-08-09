@@ -51,7 +51,14 @@ test("landing oficial é única e todos os CTAs navegam por clique real", async 
   });
 
   await clickLandingRoute(page.context(), /Ver painel funcionando/i, "/demo/painel", async (demoPage) => {
-    await expect(demoPage.getByRole("heading", { name: /Boa tarde, Marina/i })).toBeVisible();
+    await expect(demoPage.getByRole("heading", { name: /Olá, Marina!/i })).toBeVisible();
+    await expect(demoPage.getByText("Pedidos hoje", { exact: true })).toBeVisible();
+    await expect(demoPage.getByRole("heading", { name: "Vendas hoje", exact: true })).toBeVisible();
+    await expect(demoPage.getByRole("heading", { name: "Pedidos por status", exact: true })).toBeVisible();
+    await expect(demoPage.getByRole("heading", { name: "Pedidos recentes", exact: true })).toBeVisible();
+    await expect(demoPage.getByText(/Boa tarde, Marina/i)).toHaveCount(0);
+    await demoPage.screenshot({ path: `${artifactsDir}/00b-demo-painel-atual.png`, fullPage: true });
+
     const realOrder = demoPage.getByRole("link", { name: /Experimentar pedido real/i });
     await expect(realOrder).toHaveAttribute("href", "/loja/serra-burger");
     await Promise.all([
