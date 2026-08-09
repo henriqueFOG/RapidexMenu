@@ -1,28 +1,112 @@
 "use client";
 
-const columns = [
-  { title: "Recebidos", tone: "coral", count: 3, rows: [["#1285","Carla Mendes","2 itens · WhatsApp","R$ 56,80","há 1 min"],["#1282","Rafael Costa","1 item · Cardápio","R$ 38,90","há 4 min"]] },
-  { title: "Na cozinha", tone: "yellow", count: 5, rows: [["#1284","João Martins","2 itens · WhatsApp","R$ 64,80","12 min"],["#1281","Bia Moreira","4 itens · Link","R$ 112,40","18 min"]] },
-  { title: "Em rota", tone: "green", count: 2, rows: [["#1283","Ana Lima","3 itens · Cardápio","R$ 82,70","chega 20:42"],["#1279","Pedro Nunes","2 itens · Link","R$ 48,90","chega 20:48"]] },
-];
+import { useState } from "react";
+import Link from "next/link";
+import AdminOverviewV2 from "../../admin/AdminOverviewV2";
+import shellStyles from "../../admin/AdminShellV2.module.css";
+import topbarStyles from "../../admin/AdminTopbarV2.module.css";
 
-function Brand() { return <div className="brand inverse"><span>⚡</span><b>Rapidex<i>Menu</i></b></div>; }
-function Metric({ icon, label, value, foot, tone = "" }: { icon: string; label: string; value: string; foot: string; tone?: string }) { return <article className={`metric ${tone}`}><span>{icon}</span><small>{label}</small><b>{value}</b><em>{foot}</em></article>; }
-function PanelTitle({ title, text }: { title: string; text: string }) { return <header className="panelTitle"><div><h2>{title}</h2><p>{text}</p></div><a href="/entrar">Acessar painel →</a></header>; }
-function Channel({ color, name, detail, value }: { color: string; name: string; detail: string; value: string }) { return <li><i className={color}/><p><b>{name}</b><small>{detail}</small></p><strong>{value}</strong></li>; }
-function Returning({ initials, name, detail, value, tone }: { initials: string; name: string; detail: string; value: string; tone: string }) { return <div className="return"><span className={tone}>{initials}</span><p><b>{name}</b><small>{detail}</small></p><strong>{value}</strong></div>; }
+const now = Date.now();
+
+const demoData = {
+  user: { name: "Marina Braga", email: "marina@serraburger.demo", role: "Administrador" },
+  restaurant: { name: "Serra Burger", slug: "serra-burger", plan: "Profissional", isOpen: true, activeOrders: 10 },
+  metrics: {
+    revenueCents: 184200,
+    orderCount: 38,
+    averageTicketCents: 4847,
+    recoveredRevenueCents: 28640,
+    rapidexRoi: 7.4,
+  },
+  analytics: {
+    hourlySales: [
+      { hour: 6, revenueCents: 6200, orders: 2 }, { hour: 7, revenueCents: 13800, orders: 3 }, { hour: 8, revenueCents: 12400, orders: 2 },
+      { hour: 9, revenueCents: 9600, orders: 2 }, { hour: 10, revenueCents: 14800, orders: 3 }, { hour: 11, revenueCents: 21800, orders: 4 },
+      { hour: 12, revenueCents: 19600, orders: 4 }, { hour: 13, revenueCents: 23100, orders: 4 }, { hour: 14, revenueCents: 17400, orders: 3 },
+      { hour: 15, revenueCents: 14200, orders: 3 }, { hour: 16, revenueCents: 25800, orders: 4 }, { hour: 17, revenueCents: 31000, orders: 5 },
+      { hour: 18, revenueCents: 39800, orders: 6 }, { hour: 19, revenueCents: 61400, orders: 9 }, { hour: 20, revenueCents: 46800, orders: 7 },
+      { hour: 21, revenueCents: 31400, orders: 5 }, { hour: 22, revenueCents: 12600, orders: 2 },
+    ],
+    yesterdayHourlySales: [
+      { hour: 6, revenueCents: 4200, orders: 1 }, { hour: 7, revenueCents: 8600, orders: 2 }, { hour: 8, revenueCents: 7900, orders: 2 },
+      { hour: 9, revenueCents: 6500, orders: 1 }, { hour: 10, revenueCents: 11800, orders: 2 }, { hour: 11, revenueCents: 15400, orders: 3 },
+      { hour: 12, revenueCents: 13900, orders: 3 }, { hour: 13, revenueCents: 16200, orders: 3 }, { hour: 14, revenueCents: 10600, orders: 2 },
+      { hour: 15, revenueCents: 9900, orders: 2 }, { hour: 16, revenueCents: 16400, orders: 3 }, { hour: 17, revenueCents: 18300, orders: 3 },
+      { hour: 18, revenueCents: 20400, orders: 4 }, { hour: 19, revenueCents: 32100, orders: 6 }, { hour: 20, revenueCents: 25800, orders: 5 },
+      { hour: 21, revenueCents: 19200, orders: 4 }, { hour: 22, revenueCents: 9800, orders: 2 },
+    ],
+    revenueDeltaPct: 18,
+    ordersDeltaPct: 12,
+    ticketDeltaPct: 5,
+    yesterdayRevenueCents: 156100,
+    yesterdayOrderCount: 34,
+    averagePrepMinutes: 27,
+    lateOrders: 3,
+    peakHour: { hour: 19, revenueCents: 61400, orders: 9 },
+    todayStatusCounts: { received: 5, confirmed: 4, preparing: 9, ready: 3, out_for_delivery: 5, delivered: 12, canceled: 0 },
+    topProducts: [
+      { name: "Smash da Serra", quantity: 87 },
+      { name: "Batata Rústica", quantity: 64 },
+      { name: "Milkshake Ovomaltine", quantity: 41 },
+    ],
+  },
+  orders: [
+    { id: "demo-1285", number: 1285, customerName: "Carla Mendes", status: "received", source: "whatsapp", totalCents: 5680, createdAt: now - 60_000, promisedFromMinutes: 25, promisedToMinutes: 40, items: [{ name: "Smash da Serra", quantity: 1 }, { name: "Batata Rústica", quantity: 1 }] },
+    { id: "demo-1284", number: 1284, customerName: "João Martins", status: "preparing", source: "whatsapp", totalCents: 6480, createdAt: now - 12 * 60_000, promisedFromMinutes: 25, promisedToMinutes: 40, items: [{ name: "Smash da Serra", quantity: 2 }] },
+    { id: "demo-1283", number: 1283, customerName: "Ana Lima", status: "out_for_delivery", source: "menu", totalCents: 8270, createdAt: now - 19 * 60_000, promisedFromMinutes: 30, promisedToMinutes: 50, items: [{ name: "Combo Serra", quantity: 1 }, { name: "Milkshake Ovomaltine", quantity: 1 }] },
+    { id: "demo-1282", number: 1282, customerName: "Rafael Costa", status: "confirmed", source: "menu", totalCents: 3890, createdAt: now - 27 * 60_000, promisedFromMinutes: 25, promisedToMinutes: 40, items: [{ name: "Smash Clássico", quantity: 1 }] },
+    { id: "demo-1281", number: 1281, customerName: "Bia Moreira", status: "preparing", source: "link", totalCents: 11240, createdAt: now - 34 * 60_000, promisedFromMinutes: 25, promisedToMinutes: 45, items: [{ name: "Smash da Serra", quantity: 2 }, { name: "Batata Rústica", quantity: 2 }] },
+    { id: "demo-1279", number: 1279, customerName: "Pedro Nunes", status: "delivered", source: "link", totalCents: 4890, createdAt: now - 51 * 60_000, promisedFromMinutes: 25, promisedToMinutes: 40, items: [{ name: "Smash Bacon", quantity: 1 }] },
+  ],
+};
 
 export default function DemoDashboardPage() {
+  const [mobileNav, setMobileNav] = useState(false);
   const access = () => window.location.assign("/entrar?return_to=/admin");
-  return <main className="dashShell rapidex-demo-dashboard">
-    <aside className="sidebar"><Brand/><nav><button className="active" aria-current="page">▦ <span>Visão geral</span></button><button onClick={access}>▤ <span>Pedidos</span><i>10</i></button><button onClick={access}>▣ <span>Cardápio</span></button><button onClick={access}>✦ <span>Automações</span><em>IA</em></button><button onClick={access}>♙ <span>Clientes</span></button><button onClick={access}>▥ <span>Financeiro</span></button></nav><div className="growth">↗<b>Canal próprio em alta</b><p>64% das vendas vieram sem comissão.</p><span><i/></span></div><div className="dashUser"><span>MB</span><div><b>Marina Braga</b><small>Serra Burger</small></div></div></aside>
-    <section className="dashMain"><header className="dashTop"><a href="/">← Voltar ao site</a><div><a href="/loja/serra-burger" className="customerView">🛍 Experimentar pedido real</a><a href="/entrar" className="customerView">Acessar painel</a></div></header>
-      <div className="dashBody"><div className="dashTitle"><div><small>DEMONSTRAÇÃO RAPIDEXMENU</small><h1>Boa tarde, Marina.</h1><p>Veja como o restaurante acompanha pedidos, margem, recompra e oportunidades em uma única visão.</p></div><span><i/> Loja aberta</span></div>
-        <div className="dashMetrics"><Metric icon="◉" label="Vendas hoje" value="R$ 2.846,20" foot="↗ 18,4% acima de ontem" tone="lime"/><Metric icon="▤" label="Pedidos" value="58" foot="12 em andamento"/><Metric icon="▣" label="Ticket médio" value="R$ 49,07" foot="+ R$ 3,12 esta semana"/><Metric icon="✦" label="Receita Rapidex IA" value="R$ 412,60" foot="8 vendas recuperadas" tone="dark"/></div>
-        <div className="dashGrid"><section className="ordersPanel"><PanelTitle title="Pedidos agora" text="Acompanhe a fila da entrada até a entrega."/><div className="orderColumns">{columns.map(c => <div className="orderColumn" key={c.title}><header><i className={c.tone}/><b>{c.title}</b><span>{c.count}</span></header>{c.rows.map(r => <article key={r[0]}><div><small>{r[0]}</small><em>{r[4]}</em></div><b>{r[1]}</b><p>{r[2]}</p><footer><strong>{r[3]}</strong><button aria-label={`Abrir ${r[0]}`} onClick={access}>›</button></footer></article>)}{c.count > c.rows.length && <button className="more" onClick={access}>+ {c.count-c.rows.length} pedidos</button>}</div>)}</div></section>
-          <aside className="aiPanel"><header><span>✦</span><div><small>RAPIDEX IA</small><b>Oportunidade agora</b></div></header><div className="insight"><span>🔥 Movimento abaixo do previsto</span><h3>26 clientes costumam pedir às quintas, mas ainda não voltaram.</h3><p>Uma campanha com o Combo Rapidex pode gerar de <b>R$ 286 a R$ 412</b>, preservando margem de 39%.</p><div><small>♙ 26 clientes</small><small>◷ Melhor envio: agora</small></div><a href="/entrar">Acessar painel →</a><em>A automação só envia após sua aprovação.</em></div><div className="aiRoi"><div><small>Receita recuperada no mês</small><b>R$ 3.482</b></div><span><b>8,7x</b><small>ROI</small></span></div></aside></div>
-        <div className="dashBottom"><section className="channelPanel"><PanelTitle title="De onde vêm suas vendas" text="Participação por canal nos últimos 7 dias."/><div className="channelContent"><span className="donut"><b>64%</b><small>canal próprio</small></span><ul><Channel color="c1" name="RapidexMenu" detail="R$ 12.840 · sem comissão" value="64%"/><Channel color="c2" name="WhatsApp assistido" detail="R$ 4.210 · sem comissão" value="21%"/><Channel color="c3" name="Marketplaces" detail="R$ 3.008 · taxas variáveis" value="15%"/></ul></div></section><section className="returnPanel"><PanelTitle title="Clientes que voltaram" text="Recompras ativadas pela memória Rapidex."/><Returning initials="JL" name="Juliana Lopes" detail="“O de sempre” · WhatsApp" value="R$ 52,80" tone="pink"/><Returning initials="HS" name="Hugo Silva" detail="Carrinho recuperado" value="R$ 68,40" tone="green"/><Returning initials="MF" name="Márcia Freitas" detail="Campanha de recompra" value="R$ 46,90" tone="blue"/></section></div>
-      </div>
-    </section>
-  </main>;
+  const share = async () => {
+    const url = `${window.location.origin}/loja/serra-burger`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "Serra Burger", text: "Experimente um pedido real no RapidexMenu", url }); } catch { /* cancelado pelo usuário */ }
+      return;
+    }
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url);
+  };
+
+  return (
+    <main className={`rm-admin-shell ${shellStyles.shell}`}>
+      <aside className={`rm-admin-sidebar ${mobileNav ? "open" : ""}`}>
+        <Link className="rm-admin-brand" href="/" aria-label="RapidexMenu"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 17h16M6 15a6 6 0 0 1 12 0H6ZM12 9V6M10 6h4M3 20h18"/></svg></span><b>Rapidex<i>Menu</i></b></Link>
+        <nav>
+          <button className="active" aria-current="page"><span>▦</span><b>Dashboard</b></button>
+          <button onClick={access}><span>▤</span><b>Pedidos</b><em>10</em></button>
+          <button onClick={access}><span>▣</span><b>Cardápio</b></button>
+          <button onClick={access}><span>♙</span><b>Clientes</b></button>
+          <button onClick={access}><span>▥</span><b>Relatórios</b></button>
+          <button onClick={access}><span>✦</span><b>Automações</b><i>IA</i></button>
+          <button onClick={access}><span>⚙</span><b>Configurações</b></button>
+        </nav>
+
+        <a className="rm-sidebar-store" href="/loja/serra-burger"><span className="online"><i /></span><div><b>Loja online</b><small>Serra Burger</small></div><em>↗</em></a>
+        <div className="rm-sidebar-user"><span>MB</span><div><b>Marina Braga</b><small>Serra Burger · demonstração</small></div><a href="/entrar?return_to=/admin" title="Acessar painel">↗</a></div>
+      </aside>
+
+      <section className="rm-admin-main">
+        <header className={`rm-admin-topbar ${topbarStyles.topbar}`}>
+          <button className="rm-mobile-trigger" onClick={() => setMobileNav(!mobileNav)} aria-label="Abrir navegação">☰</button>
+          <div className={topbarStyles.actions}>
+            <span className={topbarStyles.hmg}>DEMO</span>
+            <button className={topbarStyles.share} onClick={() => void share()} aria-label="Compartilhar cardápio"><b aria-hidden="true">↗</b><span>Compartilhar cardápio</span></button>
+            <a className={topbarStyles.store} href="/loja/serra-burger"><b aria-hidden="true">▣</b><span>Experimentar pedido real</span></a>
+            <a className={topbarStyles.store} href="/entrar?return_to=/admin"><b aria-hidden="true">→</b><span>Acessar painel</span></a>
+          </div>
+        </header>
+
+        <div className="rm-admin-content">
+          <AdminOverviewV2 data={demoData} refresh={async () => undefined} onOpenOrders={access} />
+        </div>
+      </section>
+
+      {mobileNav && <button className="rm-nav-backdrop" onClick={() => setMobileNav(false)} aria-label="Fechar menu" />}
+    </main>
+  );
 }
