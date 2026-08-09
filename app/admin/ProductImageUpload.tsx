@@ -2,14 +2,7 @@
 
 import { useRef, useState } from "react";
 
-type Product = {
-  id: unknown;
-  name: unknown;
-  emoji: unknown;
-  imageUrl?: unknown;
-};
-
-export default function ProductImageUpload({ product, onDone }: { product: Product; onDone: () => Promise<void> }) {
+export default function ProductImageUpload({ product, onDone }: { product: Record<string, unknown>; onDone: () => Promise<void> }) {
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
