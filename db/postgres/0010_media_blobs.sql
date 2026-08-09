@@ -7,5 +7,7 @@ CREATE TABLE IF NOT EXISTS media_blobs (
   created_at BIGINT NOT NULL
 );
 
+-- statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS idx_media_blobs_restaurant
   ON media_blobs (restaurant_id, created_at);
