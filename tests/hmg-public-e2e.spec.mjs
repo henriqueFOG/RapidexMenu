@@ -86,8 +86,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await company.screenshot({ path: `${artifactsDir}/02-public-painel.png`, fullPage: true });
   });
 
-  await test.step("empresa vê alertas e publica foto real de produto", async () => {
-    await expect(company.getByRole("button", { name: /Ativar alertas/i })).toBeVisible();
+  await test.step("empresa publica foto real de produto", async () => {
     await company.getByRole("button", { name: "Cardápio", exact: true }).click();
     const addPhoto = company.getByRole("button", { name: `Adicionar foto de ${smashName}` });
     await expect(addPhoto).toBeVisible({ timeout: 20_000 });
@@ -144,7 +143,8 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await consumer.screenshot({ path: `${artifactsDir}/04-public-pedido-criado.png`, fullPage: true });
   });
 
-  await test.step("empresa recebe o pedido no painel", async () => {
+  await test.step("empresa é alertada e recebe o pedido no painel", async () => {
+    await expect(company.getByRole("alert").filter({ hasText: /Novo pedido #/ })).toBeVisible({ timeout: 20_000 });
     await company.reload({ waitUntil: "networkidle" });
     await company.getByRole("button", { name: /Pedidos/ }).click();
     await expect(company.getByText(`Cliente E2E ${suffix}`)).toBeVisible({ timeout: 30_000 });
