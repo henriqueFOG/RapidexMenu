@@ -51,14 +51,15 @@ export async function POST(request: Request) {
     }
     const categoryId = optionalString(body.categoryId, "Categoria", 100);
     if (categoryId) await assertCategory(db, context.restaurantId, categoryId);
+    const imageKey = validateImageKey(body.imageKey, context.restaurantId);
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     await db
       .prepare(
         `INSERT INTO products
          (id, restaurant_id, category_id, name, description, price_cents, cost_cents, emoji, tag,
-          active, available, prep_minutes, position, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
+          image_key, active, available, prep_minutes, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -70,13 +71,14 @@ export async function POST(request: Request) {
         costCents,
         optionalString(body.emoji, "Emoji", 8) || "🍽️",
         optionalString(body.tag, "Selo", 60),
+        imageKey,
         positiveInteger(body.prepMinutes ?? 10, "Tempo de preparo", 180),
         Number.isInteger(body.position) ? Number(body.position) : 0,
         timestamp,
         timestamp,
       )
       .run();
-    await audit(context, "product.created", "product", id, { name });
+    await audit(context, "product.created", "product", id, { name, image: Boolean(imageKey) });
     return json({ ok: true, id }, { status: 201 });
   } catch (error) {
     return apiError(error);
@@ -116,4 +118,14 @@ async function assertCategory(db: D1Database, restaurantId: string, categoryId: 
     .bind(categoryId, restaurantId)
     .first();
   if (!category) throw new HttpError(400, "Categoria inválida.", "validation_error");
+}
+
+function validateImageKey(value: unknown, restaurantId: string) {
+  const key = optionalString(value, "Imagem", 300);
+  if (!key) return null;
+  const prefix = `public/restaurants/${restaurantId}/products/`;
+  if (!key.startsWith(prefix) || key.includes("..")) {
+    throw new HttpError(400, "Imagem inválida para este restaurante.", "validation_error");
+  }
+  return key;
 }
