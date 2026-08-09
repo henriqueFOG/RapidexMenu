@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { Buffer } from "node:buffer";
 import { test, expect } from "@playwright/test";
 
 const baseURL = process.env.RAPIDEX_E2E_URL || "https://rapidexmenu-hmg.vercel.app";
@@ -13,6 +14,7 @@ const customerPhone = `24${(`800000000${suffix}`).slice(-9)}`;
 const smashName = `Smash E2E ${suffix}`;
 const friesName = `Fritas E2E ${suffix}`;
 const csv = `categoria;produto;descricao;preco;custo;preparo;emoji;selo\nHambúrgueres;${smashName};Pão brioche, carne e queijo;29,90;11,50;12;🍔;Destaque\nAcompanhamentos;${friesName};Batata crocante;14,90;4,20;8;🍟;Vai bem junto`;
+const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZP94AAAAASUVORK5CYII=", "base64");
 
 mkdirSync(artifactsDir, { recursive: true });
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
@@ -84,6 +86,20 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await company.screenshot({ path: `${artifactsDir}/02-public-painel.png`, fullPage: true });
   });
 
+  await test.step("empresa vê alertas e publica foto real de produto", async () => {
+    await expect(company.getByRole("button", { name: /Ativar alertas/i })).toBeVisible();
+    await company.getByRole("button", { name: "Cardápio", exact: true }).click();
+    const addPhoto = company.getByRole("button", { name: `Adicionar foto de ${smashName}` });
+    await expect(addPhoto).toBeVisible({ timeout: 20_000 });
+    const chooserPromise = company.waitForEvent("filechooser");
+    await addPhoto.click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: "smash-e2e.png", mimeType: "image/png", buffer: tinyPng });
+    await expect(company.getByRole("button", { name: `Trocar foto de ${smashName}` })).toBeVisible({ timeout: 30_000 });
+    await expect(company.getByText("Foto publicada").first()).toBeVisible();
+    await company.screenshot({ path: `${artifactsDir}/02b-public-foto-produto.png`, fullPage: true });
+  });
+
   const consumerContext = await browser.newContext();
   const consumer = await consumerContext.newPage();
   let trackingPath = "";
@@ -97,6 +113,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     const fries = consumer.locator("article").filter({ hasText: friesName });
     await expect(smash).toBeVisible();
     await expect(fries).toBeVisible();
+    await expect(smash.locator(".rm-store-product-image img")).toBeVisible();
     await smash.getByRole("button", { name: "Adicionar +" }).click();
     await fries.getByRole("button", { name: "Adicionar +" }).click();
     await expect(consumer.getByText("R$ 44,80").first()).toBeVisible();
