@@ -87,7 +87,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
   });
 
   await test.step("empresa publica foto real de produto", async () => {
-    await company.getByRole("button", { name: "Cardápio", exact: true }).click();
+    await company.getByRole("button", { name: /Cardápio$/ }).click();
     const addPhoto = company.getByRole("button", { name: `Adicionar foto de ${smashName}` });
     await expect(addPhoto).toBeVisible({ timeout: 20_000 });
     const chooserPromise = company.waitForEvent("filechooser");
