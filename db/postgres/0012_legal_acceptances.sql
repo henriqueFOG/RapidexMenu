@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS legal_acceptances (
   id text PRIMARY KEY,
   user_id text NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -12,10 +10,12 @@ CREATE TABLE IF NOT EXISTS legal_acceptances (
   UNIQUE (user_id, restaurant_id, document_type, document_version)
 );
 
+-- statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS legal_acceptances_restaurant_idx
   ON legal_acceptances (restaurant_id, accepted_at DESC);
 
+-- statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
   ON legal_acceptances (user_id, accepted_at DESC);
-
-COMMIT;
