@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [master, hmg]
   push:
-    branches: [master, hmg, agent/commercial-ready]
+    branches: [master, hmg, agent/commercial-ready, agent/commercial-hardening-p1]
 
 permissions:
   contents: read
