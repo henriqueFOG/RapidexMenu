@@ -11,6 +11,7 @@ export type RapidexBindings = {
   RAPIDEX_AUTH_MODE?: string;
   RAPIDEX_SESSION_SECRET?: string;
   RAPIDEX_INTEGRATION_SECRET?: string;
+  RAPIDEX_CRON_SECRET?: string;
   RAPIDEX_SIGNUP_ENABLED?: string;
   RAPIDEX_HMG_OWNER_EMAIL?: string;
   RAPIDEX_HMG_OWNER_NAME?: string;
@@ -101,6 +102,7 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET &&
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
+    reconciliation: Boolean(bindings.RAPIDEX_CRON_SECRET && bindings.RAPIDEX_CRON_SECRET.length >= 32),
     metaEmbeddedSignup,
     uploads: Boolean(bindings.BUCKET || postgresConfigured),
     openai: Boolean(bindings.OPENAI_API_KEY),
