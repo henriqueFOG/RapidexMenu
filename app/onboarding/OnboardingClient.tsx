@@ -21,12 +21,14 @@ type Restaurant = {
   published_at?: number | null;
   trial_ends_at?: number | null;
 };
+type FulfillmentSettings = { deliveryEnabled: boolean; pickupEnabled: boolean; dineInEnabled: boolean };
 type Readiness = { hasLocation: boolean; hasWhatsapp: boolean; hasCategory: boolean; hasProduct: boolean; published: boolean };
 type Category = { id: string; name: string };
 type Product = { id: string; name: string; priceCents: number; available: boolean; categoryName?: string | null };
 
 export default function OnboardingClient({ userName }: { userName: string }) {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [fulfillment, setFulfillment] = useState<FulfillmentSettings>({ deliveryEnabled: true, pickupEnabled: false, dineInEnabled: false });
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,14 +39,16 @@ export default function OnboardingClient({ userName }: { userName: string }) {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [setup, menu] = await Promise.all([
+      const [setup, menu, operation] = await Promise.all([
         api<{ restaurant: Restaurant; readiness: Readiness }>("/api/admin/onboarding"),
         api<{ categories: Category[]; products: Product[] }>("/api/admin/products"),
+        api<{ settings: { fulfillment?: FulfillmentSettings } }>("/api/admin/settings"),
       ]);
       setRestaurant(setup.restaurant);
       setReadiness(setup.readiness);
       setCategories(menu.categories || []);
       setProducts(menu.products || []);
+      if (operation.settings.fulfillment) setFulfillment(operation.settings.fulfillment);
       if (setup.readiness.published) window.location.replace("/admin");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível carregar sua ativação.");
@@ -68,6 +72,11 @@ export default function OnboardingClient({ userName }: { userName: string }) {
         deliveryFeeCents: moneyToCents(form.get("deliveryFee")),
         minimumOrderCents: moneyToCents(form.get("minimumOrder")),
         averagePrepMinutes: Number(form.get("prep")), deliveryMinutes: Number(form.get("delivery")),
+        fulfillment: {
+          deliveryEnabled: form.get("deliveryEnabled") === "on",
+          pickupEnabled: form.get("pickupEnabled") === "on",
+          dineInEnabled: form.get("dineInEnabled") === "on",
+        },
       }) });
       setMessage("Dados da operação salvos."); await load();
     } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
@@ -120,16 +129,25 @@ export default function OnboardingClient({ userName }: { userName: string }) {
       {message && <p className={styles.success}>{message}</p>}
 
       {restaurant && <form className={styles.panel} onSubmit={saveOperation}>
-        <h2>1. Como sua operação funciona?</h2><p>Esses dados alimentam o cardápio e a previsão de entrega.</p>
+        <h2>1. Como sua operação funciona?</h2><p>Esses dados alimentam o cardápio, as modalidades de atendimento e a previsão prometida ao cliente.</p>
         <div className={styles.grid}>
           <label className={styles.field}>Nome da loja<input name="name" required defaultValue={restaurant.name} /></label>
           <label className={styles.field}>WhatsApp<input name="whatsapp" required defaultValue={restaurant.whatsapp || restaurant.phone || ""} /></label>
           <label className={styles.field}>Cidade<input name="city" required defaultValue={restaurant.city || ""} /></label>
           <label className={styles.field}>UF<input name="state" required maxLength={2} defaultValue={restaurant.state || ""} /></label>
           <label className={styles.field}>Taxa de entrega (R$)<input name="deliveryFee" type="number" step="0.01" min="0" defaultValue={((restaurant.delivery_fee_cents || 0) / 100).toFixed(2)} /></label>
-          <label className={styles.field}>Pedido mínimo (R$)<input name="minimumOrder" type="number" step="0.01" min="0" defaultValue={((restaurant.minimum_order_cents || 0) / 100).toFixed(2)} /></label>
+          <label className={styles.field}>Pedido mínimo para entrega (R$)<input name="minimumOrder" type="number" step="0.01" min="0" defaultValue={((restaurant.minimum_order_cents || 0) / 100).toFixed(2)} /></label>
           <label className={styles.field}>Preparo médio (min)<input name="prep" type="number" min="1" max="240" defaultValue={restaurant.average_prep_minutes || 18} /></label>
           <label className={styles.field}>Entrega média (min)<input name="delivery" type="number" min="1" max="240" defaultValue={restaurant.delivery_minutes || 24} /></label>
+        </div>
+        <div style={{ marginTop: 18, padding: 16, border: "1px solid #e6e6e6", borderRadius: 14 }}>
+          <strong style={{ display: "block", marginBottom: 8 }}>Como seus clientes podem pedir?</strong>
+          <p style={{ marginTop: 0 }}>Ative somente as modalidades que sua operação realmente atende. Pelo menos uma deve permanecer ativa.</p>
+          <div style={{ display: "grid", gap: 10 }}>
+            <label><input name="deliveryEnabled" type="checkbox" defaultChecked={fulfillment.deliveryEnabled} /> <b>Entrega</b> — exige endereço e aplica taxa/pedido mínimo.</label>
+            <label><input name="pickupEnabled" type="checkbox" defaultChecked={fulfillment.pickupEnabled} /> <b>Retirada</b> — sem taxa de entrega e sem endereço.</label>
+            <label><input name="dineInEnabled" type="checkbox" defaultChecked={fulfillment.dineInEnabled} /> <b>Mesa / consumo no local</b> — permite QR por mesa usando <code>?mesa=12</code>.</label>
+          </div>
         </div>
         <button className={styles.button} disabled={Boolean(busy)}>{busy === "operation" ? "Salvando…" : "Salvar operação"}</button>
       </form>}
