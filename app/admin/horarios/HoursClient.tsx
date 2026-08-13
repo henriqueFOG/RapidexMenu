@@ -113,6 +113,7 @@ export default function HoursClient() {
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><input type="checkbox" checked={fulfillment.pickupEnabled} onChange={(event) => setMode("pickupEnabled", event.target.checked)} /><span><b>Retirada</b><small style={{ display: "block" }}>Sem taxa de entrega e sem endereço. O prazo considera somente preparo/fila.</small></span></label>
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><input type="checkbox" checked={fulfillment.dineInEnabled} onChange={(event) => setMode("dineInEnabled", event.target.checked)} /><span><b>Mesa / consumo no local</b><small style={{ display: "block" }}>Use QR por mesa, por exemplo: <code>/loja/sua-loja?mesa=12</code>.</small></span></label>
       </div>
+      {fulfillment.deliveryEnabled && <div style={{ marginTop: 16 }}><Link className={styles.linkButton} href="/admin/entrega">Configurar bairros, CEPs, frete e pedido mínimo →</Link></div>}
     </section>
 
     <section className={styles.panel}>
@@ -140,6 +141,6 @@ export default function HoursClient() {
     </section>
 
     <button className={styles.button} disabled={busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar operação"}</button>
-    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">← Voltar ao painel</Link></div>
+    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">← Voltar ao painel</Link>{fulfillment.deliveryEnabled && <Link className={styles.linkButton} href="/admin/entrega">Cobertura de entrega</Link>}</div>
   </section></main>;
 }
