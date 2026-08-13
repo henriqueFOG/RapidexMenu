@@ -33,10 +33,30 @@ export function apiError(error: unknown) {
 }
 
 export function assertSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return;
-  if (origin !== new URL(request.url).origin) {
+  const requestOrigin = new URL(request.url).origin;
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
     throw new HttpError(403, "Origem da requisição não permitida.", "invalid_origin");
+  }
+
+  const origin = request.headers.get("origin");
+  if (origin && origin !== requestOrigin) {
+    throw new HttpError(403, "Origem da requisição não permitida.", "invalid_origin");
+  }
+
+  if (!origin) {
+    const referer = request.headers.get("referer");
+    if (referer) {
+      let refererOrigin = "";
+      try {
+        refererOrigin = new URL(referer).origin;
+      } catch {
+        throw new HttpError(403, "Origem da requisição não permitida.", "invalid_origin");
+      }
+      if (refererOrigin !== requestOrigin) {
+        throw new HttpError(403, "Origem da requisição não permitida.", "invalid_origin");
+      }
+    }
   }
 }
 
