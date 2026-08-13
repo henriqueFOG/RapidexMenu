@@ -11,6 +11,7 @@ type Tracking = {
     paymentStatus: string;
     paymentMethod: string;
     totalCents: number;
+    scheduledFor: number | null;
     promisedFromMinutes: number;
     promisedToMinutes: number;
     createdAt: number;
@@ -21,6 +22,7 @@ type Tracking = {
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const dateTime = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
 const steps = [
   ["received", "Pedido recebido", "A loja já recebeu os detalhes."],
   ["confirmed", "Confirmado", "Pagamento e disponibilidade conferidos."],
@@ -56,9 +58,6 @@ export default function TrackingClient({ token }: { token: string }) {
     setRefreshing(true);
     try {
       const first = await load();
-      // A status transition may be finishing at the exact instant the customer
-      // requests a refresh. Re-check once after a short delay so one tap does
-      // not leave the customer looking at a just-stale state.
       if (first) {
         await wait(650);
         await load();
@@ -82,5 +81,6 @@ export default function TrackingClient({ token }: { token: string }) {
 
   const current = steps.findIndex((step) => step[0] === data.order.status);
   const canceled = data.order.status === "canceled";
-  return <main className="rm-tracking"><header><Link href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link><span className="rm-tracking-live"><i /> Atualiza automaticamente</span></header><section className="rm-tracking-card"><div className="rm-tracking-head"><small>{data.order.restaurantName.toUpperCase()}</small><h1>Pedido #{data.order.number}</h1><p>{canceled ? "Este pedido foi cancelado." : `Previsão inicial: ${data.order.promisedFromMinutes}–${data.order.promisedToMinutes} minutos.`}</p></div>{canceled ? <div className="rm-canceled"><span>×</span><div><b>Pedido cancelado</b><p>Entre em contato com a loja se precisar de ajuda.</p></div></div> : <div className="rm-timeline">{steps.map((step, index) => <div className={index < current ? "done" : index === current ? "current" : ""} key={step[0]}><span>{index < current ? "✓" : index === current ? "●" : index + 1}</span><p><b>{step[1]}</b><small>{step[2]}</small></p>{index === current && <em>Agora</em>}</div>)}</div>}<div className="rm-track-order"><h2>Resumo</h2>{data.order.items.map((item, index) => <p key={`${item.name}-${index}`}><span>{item.quantity}× {item.name}</span><b>{currency.format(item.quantity * item.unitPriceCents / 100)}</b></p>)}<p className="total"><span>Total</span><b>{currency.format(data.order.totalCents / 100)}</b></p></div>{data.payment?.status === "pending" && data.payment.pixCode && <div className="rm-track-pix"><span>▦</span><div><b>Pix aguardando pagamento</b><p>Conclua para a loja confirmar mais rápido.</p></div><button onClick={() => navigator.clipboard.writeText(data.payment!.pixCode!)}>Copiar Pix</button></div>}<button className="rm-refresh-track" disabled={refreshing} aria-busy={refreshing} onClick={() => void manualRefresh()}>{refreshing ? "… Atualizando" : "↻ Atualizar agora"}</button></section></main>;
+  const scheduledLabel = data.order.scheduledFor ? dateTime.format(new Date(data.order.scheduledFor)) : null;
+  return <main className="rm-tracking"><header><Link href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link><span className="rm-tracking-live"><i /> Atualiza automaticamente</span></header><section className="rm-tracking-card"><div className="rm-tracking-head"><small>{data.order.restaurantName.toUpperCase()}</small><h1>Pedido #{data.order.number}</h1><p>{canceled ? "Este pedido foi cancelado." : scheduledLabel ? `Agendado para ${scheduledLabel}. Após o início do preparo, a previsão é de ${data.order.promisedFromMinutes}–${data.order.promisedToMinutes} minutos.` : `Previsão inicial: ${data.order.promisedFromMinutes}–${data.order.promisedToMinutes} minutos.`}</p>{scheduledLabel && !canceled && <p style={{ marginTop: 8, fontWeight: 800 }}>🗓️ Horário reservado: {scheduledLabel}</p>}</div>{canceled ? <div className="rm-canceled"><span>×</span><div><b>Pedido cancelado</b><p>Entre em contato com a loja se precisar de ajuda.</p></div></div> : <div className="rm-timeline">{steps.map((step, index) => <div className={index < current ? "done" : index === current ? "current" : ""} key={step[0]}><span>{index < current ? "✓" : index === current ? "●" : index + 1}</span><p><b>{step[1]}</b><small>{step[2]}</small></p>{index === current && <em>Agora</em>}</div>)}</div>}<div className="rm-track-order"><h2>Resumo</h2>{data.order.items.map((item, index) => <p key={`${item.name}-${index}`}><span>{item.quantity}× {item.name}</span><b>{currency.format(item.quantity * item.unitPriceCents / 100)}</b></p>)}<p className="total"><span>Total</span><b>{currency.format(data.order.totalCents / 100)}</b></p></div>{data.payment?.status === "pending" && data.payment.pixCode && <div className="rm-track-pix"><span>▦</span><div><b>Pix aguardando pagamento</b><p>Conclua para a loja confirmar mais rápido.</p></div><button onClick={() => navigator.clipboard.writeText(data.payment!.pixCode!)}>Copiar Pix</button></div>}<button className="rm-refresh-track" disabled={refreshing} aria-busy={refreshing} onClick={() => void manualRefresh()}>{refreshing ? "… Atualizando" : "↻ Atualizar agora"}</button></section></main>;
 }
