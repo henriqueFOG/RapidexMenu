@@ -1,8 +1,7 @@
 import { billingDunningStage, type BillingDunningStage } from "./billing-dunning-policy";
+import { enqueueJob } from "./job-queue";
 import { getBindings, getDatabase } from "./runtime";
-import { escapeEmailHtml, sendTransactionalEmail, transactionalEmailConfigured } from "./transactional-email";
-
-const RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
+import { escapeEmailHtml, transactionalEmailConfigured } from "./transactional-email";
 
 type BillingRow = {
   subscription_id: string;
@@ -18,7 +17,7 @@ type BillingRow = {
 
 export async function processBillingDunning(limit = 100) {
   if (!transactionalEmailConfigured()) {
-    return { configured: false, candidates: 0, sent: 0, failed: 0 };
+    return { configured: false, candidates: 0, queued: 0, failed: 0 };
   }
 
   const db = getDatabase();
@@ -37,7 +36,7 @@ export async function processBillingDunning(limit = 100) {
   ).bind(Math.max(1, Math.min(250, limit))).all<BillingRow>();
 
   let candidates = 0;
-  let sent = 0;
+  let queued = 0;
   let failed = 0;
 
   for (const row of rows.results) {
@@ -54,35 +53,30 @@ export async function processBillingDunning(limit = 100) {
     if (!event) continue;
 
     const message = dunningMessage(row, stage);
-    let delivered = false;
     try {
-      delivered = await sendTransactionalEmail({
-        to: row.owner_email,
-        subject: message.subject,
-        html: message.html,
+      await enqueueJob({
+        restaurantId: row.restaurant_id,
+        type: "transactional_email",
+        idempotencyKey: `dunning:${event.id}`,
+        maxAttempts: 5,
+        payload: {
+          to: row.owner_email,
+          subject: message.subject,
+          html: message.html,
+          dunningEventId: event.id,
+        },
       });
+      queued += 1;
     } catch {
-      delivered = false;
-    }
-
-    if (delivered) {
       await db.prepare(
-        `UPDATE billing_dunning_events
-         SET status = 'sent', sent_at = ?, last_error = NULL, last_attempt_at = ?
-         WHERE id = ?`,
-      ).bind(Date.now(), Date.now(), event.id).run();
-      sent += 1;
-    } else {
-      await db.prepare(
-        `UPDATE billing_dunning_events
-         SET status = 'failed', last_error = 'transactional_email_failed', last_attempt_at = ?
-         WHERE id = ?`,
+        `UPDATE billing_dunning_events SET status = 'failed', last_error = 'job_enqueue_failed',
+         last_attempt_at = ? WHERE id = ?`,
       ).bind(Date.now(), event.id).run();
       failed += 1;
     }
   }
 
-  return { configured: true, candidates, sent, failed };
+  return { configured: true, candidates, queued, failed };
 }
 
 function dunningCycleKey(row: BillingRow) {
@@ -90,20 +84,12 @@ function dunningCycleKey(row: BillingRow) {
 }
 
 async function claimDunningEvent(row: BillingRow, stage: BillingDunningStage, cycleKey: string, now: number) {
-  const retryBefore = now - RETRY_AFTER_MS;
   return getDatabase().prepare(
     `INSERT INTO billing_dunning_events
      (id, subscription_id, restaurant_id, stage, cycle_key, recipient_email, status,
       attempt_count, last_attempt_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, 'sending', 1, ?, ?)
-     ON CONFLICT (subscription_id, stage, cycle_key) DO UPDATE SET
-       status = 'sending',
-       attempt_count = billing_dunning_events.attempt_count + 1,
-       last_attempt_at = excluded.last_attempt_at,
-       last_error = NULL
-     WHERE billing_dunning_events.status = 'failed'
-       AND billing_dunning_events.attempt_count < 3
-       AND billing_dunning_events.last_attempt_at <= ?
+     ON CONFLICT (subscription_id, stage, cycle_key) DO NOTHING
      RETURNING id`,
   ).bind(
     crypto.randomUUID(),
@@ -114,7 +100,6 @@ async function claimDunningEvent(row: BillingRow, stage: BillingDunningStage, cy
     row.owner_email,
     now,
     now,
-    retryBefore,
   ).first<{ id: string }>();
 }
 
@@ -136,7 +121,7 @@ function dunningMessage(row: BillingRow, stage: BillingDunningStage) {
   }
   if (stage === "grace_24h") {
     return {
-      subject: `Ação necessária: acesso do RapidexMenu próximo de ser pausado`,
+      subject: "Ação necessária: acesso do RapidexMenu próximo de ser pausado",
       html: shell(
         "Último aviso de cobrança",
         `<p>O período de tolerância de <b>${restaurant}</b> está próximo do fim.</p><p>Regularize o plano <b>${plan}</b> para manter cardápio, pedidos e recursos comerciais disponíveis sem interrupção.</p>${button(link, "Regularizar agora")}`,
@@ -144,7 +129,7 @@ function dunningMessage(row: BillingRow, stage: BillingDunningStage) {
     };
   }
   return {
-    subject: `RapidexMenu pausado por pendência de assinatura`,
+    subject: "RapidexMenu pausado por pendência de assinatura",
     html: shell(
       "Acesso comercial pausado",
       `<p>O acesso comercial de <b>${restaurant}</b> foi pausado após o término do período de tolerância.</p><p>Regularize a assinatura para reativar a operação. Os dados permanecem preservados conforme as regras da plataforma.</p>${button(link, "Reativar RapidexMenu")}`,
