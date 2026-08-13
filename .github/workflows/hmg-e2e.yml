@@ -103,6 +103,9 @@ jobs:
           cat /tmp/rapidex-hmg.log || true
           exit 1
 
+      - name: Validate critical security headers
+        run: node scripts/security-headers-e2e.mjs
+
       - name: Run API commercial HMG E2E
         run: node scripts/hmg-e2e.mjs
 
