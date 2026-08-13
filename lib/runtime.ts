@@ -48,6 +48,10 @@ export function getRapidexEnvironment() {
   return normalizeRapidexEnvironment(getBindings().RAPIDEX_ENV);
 }
 
+export function reconciliationSecret() {
+  return String(getBindings().RAPIDEX_CRON_SECRET || "").trim();
+}
+
 export function getDatabase(): D1Database {
   const bindings = getBindings();
   assertEnvironmentConfiguration({
