@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 const baseUrl = process.env.RAPIDEX_E2E_URL || "http://127.0.0.1:3000";
 const origin = new URL(baseUrl).origin;
 const suffix = `${Date.now()}`.slice(-9);
+const isolatedClientIp = "198.51.100.77";
 
 async function call(path, options = {}, expected = [200]) {
   const response = await fetch(`${baseUrl}${path}`, options);
@@ -16,7 +17,17 @@ async function call(path, options = {}, expected = [200]) {
 }
 
 function jsonHeaders(cookie) {
-  return { "content-type": "application/json", origin, ...(cookie ? { cookie } : {}) };
+  // The isolated HMG runtime is called directly, without Vercel in front of it.
+  // Give this concurrency test its own rate-limit bucket so the commercial E2E
+  // executed immediately before it does not consume the same 20 req/min window.
+  // Vercel overwrites X-Forwarded-For in real deployments, preventing clients
+  // from using this technique to bypass production IP limits.
+  return {
+    "content-type": "application/json",
+    origin,
+    "x-forwarded-for": isolatedClientIp,
+    ...(cookie ? { cookie } : {}),
+  };
 }
 
 function sessionCookie(response) {
@@ -51,7 +62,7 @@ await call("/api/admin/settings", {
   headers: jsonHeaders(cookie),
   body: JSON.stringify({ isOpen: true }),
 });
-const catalog = await call("/api/admin/products", { headers: { cookie } });
+const catalog = await call("/api/admin/products", { headers: jsonHeaders(cookie) });
 const categoryId = catalog.payload.categories[0].id;
 const product = await call("/api/admin/products", {
   method: "POST",
