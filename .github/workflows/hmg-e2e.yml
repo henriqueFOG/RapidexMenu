@@ -133,8 +133,8 @@ jobs:
       - name: Validate protected internal job endpoints
         run: node scripts/cron-auth-e2e.mjs
 
-      - name: Run canonical Playwright full UI and tenant isolation HMG E2E
-        run: npx playwright test tests/landing-functional-ui.spec.mjs tests/hmg-public-e2e.spec.mjs tests/hmg-tenant-isolation.spec.mjs --reporter=line
+      - name: Run canonical Playwright full UI, tenant isolation and PWA HMG E2E
+        run: npx playwright test tests/landing-functional-ui.spec.mjs tests/hmg-public-e2e.spec.mjs tests/hmg-tenant-isolation.spec.mjs tests/pwa-hmg.spec.mjs --reporter=line
 
       - name: Upload Playwright evidence
         if: always()
