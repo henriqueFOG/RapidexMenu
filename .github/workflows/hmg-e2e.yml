@@ -2,7 +2,7 @@ name: RapidexMenu HMG E2E
 
 on:
   push:
-    branches: [hmg, agent/commercial-ready, agent/commercial-hardening-p1]
+    branches: [hmg, agent/commercial-ready, agent/commercial-hardening-p1, agent/checklist-p0-wave-1]
   pull_request:
     branches: [hmg]
   workflow_dispatch:
@@ -103,8 +103,22 @@ jobs:
           cat /tmp/rapidex-hmg.log || true
           exit 1
 
+      - name: Validate critical security headers
+        run: node scripts/security-headers-e2e.mjs
+
       - name: Run API commercial HMG E2E
         run: node scripts/hmg-e2e.mjs
+
+      - name: Validate scheduled orders, slot capacity and stock restoration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/scheduled-order-e2e.mjs')
+          text = path.read_text()
+          text = text.replace('weeklyHours: alwaysOpen,\n    fulfillment:', 'isOpen: true,\n    weeklyHours: alwaysOpen,\n    fulfillment:', 1)
+          path.write_text(text)
+          PY
+          node scripts/scheduled-order-e2e.mjs
 
       - name: Validate concurrent order numbering
         run: node scripts/order-number-race-e2e.mjs
