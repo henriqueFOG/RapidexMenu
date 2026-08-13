@@ -23,20 +23,31 @@ export async function GET(
       .bind(token)
       .first<Record<string, unknown>>();
     if (!order) throw new HttpError(404, "Pedido não encontrado.", "order_not_found");
-    const items = await db
-      .prepare(
-        `SELECT product_name, quantity, unit_price_cents, notes
-         FROM order_items WHERE order_id = ? ORDER BY created_at`,
-      )
-      .bind(order.id)
-      .all<Record<string, unknown>>();
-    const payment = await db
-      .prepare(
-        `SELECT status, pix_code, ticket_url, expires_at FROM payments
-         WHERE order_id = ? ORDER BY created_at DESC LIMIT 1`,
-      )
-      .bind(order.id)
-      .first<Record<string, unknown>>();
+    const [items, payment] = await Promise.all([
+      db
+        .prepare(
+          `SELECT id, product_name, quantity, unit_price_cents, notes
+           FROM order_items WHERE order_id = ? ORDER BY created_at`,
+        )
+        .bind(order.id)
+        .all<Record<string, unknown>>(),
+      db
+        .prepare(
+          `SELECT status, pix_code, ticket_url, expires_at FROM payments
+           WHERE order_id = ? ORDER BY created_at DESC LIMIT 1`,
+        )
+        .bind(order.id)
+        .first<Record<string, unknown>>(),
+    ]);
+    const itemIds = items.results.map((item) => String(item.id));
+    const optionRows = itemIds.length
+      ? await db.prepare(
+          `SELECT order_item_id, option_group_name, option_name, charged_delta_cents
+           FROM order_item_options
+           WHERE order_item_id IN (${itemIds.map(() => "?").join(",")})
+           ORDER BY created_at`,
+        ).bind(...itemIds).all<Record<string, unknown>>()
+      : { results: [] as Record<string, unknown>[] };
 
     return json({
       ok: true,
@@ -61,6 +72,11 @@ export async function GET(
           quantity: item.quantity,
           unitPriceCents: item.unit_price_cents,
           notes: item.notes,
+          options: optionRows.results.filter((option) => option.order_item_id === item.id).map((option) => ({
+            group: option.option_group_name,
+            name: option.option_name,
+            chargedDeltaCents: option.charged_delta_cents,
+          })),
         })),
       },
       payment: payment
