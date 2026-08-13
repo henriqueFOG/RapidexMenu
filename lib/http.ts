@@ -58,6 +58,25 @@ export function apiError(error: unknown, request?: Request) {
     );
   }
 
+  if (error instanceof Error && error.message.includes("rapidex_schedule_capacity")) {
+    structuredLog("warn", "api.schedule_capacity", {
+      requestId,
+      method: request?.method,
+      path: request ? new URL(request.url).pathname : undefined,
+    });
+    return json(
+      {
+        ok: false,
+        error: {
+          code: "schedule_capacity_full",
+          message: "Esse horário acabou de atingir a capacidade da cozinha. Escolha outro horário.",
+          requestId,
+        },
+      },
+      { status: 409, headers: { "x-request-id": requestId } },
+    );
+  }
+
   structuredLog("error", "api.internal_error", {
     requestId,
     error,
