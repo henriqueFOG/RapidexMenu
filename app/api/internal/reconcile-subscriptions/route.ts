@@ -1,3 +1,4 @@
+import { processBillingDunning } from "@/lib/billing-dunning";
 import { apiError, HttpError, json } from "@/lib/http";
 import { reconcilePlatformSubscriptions } from "@/lib/platform-billing";
 import { reconciliationSecret } from "@/lib/runtime";
@@ -17,8 +18,9 @@ export async function POST(request: Request) {
 async function run(request: Request) {
   try {
     authorizeJob(request);
-    const result = await reconcilePlatformSubscriptions(50);
-    return json({ ok: true, ...result });
+    const reconciliation = await reconcilePlatformSubscriptions(50);
+    const dunning = await processBillingDunning(100);
+    return json({ ok: true, reconciliation, dunning });
   } catch (error) {
     return apiError(error);
   }
