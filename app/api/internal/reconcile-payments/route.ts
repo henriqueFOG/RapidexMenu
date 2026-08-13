@@ -1,6 +1,6 @@
 import { apiError, HttpError, json } from "@/lib/http";
 import { reconcileMercadoPagoPayment } from "@/lib/payment-reconciliation";
-import { getBindings, getDatabase } from "@/lib/runtime";
+import { getDatabase, reconciliationSecret } from "@/lib/runtime";
 import { constantTimeEqual } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +72,7 @@ async function reconcile(request: Request) {
 }
 
 function authorizeJob(request: Request) {
-  const secret = getBindings().RAPIDEX_CRON_SECRET || "";
+  const secret = reconciliationSecret();
   if (secret.length < 32) {
     throw new HttpError(503, "Reconciliação automática ainda não está configurada.", "reconciliation_not_configured");
   }
