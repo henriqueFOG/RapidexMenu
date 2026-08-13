@@ -138,7 +138,15 @@ async function processInboundMessage(
   let text = message.text?.body?.trim() || message.interactive?.button_reply?.title?.trim() || "";
   if (message.type === "audio" && message.audio?.id) {
     const media = await downloadWhatsAppMedia(message.audio.id, phoneNumberId);
-    text = await transcribeAudio(media.blob, `pedido.${extensionFor(media.mimeType)}`);
+    try {
+      text = await transcribeAudio(restaurantId, media.blob, `pedido.${extensionFor(media.mimeType)}`);
+    } catch (error) {
+      if (error instanceof HttpError && ["ai_usage_limit", "ai_circuit_open", "transcription_failed", "integration_not_configured"].includes(error.code)) {
+        text = "Quero falar com um atendente humano porque meu áudio não pôde ser processado.";
+      } else {
+        throw error;
+      }
+    }
   }
   if (!text) return;
 
@@ -236,6 +244,7 @@ async function processInboundMessage(
         .all<{ order_id: string; product_name: string }>()
     : { results: [] as Array<{ order_id: string; product_name: string }> };
   const reply = await generateSalesReply({
+    restaurantId,
     restaurantName: restaurant.name,
     message: text,
     customerName: customer.name,
