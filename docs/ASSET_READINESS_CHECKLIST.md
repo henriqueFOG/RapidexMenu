@@ -1,227 +1,255 @@
-# RapidexMenu — checklist vivo de prontidão como ativo comercial
+# RapidexMenu — Checklist vivo de prontidão comercial
 
-Atualizado em: 13/08/2026  
-Branch de execução: `agent/commercial-hardening-p0`  
-PR de trabalho: #8 → `hmg`
+Atualizado em 13/08/2026. Este documento é o gate operacional do produto; presença de código, por si só, não significa prontidão comercial.
 
 ## Legenda
 
-- ✅ **Implementado e validado**: código presente e gate automático correspondente aprovado.
-- 🧪 **Implementado, em validação**: código presente; ainda falta E2E/HMG ou teste específico antes de considerar concluído.
-- ⏳ **Pendente técnico**: precisa ser implementado no produto/infra.
-- 🔒 **Dependência externa**: exige jurídico, conta/credencial, fornecedor, decisão societária ou validação humana externa ao código.
-
-> Regra: nenhum item externo é marcado como concluído só porque existe estrutura de código para suportá-lo.
+- ✅ implementado e já validado por teste/gate técnico aplicável.
+- 🧪 implementado no branch de hardening, aguardando ou repetindo validação no SHA final.
+- ⏳ trabalho técnico ainda pendente para a fase indicada.
+- 🔒 dependência externa/empresarial que não pode ser concluída apenas por código.
+- ➡️ deliberadamente movido para fase posterior porque não faz parte da oferta comercial atual.
 
 ---
 
-# P0 — antes de cobrar/abrir clientes pagantes
+# P0 — necessário para piloto comercial confiável
 
-## Integridade de pedidos e estoque
+## 1. Integridade de pedidos e concorrência
 
-- 🧪 Guard transacional PostgreSQL contra overselling concorrente (`0011_order_item_stock_guard.sql`).
-- 🧪 Invariante de banco impedindo `order_item` de produto pertencente a outro tenant.
-- 🧪 Resposta comercial `409 insufficient_stock` para corrida de estoque.
-- 🧪 Teste E2E com duas compras concorrentes da última unidade.
-- 🧪 Transição de status com compare-and-set e `409 order_state_conflict`.
-- 🧪 Teste E2E com dois operadores disputando alteração do mesmo pedido.
-- ✅ Preço base é recalculado no servidor e não confia no navegador.
-- ✅ Idempotência de checkout por `clientOrderId` já existia e permanece coberta.
-- ⏳ Reconciliação periódica de pagamentos pendentes/perda de webhook.
-- ⏳ Teste dedicado de numeração de pedidos sob alta concorrência.
+- ✅ Preço e custo do pedido recalculados no servidor; preço enviado pelo navegador não é autoridade.
+- ✅ Idempotência de checkout por `clientOrderId` + restrição única por restaurante.
+- ✅ Reserva/decremento de estoque protegidos no PostgreSQL por lock transacional.
+- ✅ Falha de corrida de estoque traduzida para `409 insufficient_stock`, sem pedido parcialmente confirmado.
+- ✅ E2E PostgreSQL com duas compras disputando a última unidade.
+- ✅ Mudança de status com compare-and-set; operador com estado antigo recebe `409 order_state_conflict`.
+- ✅ E2E PostgreSQL para duas transições concorrentes do mesmo pedido.
+- 🧪 Numeração de pedidos: teste com 12 checkouts simultâneos adicionado; primeiro run provou que o rate-limit funcionava e foi isolado em bucket próprio para testar a sequência sem desabilitar a proteção de produção.
+- ✅ Isolamento multi-tenant adversarial para produtos, mídia, pedidos e clientes.
 
-## Cardápio universal — modalidades
+**Aceite:** nenhum overselling silencioso, colisão de status ou acesso cruzado entre restaurantes.
 
-- 🧪 Modelo de pedido `delivery | pickup | dine_in` (`0013_order_fulfillment.sql`).
-- 🧪 Endereço obrigatório somente em `delivery`.
-- 🧪 Frete, pedido mínimo e tempo logístico aplicados somente em `delivery`.
-- 🧪 Mesa obrigatória em `dine_in`.
-- 🧪 Configuração por restaurante das modalidades habilitadas.
-- 🧪 Loja pública exibe seletor Entrega / Retirada / Consumir no local.
-- 🧪 QR/link por mesa via `?mesa=<codigo>` respeitando configuração da loja.
-- 🧪 Onboarding permite escolher modalidades.
-- 🧪 Painel pós-publicação permite alterar modalidades em Horários/Operação.
-- ✅ Compatibilidade: lojas já existentes permanecem delivery-only até opt-in.
-- 🧪 Novas lojas têm frete e pedido mínimo neutros (`0`) até o proprietário configurar; lojas existentes não são alteradas (`0016_safe_new_store_defaults.sql`).
-- ⏳ Pedido agendado: coluna preparada, fluxo de negócio/UI ainda não implementado.
+## 2. Pagamentos do restaurante
 
-## Cardápio universal — tamanhos, sabores e adicionais
+- ✅ Pix/checkout não confia no payload do webhook: pagamento é reconsultado no Mercado Pago antes de alterar estado.
+- ✅ Webhook/idempotência e associação de pagamento ao pedido/tenant.
+- ✅ Job de reconciliação de pagamentos pendentes implementado.
+- ✅ Cron protegido por Bearer secret e compatível com `CRON_SECRET` nativo da Vercel.
+- 🧪 Gate HMG do cron deve permanecer verde no SHA final.
+- 🔒 Validar Pix real ponta a ponta com credencial/conta definitiva do restaurante.
+- 🔒 Validar webhook real duplicado, atrasado, inválido e webhook perdido em produção.
 
-- 🧪 `product_option_groups` com mínimo/máximo de escolhas.
-- 🧪 `product_options` com acréscimo de preço/custo e disponibilidade.
-- 🧪 Estratégias de cobrança: `sum`, `highest`, `average`, `included`.
-- 🧪 Servidor valida que opção pertence ao produto e ao tenant.
-- 🧪 Servidor valida min/max; navegador não é autoridade.
-- 🧪 Servidor calcula preço e custo dos modificadores.
-- 🧪 Snapshot imutável em `order_item_options`, incluindo valor efetivamente cobrado.
-- 🧪 Loja pública possui configurador de produto.
-- 🧪 Carrinho suporta o mesmo produto com configurações diferentes.
-- 🧪 Tracking expõe snapshot de opções sem depender do cardápio atual.
-- 🧪 Editor no-code em `/admin/opcoes` para tamanhos/sabores/adicionais.
-- ⏳ Teste E2E específico de preço adulterado em modificadores e escolha obrigatória.
-- ⏳ Estoque individual de opções/ingredientes, caso validado como necessário comercialmente.
+**Aceite:** perda de webhook não deixa pagamento permanentemente inconsistente e nenhum evento forjado confirma pagamento.
 
-## Entrega e cobertura
+## 3. Modalidades de atendimento
 
-- ⏳ Zonas de entrega por CEP/bairro/faixa ou polígono.
-- ⏳ Frete por zona calculado no servidor.
-- ⏳ Pedido mínimo por zona.
-- ⏳ Prazo adicional por zona.
-- ⏳ Bloqueio de endereço fora da cobertura.
-- ⏳ Interface administrativa para cobertura de entrega.
-- ⏳ Integração logística/parceiro: somente após validação do núcleo.
+- ✅ `delivery`, `pickup` e `dine_in` persistidos no pedido.
+- ✅ Endereço obrigatório apenas para delivery.
+- ✅ Frete, mínimo e logística aplicados apenas a delivery.
+- ✅ Mesa obrigatória em `dine_in` e QR/link compatível com `?mesa=`.
+- ✅ Restaurante habilita/desabilita modalidades no onboarding e em Operação.
+- ✅ E2E de retirada/mesa sem cobrança de frete indevida.
+- ➡️ Pedido agendado movido para P1; não faz parte do MVP comercial atual.
 
-## Planos e monetização SaaS
+## 4. Tamanhos, sabores e adicionais
 
-- 🧪 Entitlements server-side criados para IA, WhatsApp, multiunidade e KDS.
-- ✅ Testes unitários de entitlements passaram no CI.
-- 🧪 IA comercial bloqueada no servidor abaixo de Growth fora do trial.
-- 🧪 Conexão do WhatsApp bloqueada no servidor abaixo de Growth fora do trial.
-- 🧪 Regra comercial: trial Start demonstra recursos Growth; Scale continua exclusivo.
-- ⏳ Aplicar entitlements a todos os recursos pagos restantes, não apenas IA/WhatsApp.
-- ⏳ Desativar automação do WhatsApp de forma segura após downgrade, sem impedir desconexão/status transacional.
-- ⏳ Limites/franquias de IA e mensageria por plano.
-- ⏳ Grace period formal para inadimplência.
-- ⏳ Dunning (avisos, retry, suspensão e reativação).
-- ⏳ Reconciliação periódica de assinatura Rapidex com Mercado Pago.
-- 🔒 Validar assinatura real/renovação/recusa/cancelamento com conta comercial definitiva.
+- ✅ Grupos de opções por produto com mínimo/máximo.
+- ✅ Opções com preço, custo, disponibilidade e posição.
+- ✅ Estratégias de preço `sum`, `highest`, `average` e `included`.
+- ✅ Validação server-side de produto, tenant, grupo, mínimo/máximo e opções permitidas.
+- ✅ Cliente não consegue adulterar preço de adicional.
+- ✅ Snapshot imutável de produto, opções, preço e custo no item do pedido.
+- ✅ Editor administrativo `/admin/opcoes`.
+- ✅ E2E PostgreSQL para opção obrigatória, adulteração de preço e snapshot.
+- ➡️ Estoque no nível do ingrediente/opção movido para P1 e só será construído se restaurantes piloto demonstrarem necessidade.
 
-## Multiunidade
+## 5. Zonas de entrega
 
-- ⏳ Criar `Organization/Account` acima das lojas.
-- ⏳ Um usuário pertencer a múltiplas lojas sem criar outra conta.
-- ⏳ Seletor de unidade ativa.
-- ⏳ Permissões por unidade.
-- ⏳ Visão consolidada de unidades.
-- ⏳ E2E de isolamento entre organizações e unidades.
-- ⏳ Fazer a promessa comercial “até 3 unidades” depender desta implementação real.
+- ✅ Zonas por CEP/bairro com taxa, mínimo e minutos adicionais.
+- ✅ Cálculo da zona no servidor e snapshot da regra aplicada ao pedido.
+- ✅ Rejeição server-side de endereço fora da cobertura quando a loja usa cobertura restrita.
+- ✅ Tela administrativa `/admin/entrega`.
+- ✅ API pública de cotação e E2E de cobertura/taxa/mínimo/snapshot.
+- 🧪 Checkout público agora consulta CEP+bairro antes da confirmação, mostra zona/taxa/mínimo/prazo reais e bloqueia endereço fora da cobertura; aguarda Playwright do SHA final.
+- ➡️ Polígonos/mapa e integração logística movidos para P2.
 
-## Segurança
+## 6. Planos e entitlements
 
-- ✅ CI principal: TypeScript, unit tests e production build aprovados no primeiro lote do PR.
-- 🧪 CSP global adicionada; precisa ser validada no HMG com Meta/Mercado Pago reais.
-- 🧪 `frame-ancestors`, X-Frame-Options, Referrer-Policy, Permissions-Policy e `nosniff` adicionados.
-- 🧪 CSRF/origin reforçado com `Sec-Fetch-Site`, Origin e Referer.
-- ✅ Sessão HttpOnly, assinatura e autenticação nativa já existiam.
-- ✅ Teste adversarial multi-tenant já existia e permanece obrigatório.
-- ⏳ Dependency scanning automatizado.
-- ⏳ Secret scanning/gate de segredo no CI.
-- 🔒 Rotacionar/remover qualquer segredo histórico de repositórios/ambientes antigos.
+- ✅ Regra server-side de planos Começo/Crescimento/Escala.
+- ✅ Trial Começo demonstra experiência Crescimento sem liberar capacidades Scale.
+- ✅ IA administrativa protegida por entitlement.
+- ✅ Conexão WhatsApp protegida por entitlement.
+- ✅ KDS básico protegido para Scale.
+- 🧪 Webhook WhatsApp preserva histórico inbound, mas interrompe o bot pago e transfere para humano após perda de entitlement; aguarda gate final.
+- ✅ Landing removeu promessa de multiunidade/fila que ainda não estava entregue.
+- ➡️ Multiunidade deixou de ser P0 enquanto não fizer parte da oferta vendida; permanece no roadmap P2.
+
+**Aceite:** frontend não é a única barreira de plano e downgrade não mantém automação paga ativa.
+
+## 7. Cobrança da assinatura Rapidex
+
+- ✅ Assinatura da plataforma separada do dinheiro do restaurante.
+- ✅ Webhook de billing reconsulta Mercado Pago e valida referência/valor.
+- ✅ Reconciliação periódica de assinaturas.
+- ✅ Grace period formal de 72h.
+- ✅ Política de dunning não trata cancelamento voluntário como inadimplência e não cobra antes da janela real de tolerância.
+- ✅ Ledger idempotente de dunning com estágios `grace_started`, `grace_24h`, `suspended` e até 3 retries espaçados.
+- ✅ Testes unitários das regras de grace/dunning.
+- ✅ Cron de assinatura agendado e protegido.
+- 🔒 Configurar/validar e-mail transacional definitivo em produção.
+- 🔒 Validar ciclo real: pagamento inicial, renovação, recusa, grace, regularização, cancelamento, suspensão e reativação.
+
+## 8. IA — segurança e controle econômico
+
+- ✅ Modelo não recebe custo interno nem percentual exato de margem; recebe prioridade comercial grosseira.
+- ✅ JSON Schema estrito e IDs de produto validados pelo servidor.
+- ✅ Prompt trata mensagem/contexto do cliente como dados não confiáveis.
+- ✅ Memória persistente rejeita conteúdo instrucional/sensível.
+- ✅ Saída ao consumidor possui filtro determinístico de vazamento de `commercialPriority`, `decisionReason`, prompt/instruções internas, credenciais e termos equivalentes; suspeita força handoff humano.
+- ✅ Red-team unitário cobre `ignore instructions`, system/developer prompt, token/API key, memória legítima e tentativa de vazamento na resposta.
+- ✅ Limites internos diários por tenant/plano para respostas e transcrição.
+- ✅ Contabilização de tokens por restaurante/dia.
+- ✅ Circuit breaker por restaurante/provedor e fallback/handoff quando OpenAI falha.
+- 🧪 Fluxo completo de WhatsApp + quota/circuit deve permanecer verde no SHA final.
+
+**Aceite:** IA nunca é autoridade de preço/pagamento/reembolso e uma loja não pode gerar custo ilimitado nem derrubar IA das demais.
+
+## 9. Segurança de aplicação e supply chain
+
+- ✅ CSP e proteção contra frame/clickjacking.
+- ✅ `Referrer-Policy`, `Permissions-Policy` e `nosniff`.
+- ✅ CSRF/origin reforçado com `Sec-Fetch-Site`, Origin e Referer.
+- ✅ Sessão HttpOnly, assinatura HMAC e invalidação por `auth_version`.
+- ✅ PBKDF2 com salt e recuperação de senha com token hash/expiração/anti-enumeração.
+- ✅ Dependency audit obrigatório no CI.
+- ✅ Secret scan obrigatório no CI.
+- ✅ Dependências de produção atualizadas; audit retornou zero vulnerabilidades no refresh validado.
+- ✅ GitHub Actions atualizadas para v5.
+- 🔒 Rotacionar/confirmar segredos definitivos de produção e aplicar menor privilégio em todas as contas externas.
 - 🔒 Revisão de segurança externa antes de aquisição em escala.
 
-## IA e automação
+## 10. Jurídico e LGPD
 
-- ✅ Saída estruturada/JSON Schema e IDs validados no servidor já existiam.
-- 🧪 Percentual exato de margem deixou de ser enviado ao modelo; IA recebe prioridade comercial abstrata.
-- 🧪 Prompt proíbe revelar custo, margem, regra interna, prompt, IDs, credenciais e `decisionReason`.
-- 🧪 Contexto/mensagem são explicitamente tratados como dados não confiáveis.
-- 🧪 Memória persistente filtra conteúdo instrucional/sensível.
-- ✅ Preço, disponibilidade e fechamento permanecem sob autoridade do servidor.
-- ⏳ Suite automatizada de prompt-injection/red-team.
-- ⏳ Limite de gasto/uso de IA por tenant e plano.
-- ⏳ Circuit breaker/fallback operacional mensurável.
+### Evidência técnica
+- ✅ Aceite de Termos/Privacidade registra versão, usuário, restaurante e timestamp.
+- ✅ Páginas legais exibem versão centralizada.
+- ✅ Estrutura para solicitações de privacidade e painel administrativo.
+- ✅ Fluxos técnicos de consulta/exportação/correção/opt-out implementados.
+- 🧪 Retenção/anonimização destrutiva permanece condicionada à política jurídica definitiva.
 
-## Jurídico / LGPD
+### Dependências externas
+- 🔒 Definir entidade contratante/CNPJ e dados societários/fiscais.
+- 🔒 Revisar Termos de Uso com jurídico brasileiro.
+- 🔒 Revisar Política de Privacidade.
+- 🔒 Definir DPA e papéis controlador/operador por tratamento.
+- 🔒 Definir política formal de retenção e base legal por classe de dado.
+- 🔒 Definir canal/encarregado de privacidade e subprocessadores.
+- 🔒 Avaliar transferências internacionais e procedimento jurídico de incidente.
 
-- 🧪 Versão dos Termos e Privacidade centralizada no código.
-- 🧪 Aceites versionados persistidos por usuário/restaurante (`legal_acceptances`).
-- 🧪 Signup retorna/registre a versão legal aceita.
-- 🔒 Revisão dos Termos por jurídico brasileiro.
-- 🔒 Revisão da Política de Privacidade por jurídico brasileiro.
-- 🔒 DPA e definição controlador/operador por fluxo.
-- 🔒 Definir entidade contratante/CNPJ/conta empresarial.
-- ⏳ Processo técnico para exportação/correção/exclusão/anonimização de titular.
-- ⏳ Painel/processo de opt-out e solicitações LGPD.
-- ⏳ Política/rotina automática de retenção por categoria de dado.
-- 🔒 Revisar subprocessadores e transferência internacional.
-- 🔒 Canal/contato real de privacidade/encarregado.
+## 11. Fotos e mídia
 
-## Mídia
+- ✅ JPG/PNG/WebP; SVG/HTML rejeitados.
+- ✅ Validação por magic bytes e dimensões, não apenas MIME informado pelo cliente.
+- ✅ Limite de tamanho diferenciado para bucket vs fallback HMG.
+- ✅ Ownership de chave por tenant antes de vincular produto.
+- ✅ Produção falha fechada sem object storage; Postgres base64 permanece somente como fallback de desenvolvimento/HMG.
+- 🔒 Provisionar bucket/CDN definitivo e credenciais de produção.
+- ⏳ Re-encode/normalização de imagem e variantes otimizadas antes de grande escala.
+- ⏳ Job de limpeza de objetos órfãos após object storage definitivo.
 
-- ✅ Upload já limita JPG/PNG/WebP e impede SVG/HTML no fluxo existente.
-- ⏳ Validação por magic bytes (não confiar apenas em MIME do cliente).
-- ⏳ Decodificação/re-encode seguro e limite de dimensões.
-- ⏳ Object storage definitivo (R2/Vercel Blob/S3 ou equivalente).
-- ⏳ Banco guardar somente chave/metadados, não binário em escala.
-- ⏳ Limpeza de objetos órfãos.
-- 🔒 Provisionar storage definitivo e credenciais de produção.
+## 12. Backup e recuperação
 
-## Backup / recuperação
-
-- ✅ Runbook de piloto e snapshot HMG já documentados no repositório.
-- 🔒 Confirmar política de backup do PostgreSQL contratado em produção.
-- 🔒 Executar restauração real em cópia isolada e registrar evidência.
-- ⏳ Automatizar verificação periódica de restauração quando a infraestrutura permitir.
-- ⏳ Definir RPO/RTO formal.
+- 🔒 Contratar/configurar política automática de backup do Postgres e object storage.
+- 🔒 Definir RPO/RTO empresarial.
+- 🔒 Executar restauração real para ambiente temporário e guardar evidência.
+- 🔒 Rodar migrations + E2E sobre o restore.
+- ✅ Runbooks de operação/incidente documentados no repositório.
 
 ---
 
-# P1 — antes de abrir aquisição pública em escala
-
-## Filas, webhooks e resiliência
-
-- ⏳ Fila assíncrona para webhooks, WhatsApp, e-mail e jobs pesados.
-- ⏳ Retry exponencial e idempotente.
-- ⏳ Dead-letter queue.
-- ⏳ Dashboard/reprocessamento seguro de jobs falhos.
-- ⏳ Webhook responder rápido após validar/persistir; processamento pesado assíncrono.
+# P1 — necessário antes de aquisição pública em escala
 
 ## Observabilidade
 
-- ⏳ Error tracking/APM.
-- ⏳ Uptime externo.
-- ⏳ Alertas de 5xx, latência, pagamento pendente, webhook falho e fila atrasada.
-- ⏳ Correlation/request ID em logs.
-- ⏳ Logs estruturados com redaction de PII/segredos.
-- 🔒 Definir ferramenta/conta de observabilidade de produção.
+- ⏳ Error tracking centralizado.
+- ⏳ APM/latência p95/p99.
+- ⏳ Uptime monitor externo.
+- ⏳ Alertas para 5xx, pagamento/webhook, fila, WhatsApp, IA, banco, storage e e-mail.
+- ⏳ Correlation/request ID e logs estruturados com política de redaction.
+- ⏳ Status page quando a base justificar.
 
-## Onboarding e ativação
+## Jobs assíncronos e resiliência
 
-- ✅ Onboarding, importação e publicação já existiam.
-- 🧪 Onboarding agora inclui modalidades de atendimento.
-- ⏳ Templates de configuração por segmento (pizza, açaí, hamburgueria, japonês, marmita).
-- ⏳ Importação de opções/modificadores junto do cardápio.
-- ⏳ Checklist visual de ativação completo e time-to-value medido.
-- ⏳ Instrumentar “primeiro pedido em até 48h”.
+- ⏳ Fila para WhatsApp outbound, campanhas, e-mails e trabalhos pesados.
+- ⏳ Retry exponencial + DLQ + idempotency key por job.
+- ⏳ Dashboard de falhas e reprocessamento seguro.
+- ⏳ Receber/validar/persistir webhooks rapidamente e processar trabalho pesado fora do request quando necessário.
 
-## Operação / KDS
+## Onboarding e self-service
 
-- ⏳ KDS por estação.
+- ✅ Cadastro público, trial e onboarding guiado.
+- ✅ Configuração de operação/modalidades.
+- ✅ Importação de cardápio e cadastro manual.
+- ✅ Publicação do cardápio sem intervenção do fundador validada no E2E público.
+- ⏳ Templates por segmento para acelerar hamburgueria/pizzaria/açaí/japonês/marmitaria.
+- ⏳ Importação assistida por foto/PDF/IA após validação de demanda.
+- ⏳ Instrumentar métrica real “primeiro pedido em até 48h”.
+
+## Operação/KDS
+
+- ✅ KDS básico para plano Escala.
+- ⏳ Estações (chapa/fritura/bebidas/montagem).
 - ⏳ Impressão opcional.
-- ⏳ Pausa/capacidade automática por fila.
-- ⏳ Sinalização de atraso e SLA operacional.
-- ⏳ Cancelamento/reembolso com motivo e permissão.
-- ⏳ Histórico de quem fez cada alteração sensível.
+- ✅ Alertas de novo pedido no painel.
+- ⏳ SLA/atraso operacional avançado e previsão pela fila real.
+- ⏳ Permissões específicas para cancelamento/reembolso.
 
-## CRM / recompra
+## CRM, recompra e analytics
 
-- ✅ Base de clientes, preferências e histórico já existem parcialmente.
-- ⏳ Segmentação operacional (novo, recorrente, VIP, inativo, risco de churn).
-- ⏳ Automação de recompra com consentimento, frequency cap e opt-out.
-- ⏳ Atribuição completa mensagem → pedido → receita → margem.
-- ⏳ LTV/frequência/coortes por cliente.
+- ✅ Base de clientes por restaurante, histórico, consentimento, LTV e frequência básica.
+- ✅ Profit Engine e atribuição de upsell/recomendação existentes.
+- ✅ Guardrails de margem e aprovação humana de automação.
+- ⏳ Segmentação completa: novo/recorrente/VIP/inativo/churn risk.
+- ⏳ Automação de recompra com frequency cap e opt-out operacional completos.
+- ⏳ Atribuição completa mensagem → conversão → margem.
+- ⏳ Analytics de conversão do cardápio, abandono e recompra mais aprofundados.
 
-## Backoffice da própria Rapidex
+## Backoffice do SaaS
 
-- ⏳ Console interno de tenants/planos/trials/integrações/saúde/consumo.
-- ⏳ Feature flags por tenant.
-- ⏳ Suspensão/reativação com auditoria.
-- ⏳ Impersonation somente se necessária, com consentimento, motivo e auditoria.
+- ✅ Backoffice interno básico `/admin/plataforma` com visão de tenants/saúde.
+- ⏳ Saúde por integração/custo/suporte mais granular.
+- ⏳ Feature flags operacionais por tenant.
+- ⏳ Impersonation somente se houver necessidade real, com consentimento/motivo/prazo/auditoria.
 
-## Performance / escala
+## Performance e capacidade
 
-- ⏳ Cache do cardápio público com invalidação por restaurante.
-- ⏳ Separar catálogo quase-estático de disponibilidade dinâmica.
-- ⏳ Paginação dos painéis administrativos.
-- ⏳ Índices orientados por queries e telemetria real.
-- ⏳ Load test de pedidos/webhooks/WhatsApp.
-- ⏳ PWA operacional/instalável e experiência de tablet/KDS.
+- ⏳ Cache/invalidação do catálogo público por restaurante.
+- ⏳ Paginação administrativa em telas que ultrapassarem limites atuais.
+- ⏳ Load test formal de pico além dos testes de concorrência P0.
+- ⏳ Índices revisados a partir de queries reais/telemetria.
+- ⏳ Limites operacionais por tenant para outras integrações caras além de IA.
+
+## Suporte
+
+- ✅ Política de severidade/SLA e runbook documentados em `docs/SUPPORT_AND_INCIDENT_SLA.md`.
+- 🔒 Definir canais/equipe/horários reais de suporte comercial.
+- ⏳ Base de conhecimento para self-service.
+- ⏳ Processo real de post-mortem e histórico de incidentes quando houver operação.
 
 ---
 
 # P2 — tornar o ativo defensável e transferível
 
-## Integrações
+## Multiunidade
+
+- ➡️ `Organization/Account` com várias lojas.
+- ➡️ Membership e permissões por unidade.
+- ➡️ Seletor de unidade ativa.
+- ➡️ Visão consolidada de faturamento/pedidos/clientes.
+- ➡️ Isolamento E2E entre organizações e lojas.
+
+**Regra comercial atual:** não prometer/vender multiunidade até essa camada existir.
+
+## Integrações e ecossistema
 
 - ⏳ POS/PDV/ERP.
 - ⏳ Fiscal via parceiro.
@@ -234,8 +262,9 @@ PR de trabalho: #8 → `hmg`
 - 🔒 Titularidade empresarial do código e cessão de PI de colaboradores.
 - 🔒 Inventário/licenças open source revisados juridicamente quando necessário.
 - 🔒 Registro/proteção da marca RapidexMenu.
-- 🔒 Domínio, GitHub, Vercel, banco, Meta, Mercado Pago, OpenAI e DNS sob contas empresariais com MFA.
-- ⏳ Documentação de deploy, rollback, banco e integrações independente do fundador.
+- 🔒 Domínio, GitHub, Vercel, banco, Meta, Mercado Pago, OpenAI, e-mail, storage e DNS sob contas empresariais com MFA.
+- ✅ Documentação técnica de ambiente, migrations, operação, incidentes e checklist versionada no repositório.
+- ⏳ Documentação de rollback/deploy e inventário de integrações refinados até não depender do fundador.
 - 🔒 Pelo menos duas pessoas autorizadas/capacitadas para operar produção.
 
 ## Métricas econômicas do ativo
@@ -244,31 +273,32 @@ PR de trabalho: #8 → `hmg`
 - ⏳ Logo churn / revenue churn / NRR.
 - ⏳ ARPA e margem bruta real.
 - ⏳ CAC/payback/LTV-CAC.
-- ⏳ Custo OpenAI/Meta/infra/suporte por tenant.
+- 🧪 Uso/tokens de IA por tenant já instrumentados; converter em custo financeiro real quando houver faturamento de API.
+- ⏳ Custo Meta/infra/storage/suporte por tenant.
 - ⏳ Dashboard de ativação D2, retenção W4 e receita recuperada/mensalidade.
 
 ---
 
 # Gate para declarar “pronto para comercializar em escala”
 
-- ⏳ Nenhum P0 técnico aberto.
-- ⏳ CI + migrations + E2E + isolamento multi-tenant verdes no SHA publicado.
-- ⏳ Delivery/retirada e modificadores validados ponta a ponta.
+- 🧪 Nenhum P0 **técnico controlável por código** aberto no SHA final.
+- 🧪 CI + migrations + E2E + isolamento multi-tenant verdes no mesmo SHA final.
+- 🧪 Delivery/retirada/mesa, modificadores e cotação de zona validados ponta a ponta no SHA final.
 - 🔒 Pix real e cobrança recorrente validados com contas definitivas.
 - 🔒 WhatsApp oficial validado com conta/número definitivo/teste aprovado.
+- 🔒 E-mail transacional e object storage definitivos configurados/testados.
 - 🔒 Termos/Privacidade/DPA e entidade contratante concluídos.
 - 🔒 Backup restaurado com evidência.
 - ⏳ Monitoramento e alertas em produção.
-- ⏳ Suporte/SLA real definidos.
+- ✅ Política de suporte/SLA documentada; 🔒 operação/canais reais ainda precisam ser definidos.
 - ⏳ Pelo menos 3 restaurantes reais por 7 dias sem incidente grave.
-- ⏳ Evidência de clientes dispostos a pagar/renovar.
-- ⏳ Onboarding não depender tecnicamente do fundador.
-- ⏳ MRR, churn, ativação e uso medidos.
+- ⏳ Evidência de clientes pagantes e pelo menos uma renovação real.
+- ✅ Onboarding técnico self-service validado; ⏳ medir ativação real em clientes piloto.
+- ⏳ MRR, churn, ativação e retenção medidos com base real.
 
 ## Próximo gate técnico imediato
 
-1. Fazer o HMG E2E passar com PostgreSQL real após migrations 0011–0016.
-2. Adicionar E2E para modalidades e modificadores/preço server-side.
-3. Implementar zonas de entrega e cobertura.
-4. Hardening de mídia/object storage.
-5. Reconciliação financeira e disciplina de billing.
+1. Fazer o **SHA final deste PR** ficar verde simultaneamente em CI, HMG E2E, Security audit e Secret scan.
+2. Confirmar no HMG o novo teste de 12 pedidos concorrentes e o checkout de cotação de entrega no Playwright.
+3. Depois do gate técnico, não abrir produção pública: executar os gates externos de jurídico, credenciais reais, object storage e restore de backup.
+4. Rodar piloto controlado com restaurantes reais e usar telemetria para priorizar os P1, em vez de adicionar features sem evidência.
