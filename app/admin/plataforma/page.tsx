@@ -1,9 +1,7 @@
-import { requirePlatformAdmin } from "@/lib/platform-admin";
-import PlatformConsoleClient from "./PlatformConsoleClient";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlatformOverviewPage() {
-  await requirePlatformAdmin();
-  return <PlatformConsoleClient />;
+export default function LegacyPlatformOverviewPage() {
+  redirect("/central");
 }
