@@ -25,6 +25,19 @@ export function apiError(error: unknown) {
     );
   }
 
+  if (error instanceof Error && error.message.includes("rapidex_insufficient_stock")) {
+    return json(
+      {
+        ok: false,
+        error: {
+          code: "insufficient_stock",
+          message: "Um dos produtos acabou enquanto o pedido era finalizado. Atualize o cardápio e tente novamente.",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   console.error("Rapidex API error", error instanceof Error ? error.message : "unknown");
   return json(
     { ok: false, error: { code: "internal_error", message: "Não foi possível concluir agora." } },
