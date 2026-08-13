@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retryDelayMs } from "../lib/job-queue";
+import { retryDelayMs } from "../lib/job-queue-policy";
 
 test("job retry uses bounded exponential backoff", () => {
   assert.equal(retryDelayMs(1), 30_000);
