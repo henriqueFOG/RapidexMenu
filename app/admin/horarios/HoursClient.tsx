@@ -7,10 +7,11 @@ import styles from "../../commercial.module.css";
 type DayKey = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
 type Window = { open: string; close: string };
 type WeeklyHours = Partial<Record<DayKey, Window[]>>;
+type FulfillmentSettings = { deliveryEnabled: boolean; pickupEnabled: boolean; dineInEnabled: boolean };
 
 type SettingsPayload = {
   restaurant?: { is_open?: number; timezone?: string };
-  settings?: { weeklyHours?: WeeklyHours | null };
+  settings?: { weeklyHours?: WeeklyHours | null; fulfillment?: FulfillmentSettings };
   error?: { message?: string };
 };
 
@@ -30,6 +31,7 @@ export default function HoursClient() {
   const [enabled, setEnabled] = useState(false);
   const [manualOpen, setManualOpen] = useState(true);
   const [hours, setHours] = useState<WeeklyHours>(defaultHours);
+  const [fulfillment, setFulfillment] = useState<FulfillmentSettings>({ deliveryEnabled: true, pickupEnabled: false, dineInEnabled: false });
   const [timezone, setTimezone] = useState("America/Sao_Paulo");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,7 @@ export default function HoursClient() {
         const saved = payload.settings?.weeklyHours;
         setEnabled(Boolean(saved));
         if (saved) setHours({ ...defaultHours, ...saved });
+        if (payload.settings?.fulfillment) setFulfillment(payload.settings.fulfillment);
         setManualOpen(Boolean(payload.restaurant?.is_open));
         setTimezone(payload.restaurant?.timezone || "America/Sao_Paulo");
       })
@@ -60,6 +63,9 @@ export default function HoursClient() {
       return { ...current, [day]: [{ ...currentWindow, [field]: value }] };
     });
   }
+  function setMode(mode: keyof FulfillmentSettings, active: boolean) {
+    setFulfillment((current) => ({ ...current, [mode]: active }));
+  }
 
   async function save() {
     setBusy(true); setError(""); setMessage("");
@@ -67,13 +73,13 @@ export default function HoursClient() {
       const response = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ isOpen: manualOpen, weeklyHours: enabled ? hours : null }),
+        body: JSON.stringify({ isOpen: manualOpen, weeklyHours: enabled ? hours : null, fulfillment }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
-      if (!response.ok) throw new Error(payload.error?.message || "Não foi possível salvar os horários.");
-      setMessage(enabled ? "Agenda semanal salva. O backend já está usando esses horários." : "Agenda automática desativada. O botão manual controla a loja.");
+      if (!response.ok) throw new Error(payload.error?.message || "Não foi possível salvar a operação.");
+      setMessage("Operação salva. Horários e modalidades já estão valendo no cardápio e na API de pedidos.");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível salvar os horários.");
+      setError(reason instanceof Error ? reason.message : "Não foi possível salvar a operação.");
     } finally { setBusy(false); }
   }
 
@@ -82,8 +88,8 @@ export default function HoursClient() {
   return <main className={styles.shell}><section className={styles.card} style={{ maxWidth: 900 }}>
     <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
     <small className={styles.kicker}>OPERAÇÃO</small>
-    <h1 className={styles.title}>Horários de funcionamento</h1>
-    <p className={styles.intro}>O cardápio e a API de pedidos usam a mesma agenda. Horários que cruzam meia-noite, como 18:00–02:00, são aceitos.</p>
+    <h1 className={styles.title}>Horários e modalidades</h1>
+    <p className={styles.intro}>O cardápio e a API de pedidos usam a mesma configuração. Horários que cruzam meia-noite, como 18:00–02:00, são aceitos.</p>
 
     {error && <p className={styles.error}>{error}</p>}
     {message && <p className={styles.success}>{message}</p>}
@@ -97,6 +103,16 @@ export default function HoursClient() {
           <option value="paused">Pausado agora</option>
         </select>
       </label>
+    </section>
+
+    <section className={styles.panel}>
+      <h2>Modalidades de atendimento</h2>
+      <p>Ative somente os fluxos que sua equipe consegue cumprir. Pelo menos uma modalidade precisa ficar ativa.</p>
+      <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><input type="checkbox" checked={fulfillment.deliveryEnabled} onChange={(event) => setMode("deliveryEnabled", event.target.checked)} /><span><b>Entrega</b><small style={{ display: "block" }}>Exige endereço e aplica taxa, pedido mínimo e tempo logístico.</small></span></label>
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><input type="checkbox" checked={fulfillment.pickupEnabled} onChange={(event) => setMode("pickupEnabled", event.target.checked)} /><span><b>Retirada</b><small style={{ display: "block" }}>Sem taxa de entrega e sem endereço. O prazo considera somente preparo/fila.</small></span></label>
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><input type="checkbox" checked={fulfillment.dineInEnabled} onChange={(event) => setMode("dineInEnabled", event.target.checked)} /><span><b>Mesa / consumo no local</b><small style={{ display: "block" }}>Use QR por mesa, por exemplo: <code>/loja/sua-loja?mesa=12</code>.</small></span></label>
+      </div>
     </section>
 
     <section className={styles.panel}>
@@ -123,7 +139,7 @@ export default function HoursClient() {
       </div>}
     </section>
 
-    <button className={styles.button} disabled={busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar horários"}</button>
+    <button className={styles.button} disabled={busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar operação"}</button>
     <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">← Voltar ao painel</Link></div>
   </section></main>;
 }
