@@ -1,4 +1,5 @@
 import { audit, requireAdminContext, requireRole } from "@/lib/admin-auth";
+import { fulfillmentSettingsFrom, normalizeFulfillmentSettings } from "@/lib/fulfillment";
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
 import { validateWeeklyHours } from "@/lib/store-availability";
@@ -14,6 +15,7 @@ export async function GET() {
       .bind(context.restaurantId)
       .first<Record<string, unknown>>();
     const settings = safeJson(restaurant?.settings_json);
+    settings.fulfillment = fulfillmentSettingsFrom(settings);
     return json({ ok: true, restaurant, settings });
   } catch (error) {
     return apiError(error);
@@ -50,6 +52,9 @@ export async function PATCH(request: Request) {
             : null;
     if (body.brandColor !== undefined) settings.brandColor = optionalString(body.brandColor, "Cor", 20);
     if (body.cuisine !== undefined) settings.cuisine = optionalString(body.cuisine, "Categoria", 80);
+    if (body.fulfillment !== undefined) {
+      settings.fulfillment = normalizeFulfillmentSettings(body.fulfillment, fulfillmentSettingsFrom(settings));
+    }
     if (body.weeklyHours !== undefined) {
       try { settings.weeklyHours = validateWeeklyHours(body.weeklyHours); }
       catch (error) {
@@ -83,7 +88,7 @@ export async function PATCH(request: Request) {
     await audit(context, "restaurant.settings_updated", "restaurant", context.restaurantId, {
       fields: Object.keys(body),
     });
-    return json({ ok: true });
+    return json({ ok: true, fulfillment: fulfillmentSettingsFrom(settings) });
   } catch (error) {
     return apiError(error);
   }
