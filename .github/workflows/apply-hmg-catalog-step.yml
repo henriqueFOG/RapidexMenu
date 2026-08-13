@@ -1,0 +1,25 @@
+name: Apply HMG catalog cache step
+
+on:
+  push:
+    branches: [agent/commercial-hardening-p1]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/commercial-hardening-p1
+      - run: node scripts/patch-hmg-catalog-cache-step.mjs
+      - run: |
+          if git diff --quiet -- .github/workflows/hmg-e2e.yml; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/hmg-e2e.yml
+          git commit -m "test: gate versioned public catalog cache"
+          git push origin HEAD:agent/commercial-hardening-p1
