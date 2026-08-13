@@ -1,5 +1,3 @@
-BEGIN;
-
 -- Commercial invariant: an order item must never reserve stock from another tenant
 -- and two concurrent checkouts must never oversell the same controlled product.
 -- The product row lock is held until the surrounding order transaction commits.
@@ -52,10 +50,13 @@ BEGIN
 END;
 $$;
 
+-- statement-breakpoint
+
 DROP TRIGGER IF EXISTS rapidex_order_item_stock_guard ON order_items;
+
+-- statement-breakpoint
+
 CREATE TRIGGER rapidex_order_item_stock_guard
 BEFORE INSERT ON order_items
 FOR EACH ROW
 EXECUTE FUNCTION rapidex_guard_order_item_stock();
-
-COMMIT;
