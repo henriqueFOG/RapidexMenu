@@ -35,6 +35,17 @@ test("PWA registration forces service-worker update checks and exposes offline s
   assert.match(lifecycle, /Sem conexão/);
 });
 
+test("restaurant admin exposes a non-invasive install flow including iOS guidance", () => {
+  const prompt = read("app/admin/InstallPwaPrompt.tsx");
+  const layout = read("app/admin/layout.tsx");
+  assert.match(prompt, /beforeinstallprompt/);
+  assert.match(prompt, /appinstalled/);
+  assert.match(prompt, /display-mode: standalone/);
+  assert.match(prompt, /Adicionar à Tela de Início/);
+  assert.match(prompt, /reminderAfterMs = 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(layout, /<InstallPwaPrompt \/>/);
+});
+
 test("KDS blocks mutations offline and refreshes on reconnection", () => {
   const kds = read("app/admin/cozinha/KitchenDisplayClient.tsx");
   assert.match(kds, /!navigator\.onLine/);
