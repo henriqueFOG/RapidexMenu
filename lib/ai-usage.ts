@@ -1,24 +1,10 @@
+import { aiDailyLimit, normalizeAiUsagePlan, type AiUsageKind, type AiUsagePlan } from "./ai-usage-policy";
 import { getDatabase } from "./runtime";
 
-type AiUsageKind = "response" | "transcription";
-type RapidexPlan = "start" | "growth" | "scale";
-
 type TenantCommercialState = {
-  plan: RapidexPlan;
+  plan: AiUsagePlan;
   status: string;
   trial_ends_at: number | null;
-};
-
-const RESPONSE_DAILY_LIMIT: Record<RapidexPlan, number> = {
-  start: 300,
-  growth: 2_000,
-  scale: 10_000,
-};
-
-const TRANSCRIPTION_DAILY_LIMIT: Record<RapidexPlan, number> = {
-  start: 40,
-  growth: 250,
-  scale: 1_000,
 };
 
 const FAILURE_WINDOW_MS = 5 * 60_000;
@@ -32,12 +18,9 @@ export async function reserveAiUsage(restaurantId: string, kind: AiUsageKind, no
   ).bind(restaurantId).first<TenantCommercialState>();
   if (!state) return { allowed: false, reason: "tenant_not_found" as const, limit: 0, used: 0 };
 
-  const plan = normalizePlan(state.plan);
-  // Trial accounts use a deliberately smaller safety ceiling. This is an internal
-  // abuse/cost guard, not a published usage allowance or billing entitlement.
+  const plan = normalizeAiUsagePlan(state.plan);
   const trialActive = state.status === "trial" && (!state.trial_ends_at || Number(state.trial_ends_at) > now);
-  const baseLimit = kind === "response" ? RESPONSE_DAILY_LIMIT[plan] : TRANSCRIPTION_DAILY_LIMIT[plan];
-  const limit = trialActive ? Math.min(baseLimit, kind === "response" ? 300 : 40) : baseLimit;
+  const limit = aiDailyLimit({ plan, kind, trialActive });
   const usageDay = utcDay(now);
   const responseIncrement = kind === "response" ? 1 : 0;
   const transcriptionIncrement = kind === "transcription" ? 1 : 0;
@@ -147,19 +130,6 @@ export async function recordAiProviderFailure(
     FAILURE_THRESHOLD,
     now + CIRCUIT_OPEN_MS,
   ).run();
-}
-
-export function aiUsageLimitsForPlan(plan: string) {
-  const normalized = normalizePlan(plan);
-  return {
-    responseDaily: RESPONSE_DAILY_LIMIT[normalized],
-    transcriptionDaily: TRANSCRIPTION_DAILY_LIMIT[normalized],
-  };
-}
-
-function normalizePlan(plan: string): RapidexPlan {
-  if (plan === "scale" || plan === "growth") return plan;
-  return "start";
 }
 
 function utcDay(timestamp: number) {
