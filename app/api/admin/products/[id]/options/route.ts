@@ -1,7 +1,7 @@
 import { audit, requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
-import { optionalString, requiredString } from "@/lib/validation";
+import { requiredString } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -166,7 +166,6 @@ function normalizeGroups(value: unknown) {
       priceDeltaCents: integerBetween(option.priceDeltaCents ?? 0, 0, 1_000_000, "Acréscimo de preço"),
       costDeltaCents: integerBetween(option.costDeltaCents ?? 0, 0, 1_000_000, "Acréscimo de custo"),
       available: option.available === undefined ? true : option.available === true,
-      note: optionalString(undefined, "", 1),
     }));
     if (minSelect > options.filter((option) => option.available).length) {
       throw new HttpError(400, `${name}: não há opções disponíveis suficientes para cumprir o mínimo.`, "validation_error");
