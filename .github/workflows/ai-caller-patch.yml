@@ -1,0 +1,42 @@
+name: AI caller patch
+
+on:
+  push:
+    branches: [agent/commercial-hardening-p0]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/commercial-hardening-p0
+      - name: Scope WhatsApp AI calls to tenant
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/api/webhooks/whatsapp/route.ts')
+          source = path.read_text()
+          source = source.replace(
+              'text = await transcribeAudio(media.blob, `pedido.${extensionFor(media.mimeType)}`);',
+              'try {\n      text = await transcribeAudio(restaurantId, media.blob, `pedido.${extensionFor(media.mimeType)}`);\n    } catch (error) {\n      if (error instanceof HttpError && ["ai_usage_limit", "ai_circuit_open", "transcription_failed", "integration_not_configured"].includes(error.code)) {\n        text = "Quero falar com um atendente humano porque meu áudio não pôde ser processado.";\n      } else {\n        throw error;\n      }\n    }',
+          )
+          source = source.replace(
+              'const reply = await generateSalesReply({\n    restaurantName: restaurant.name,',
+              'const reply = await generateSalesReply({\n    restaurantId,\n    restaurantName: restaurant.name,',
+          )
+          path.write_text(source)
+          PY
+          if git diff --quiet -- app/api/webhooks/whatsapp/route.ts; then
+            echo "WhatsApp AI callers already scoped."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/api/webhooks/whatsapp/route.ts
+          git commit -m "ai: scope WhatsApp usage to tenant"
+          git push origin HEAD:agent/commercial-hardening-p0
