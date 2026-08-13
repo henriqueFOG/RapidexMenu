@@ -1,5 +1,7 @@
 import { HttpError } from "./http";
+import { structuredLog } from "./observability";
 import { getBindings, getDatabase } from "./runtime";
+import { subscriptionEventStatement } from "./subscription-events";
 
 export const PLAN_PRICES = { start: 9700, growth: 29700, scale: 59700 } as const;
 export type RapidexPlan = keyof typeof PLAN_PRICES;
@@ -49,24 +51,36 @@ export async function createBillingCheckout(input: {
     ? await response.json().catch(() => ({})) as ProviderSubscription & { message?: string }
     : await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
   if (!response.ok || !provider.id || !provider.init_point) {
-    console.error("Rapidex billing checkout failed", response.status, provider.message || "unknown");
+    structuredLog("error", "billing.checkout_failed", { status: response.status, providerMessage: provider.message || "unknown" });
     throw new HttpError(502, "Não foi possível abrir a assinatura agora.", "billing_provider_error");
   }
 
   const now = Date.now();
   const db = getDatabase();
-  await db.prepare(
-    `INSERT INTO platform_subscriptions
-     (id, restaurant_id, provider, provider_subscription_id, plan, amount_cents, status, checkout_url,
-      next_payment_at, provider_data_json, created_at, updated_at)
-     VALUES (?, ?, 'mercado_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    crypto.randomUUID(), input.restaurantId, provider.id, input.plan, amountCents,
-    normalizeStatus(provider.status), provider.init_point, parseDate(provider.next_payment_date),
-    JSON.stringify(provider), now, now,
-  ).run();
+  const subscriptionId = crypto.randomUUID();
+  const status = normalizeStatus(provider.status);
+  await db.batch([
+    db.prepare(
+      `INSERT INTO platform_subscriptions
+       (id, restaurant_id, provider, provider_subscription_id, plan, amount_cents, status, checkout_url,
+        next_payment_at, provider_data_json, created_at, updated_at)
+       VALUES (?, ?, 'mercado_pago', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      subscriptionId, input.restaurantId, provider.id, input.plan, amountCents,
+      status, provider.init_point, parseDate(provider.next_payment_date),
+      JSON.stringify(provider), now, now,
+    ),
+    subscriptionEventStatement(db, {
+      subscriptionId,
+      restaurantId: input.restaurantId,
+      source: "checkout_create",
+      before: { status: null, plan: null, amountCents: null },
+      after: { status, plan: input.plan, amountCents },
+      occurredAt: now,
+    }),
+  ]);
 
-  return { id: provider.id, checkoutUrl: provider.init_point, status: normalizeStatus(provider.status) };
+  return { id: provider.id, checkoutUrl: provider.init_point, status };
 }
 
 export async function fetchProviderSubscription(providerId: string) {
@@ -90,7 +104,7 @@ export async function cancelProviderSubscription(providerId: string) {
   });
   const provider = await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
   if (!response.ok || !provider.id) {
-    console.error("Rapidex billing cancellation failed", response.status, provider.message || "unknown");
+    structuredLog("error", "billing.cancellation_failed", { status: response.status, providerMessage: provider.message || "unknown" });
     throw new HttpError(502, "Não foi possível cancelar a renovação agora.", "billing_provider_error");
   }
   return provider;
@@ -159,8 +173,6 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
       ).bind(accessEndsAt > now ? "active" : "paused", local.plan, accessEndsAt, now, local.restaurant_id),
     );
   } else if (status === "pending" && local.status === "authorized") {
-    // A renewal can transiently leave the provider pending. Preserve service for a short,
-    // explicit grace window instead of causing an immediate checkout outage.
     accessEndsAt = paidThrough && paidThrough > now ? paidThrough : now + BILLING_GRACE_MS;
     accessReason = paidThrough && paidThrough > now ? "paid_period" : "grace";
     restaurantStatements.push(
@@ -170,13 +182,24 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
     );
   }
 
-  await db.batch([
+  const statements: D1PreparedStatement[] = [
     db.prepare(
       `UPDATE platform_subscriptions SET status = ?, next_payment_at = ?, provider_data_json = ?, updated_at = ?
        WHERE id = ?`,
     ).bind(status, subscriptionNextPayment, JSON.stringify(provider), now, local.id),
     ...restaurantStatements,
-  ]);
+  ];
+  if (status !== local.status) {
+    statements.push(subscriptionEventStatement(db, {
+      subscriptionId: local.id,
+      restaurantId: local.restaurant_id,
+      source: "provider_sync",
+      before: { status: local.status, plan: local.plan, amountCents: Number(local.amount_cents) },
+      after: { status, plan: local.plan, amountCents: Number(local.amount_cents) },
+      occurredAt: now,
+    }));
+  }
+  await db.batch(statements);
   return { restaurantId: local.restaurant_id, status, plan: local.plan, accessEndsAt, accessReason };
 }
 
@@ -199,7 +222,10 @@ export async function reconcilePlatformSubscriptions(limit = 50) {
       reconciled += 1;
     } catch (error) {
       failed += 1;
-      console.error("Rapidex billing reconciliation failed", row.provider_subscription_id, error instanceof Error ? error.message : "unknown");
+      structuredLog("error", "billing.reconciliation_failed", {
+        providerSubscriptionId: row.provider_subscription_id,
+        error,
+      });
     }
   }
   return { configured: true, scanned: rows.results.length, reconciled, failed };

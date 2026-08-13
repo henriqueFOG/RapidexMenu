@@ -59,6 +59,7 @@ type MenuData = {
       pickupEnabled: boolean;
       dineInEnabled: boolean;
     };
+    catalogVersion: number;
   };
   categories: Array<{ id: string; name: string; products: Product[] }>;
   uncategorized: Product[];
@@ -121,15 +122,69 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [clientOrderId] = useState(() => typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
-    fetch(`/api/public/menu/${encodeURIComponent(slug)}`)
-      .then(async (response) => {
-        const payload = await response.json() as MenuData & { error?: { message?: string } };
-        if (!response.ok) throw new Error(payload.error?.message || "Loja não encontrada.");
-        return payload as MenuData;
-      })
-      .then(setMenu)
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Não foi possível abrir a loja."))
-      .finally(() => setLoading(false));
+    const controller = new AbortController();
+    const encodedSlug = encodeURIComponent(slug);
+
+    async function loadVersionedMenu() {
+      setLoading(true);
+      setError("");
+      try {
+        let stateResponse = await fetch(`/api/public/store-state/${encodedSlug}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        let statePayload = await stateResponse.json() as {
+          restaurant?: MenuData["restaurant"];
+          error?: { message?: string };
+        };
+        if (!stateResponse.ok || !statePayload.restaurant) {
+          throw new Error(statePayload.error?.message || "Loja não encontrada.");
+        }
+
+        let catalogResponse = await fetch(`/api/public/catalog/${encodedSlug}?v=${statePayload.restaurant.catalogVersion}`, {
+          signal: controller.signal,
+        });
+        if (catalogResponse.status === 409) {
+          // An admin changed the menu between state and catalog requests. Refresh
+          // the lightweight state once and request the new immutable version.
+          stateResponse = await fetch(`/api/public/store-state/${encodedSlug}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          statePayload = await stateResponse.json() as {
+            restaurant?: MenuData["restaurant"];
+            error?: { message?: string };
+          };
+          if (!stateResponse.ok || !statePayload.restaurant) {
+            throw new Error(statePayload.error?.message || "Loja não encontrada.");
+          }
+          catalogResponse = await fetch(`/api/public/catalog/${encodedSlug}?v=${statePayload.restaurant.catalogVersion}`, {
+            signal: controller.signal,
+          });
+        }
+        const catalogPayload = await catalogResponse.json() as {
+          categories?: MenuData["categories"];
+          uncategorized?: MenuData["uncategorized"];
+          error?: { message?: string };
+        };
+        if (!catalogResponse.ok) {
+          throw new Error(catalogPayload.error?.message || "Não foi possível carregar o cardápio.");
+        }
+        setMenu({
+          restaurant: statePayload.restaurant,
+          categories: catalogPayload.categories || [],
+          uncategorized: catalogPayload.uncategorized || [],
+        });
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        setError(reason instanceof Error ? reason.message : "Não foi possível abrir a loja.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void loadVersionedMenu();
+    return () => controller.abort();
   }, [slug]);
 
   useEffect(() => {

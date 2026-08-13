@@ -174,15 +174,15 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ⏳ APM/latência p95/p99.
 - ⏳ Uptime monitor externo.
 - ⏳ Alertas para 5xx, pagamento/webhook, fila, WhatsApp, IA, banco, storage e e-mail.
-- ⏳ Correlation/request ID e logs estruturados com política de redaction.
+- 🧪 Correlation/request ID e logs estruturados com política de redaction implementados no hardening P1; aguardam gate integrado do branch e observação em HMG.
 - ⏳ Status page quando a base justificar.
 
 ## Jobs assíncronos e resiliência
 
-- ⏳ Fila para WhatsApp outbound, campanhas, e-mails e trabalhos pesados.
-- ⏳ Retry exponencial + DLQ + idempotency key por job.
-- ⏳ Dashboard de falhas e reprocessamento seguro.
-- ⏳ Receber/validar/persistir webhooks rapidamente e processar trabalho pesado fora do request quando necessário.
+- 🧪 Fila durável para jobs, retry e DLQ implementados no hardening P1; aguardam gate integrado do branch/HMG.
+- 🧪 Idempotency key, inspeção e reprocessamento seguro implementados; aguardam validação operacional em HMG.
+- 🧪 Dashboard de jobs disponível no backoffice da plataforma; aguarda teste de suporte real.
+- ⏳ Migrar todos os webhooks/trabalhos pesados elegíveis para processamento assíncrono depois de validar os fluxos prioritários.
 
 ## Onboarding e self-service
 
@@ -203,6 +203,16 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ⏳ SLA/atraso operacional avançado e previsão pela fila real.
 - ⏳ Permissões específicas para cancelamento/reembolso.
 
+## PWA / mobile operacional
+
+- 🧪 **PWA instalável:** manifest App Router, modo `standalone`, atalhos, ícones PNG 192/512/maskable gerados pelo servidor, Apple Web App metadata e service worker registrados; aguarda validação de instalação no HMG em dispositivos reais.
+- 🧪 **KDS em tablet:** layout/touch targets/safe areas ajustados, polling pausado fora de foco e estado online visível; aguarda teste físico em tablet/telefone.
+- 🧪 **Offline/reconexão:** service worker não intercepta API/admin/pagamento, existe fallback offline, mutações KDS são bloqueadas sem rede e nunca são repetidas automaticamente após reconexão; aguarda teste de queda de rede em HMG.
+- 🧪 **Notificações:** permissão + toast visual + som continuam como fallback e notificações em primeiro plano usam o service worker quando disponível; background Web Push permanece opcional até confirmar necessidade operacional nos pilotos.
+- ✅ Testes estáticos `tests/pwa.test.ts` protegem manifest, isolamento de cache, registro do service worker e bloqueio offline do KDS no código.
+
+**Aceite antes de promover para ✅ completo:** instalar pelo HMG em Android/Chrome e iPhone/Safari, abrir em modo standalone, alternar rede durante KDS, confirmar que nenhuma mutação é duplicada e validar alerta visual/sonoro/notificação em cenário de pedido real.
+
 ## CRM, recompra e analytics
 
 - ✅ Base de clientes por restaurante, histórico, consentimento, LTV e frequência básica.
@@ -222,7 +232,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 
 ## Performance e capacidade
 
-- ⏳ Cache/invalidação do catálogo público por restaurante.
+- 🧪 Cache/invalidação do catálogo público por restaurante implementado no hardening P1; aguarda gate integrado e HMG.
 - ⏳ Paginação administrativa em telas que ultrapassarem limites atuais.
 - ⏳ Load test formal de pico além dos testes de concorrência P0.
 - ⏳ Índices revisados a partir de queries reais/telemetria.
@@ -291,6 +301,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - 🔒 Backup restaurado com evidência.
 - ⏳ Monitoramento e alertas em produção.
 - ✅ Política de suporte/SLA documentada; 🔒 operação/canais reais ainda precisam ser definidos.
+- ⏳ PWA validada em HMG com instalação/standalone/reconexão em dispositivos reais.
 - ⏳ Pelo menos 3 restaurantes reais por 7 dias sem incidente grave.
 - ⏳ Evidência de clientes pagantes e pelo menos uma renovação real.
 - ✅ Onboarding técnico self-service validado; ⏳ medir ativação real em clientes piloto.
@@ -298,9 +309,10 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 
 ## Próximo gate imediato
 
-O gate técnico automatizado do branch de hardening foi concluído no SHA de código `6384828868f464e558b7e8d71cd7fcec60e8c5d5`. O produto ainda **não deve ser declarado pronto para escala pública** até concluir os gates externos abaixo:
+O gate técnico automatizado P0 foi concluído no SHA de código `6384828868f464e558b7e8d71cd7fcec60e8c5d5`. O hardening P1/PWA está em validação e o produto ainda **não deve ser declarado pronto para escala pública** até concluir os gates externos abaixo:
 
 1. Jurídico/LGPD: entidade contratante, Termos, Privacidade, DPA, retenção e subprocessadores.
 2. Produção real: Mercado Pago, Meta/WhatsApp, e-mail transacional e object storage com credenciais definitivas.
 3. Continuidade: backup contratado, restore comprovado e monitoramento/alertas de produção.
-4. Piloto controlado: restaurantes reais, sete dias sem incidente grave, pagamento/renovação e métricas de ativação/retenção.
+4. PWA/HMG: instalação real, standalone, reconexão e alertas validados em dispositivos móveis/tablet.
+5. Piloto controlado: restaurantes reais, sete dias sem incidente grave, pagamento/renovação e métricas de ativação/retenção.
