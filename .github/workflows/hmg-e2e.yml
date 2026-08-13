@@ -40,6 +40,7 @@ jobs:
       RAPIDEX_SIGNUP_ENABLED: "true"
       RAPIDEX_SESSION_SECRET: hmg-ci-session-secret-32-characters-minimum-only
       RAPIDEX_INTEGRATION_SECRET: hmg-ci-integration-secret-32-characters-minimum
+      CRON_SECRET: hmg-ci-cron-secret-32-characters-minimum-only
       DATABASE_URL: postgresql://rapidex@127.0.0.1:5432/rapidex_hmg?sslmode=disable
       RAPIDEX_POSTGRES_WS_PROXY: 127.0.0.1:9876
       RAPIDEX_E2E_URL: http://localhost:3000
