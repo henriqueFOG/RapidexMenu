@@ -14,7 +14,7 @@ export class HttpError extends Error {
 export function json(data: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json; charset=utf-8");
-  headers.set("cache-control", "no-store");
+  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
   headers.set("x-content-type-options", "nosniff");
   if (!headers.has("x-request-id")) headers.set("x-request-id", correlationId());
   return Response.json(data, { ...init, headers });
