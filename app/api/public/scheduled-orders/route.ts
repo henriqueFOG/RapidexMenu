@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const db = getDatabase();
-    const limit = await consumeRateLimit(db, await rateLimitKey(request, "scheduled-orders"), 15, 60_000);
+    const limit = await consumeRateLimit(db, await rateLimitKey(request, "scheduled-orders"), 40, 60_000);
     if (!limit.allowed) throw new HttpError(429, "Muitas tentativas. Aguarde um minuto.", "rate_limited");
 
     await ensureDemoData(db);
