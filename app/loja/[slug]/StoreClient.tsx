@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
+type FulfillmentType = "delivery" | "pickup" | "dine_in";
 type Product = {
   id: string;
   name: string;
@@ -37,9 +38,16 @@ type MenuData = {
     pixAvailable: boolean;
     deliveryFeeCents: number;
     minimumOrderCents: number;
+    prepMinutes: number;
+    deliveryMinutes: number;
     estimatedMinutes: number;
     brandColor: string;
     cuisine: string;
+    fulfillment: {
+      deliveryEnabled: boolean;
+      pickupEnabled: boolean;
+      dineInEnabled: boolean;
+    };
   };
   categories: Array<{ id: string; name: string; products: Product[] }>;
   uncategorized: Product[];
@@ -53,6 +61,8 @@ type OrderResult = {
     restaurantName: string;
     totalCents: number;
     status: string;
+    fulfillmentType: FulfillmentType;
+    tableCode?: string | null;
     promisedFromMinutes: number;
     promisedToMinutes: number;
   };
@@ -80,6 +90,8 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [checkout, setCheckout] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
   const [recommendations, setRecommendations] = useState<SmartUpsell[]>([]);
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("delivery");
+  const [tableCode, setTableCode] = useState("");
   const [clientOrderId] = useState(() => typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
@@ -93,6 +105,20 @@ export default function StoreClient({ slug }: { slug: string }) {
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Não foi possível abrir a loja."))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedTable = (params.get("mesa") || "").trim().slice(0, 30);
+    if (requestedTable && menu.restaurant.fulfillment.dineInEnabled) {
+      setTableCode(requestedTable);
+      setFulfillmentType("dine_in");
+      return;
+    }
+    if (menu.restaurant.fulfillment.deliveryEnabled) setFulfillmentType("delivery");
+    else if (menu.restaurant.fulfillment.pickupEnabled) setFulfillmentType("pickup");
+    else if (menu.restaurant.fulfillment.dineInEnabled) setFulfillmentType("dine_in");
+  }, [menu]);
 
   const allProducts = useMemo(
     () => menu ? [...menu.categories.flatMap((item) => item.products), ...menu.uncategorized] : [],
@@ -108,7 +134,13 @@ export default function StoreClient({ slug }: { slug: string }) {
   const selectedKey = selectedProductIds.join(",");
   const itemCount = entries.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = entries.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
-  const total = subtotal + (menu?.restaurant.deliveryFeeCents || 0);
+  const deliveryActive = fulfillmentType === "delivery";
+  const deliveryFee = deliveryActive ? (menu?.restaurant.deliveryFeeCents || 0) : 0;
+  const total = subtotal + deliveryFee;
+  const minimumRequired = deliveryActive ? (menu?.restaurant.minimumOrderCents || 0) : 0;
+  const estimatedMinutes = menu
+    ? menu.restaurant.prepMinutes + (deliveryActive ? menu.restaurant.deliveryMinutes : 0)
+    : 0;
 
   useEffect(() => {
     if (!menu || !selectedProductIds.length) {
@@ -163,44 +195,70 @@ export default function StoreClient({ slug }: { slug: string }) {
   if (loading) return <StoreLoading />;
   if (error || !menu) return <StoreError message={error || "Loja não encontrada."} />;
 
+  const fulfillment = menu.restaurant.fulfillment;
+  const modeCount = Number(fulfillment.deliveryEnabled) + Number(fulfillment.pickupEnabled) + Number(fulfillment.dineInEnabled);
+  const fulfillmentLabel = fulfillmentType === "delivery" ? "Entrega" : fulfillmentType === "pickup" ? "Retirada" : `Mesa${tableCode ? ` ${tableCode}` : ""}`;
+
   return <main className="rm-store" style={{ "--store-accent": menu.restaurant.brandColor } as React.CSSProperties}>
     <header className="rm-store-top"><Link href="/" className="rm-store-powered"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link><div><button onClick={() => document.getElementById("rm-search")?.focus()}>⌕ <span>Buscar</span></button>{menu.restaurant.whatsapp && <a href={`https://wa.me/${menu.restaurant.whatsapp}`} target="_blank" rel="noreferrer">💬 <span>WhatsApp</span></a>}</div></header>
     <section className="rm-store-cover"><div><span>🍔</span><i>⚡</i></div></section>
-    <section className="rm-store-info"><div className="rm-store-logo">⚡</div><div><small>{menu.restaurant.cuisine}</small><h1>{menu.restaurant.name}</h1><p><span className={menu.restaurant.isOpen ? "open" : "closed"}>{menu.restaurant.isOpen ? "● Aberto" : "● Fechado"}</span> · {menu.restaurant.city}, {menu.restaurant.state}</p></div><div className="rm-store-facts"><span>◷ <b>{menu.restaurant.estimatedMinutes}–{menu.restaurant.estimatedMinutes + 8} min</b><small>Entrega estimada</small></span><span>🛵 <b>{currency.format(menu.restaurant.deliveryFeeCents / 100)}</b><small>Taxa de entrega</small></span><span>▣ <b>{currency.format(menu.restaurant.minimumOrderCents / 100)}</b><small>Pedido mínimo</small></span></div></section>
+    <section className="rm-store-info"><div className="rm-store-logo">⚡</div><div><small>{menu.restaurant.cuisine}</small><h1>{menu.restaurant.name}</h1><p><span className={menu.restaurant.isOpen ? "open" : "closed"}>{menu.restaurant.isOpen ? "● Aberto" : "● Fechado"}</span> · {menu.restaurant.city}, {menu.restaurant.state}</p></div><div className="rm-store-facts"><span>◷ <b>{estimatedMinutes}–{estimatedMinutes + 8} min</b><small>{deliveryActive ? "Entrega estimada" : "Preparo estimado"}</small></span><span>{deliveryActive ? "🛵" : fulfillmentType === "pickup" ? "🛍️" : "🍽️"} <b>{deliveryActive ? currency.format(deliveryFee / 100) : fulfillmentLabel}</b><small>{deliveryActive ? "Taxa de entrega" : "Modalidade"}</small></span><span>▣ <b>{minimumRequired ? currency.format(minimumRequired / 100) : "Sem mínimo"}</b><small>Pedido mínimo</small></span></div></section>
 
     <div className="rm-store-layout">
       <section className="rm-store-catalog">
+        {modeCount > 1 && <div aria-label="Como você quer receber o pedido?" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, padding: 12, border: "1px solid #e4e4e4", borderRadius: 16, background: "#fff" }}>
+          <strong style={{ width: "100%", fontSize: 13 }}>Como você quer receber?</strong>
+          {fulfillment.deliveryEnabled && <button type="button" aria-pressed={fulfillmentType === "delivery"} onClick={() => setFulfillmentType("delivery")} style={modeButton(fulfillmentType === "delivery")}>🛵 Entrega</button>}
+          {fulfillment.pickupEnabled && <button type="button" aria-pressed={fulfillmentType === "pickup"} onClick={() => setFulfillmentType("pickup")} style={modeButton(fulfillmentType === "pickup")}>🛍️ Retirada</button>}
+          {fulfillment.dineInEnabled && <button type="button" aria-pressed={fulfillmentType === "dine_in"} onClick={() => setFulfillmentType("dine_in")} style={modeButton(fulfillmentType === "dine_in")}>🍽️ Consumir no local</button>}
+          {fulfillmentType === "dine_in" && <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800 }}>Mesa <input aria-label="Número ou identificação da mesa" value={tableCode} onChange={(event) => setTableCode(event.target.value.slice(0, 30))} placeholder="Ex.: 12" style={{ width: 90, padding: "8px 10px", border: "1px solid #ccc", borderRadius: 10 }} /></label>}
+        </div>}
         <div className="rm-store-tools"><label>⌕<input id="rm-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar no cardápio" /></label><nav><button className={category === "all" ? "active" : ""} onClick={() => setCategory("all")}>Todos</button>{menu.categories.map((item) => <button className={category === item.id ? "active" : ""} onClick={() => setCategory(item.id)} key={item.id}>{item.name}</button>)}</nav></div>
         <div className="rm-store-section-title"><div><small>FEITO NA HORA</small><h2>{category === "all" ? "Cardápio completo" : menu.categories.find((item) => item.id === category)?.name}</h2></div><span>{visibleProducts.length} opções</span></div>
         <div className="rm-store-products">{visibleProducts.map((product) => <article className={!product.available ? "unavailable" : ""} key={product.id}><div className="rm-store-product-image">{product.imageUrl ? <Image src={product.imageUrl} width={320} height={320} unoptimized alt="" /> : <span>{product.emoji}</span>}{product.tag && <small>{product.tag}</small>}</div><div className="rm-store-product-copy"><div><h3>{product.name}</h3><p>{product.description}</p></div><footer><strong>{currency.format(product.priceCents / 100)}</strong>{product.available ? cart[product.id] ? <div className="rm-qty"><button onClick={() => change(product, -1)}>−</button><b>{cart[product.id].quantity}</b><button onClick={() => add(product)}>+</button></div> : <button onClick={() => add(product)}>Adicionar +</button> : <em>Esgotado</em>}</footer></div></article>)}</div>
         {!visibleProducts.length && <div className="rm-store-empty">Nenhum item encontrado nessa busca.</div>}
       </section>
 
-      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.id}><span>{item.emoji}</span><div><b>{item.name}</b><small>{currency.format(item.priceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => add(item)}>+</button></div></div><em>{currency.format(item.priceCents * item.quantity / 100)}</em></article>)}</div>{recommendations.length > 0 && <div style={{ margin: "8px 16px 14px", padding: 14, borderRadius: 16, background: "#f2f8df", border: "1px solid #dbe9b5" }}><small style={{ fontWeight: 900, letterSpacing: ".08em" }}>✦ RAPIDEX SUGERE</small>{recommendations.slice(0, 1).map((product) => <div key={product.id} style={{ display: "grid", gridTemplateColumns: "42px 1fr auto", gap: 10, alignItems: "center", marginTop: 10 }}><span style={{ fontSize: 26 }}>{product.emoji}</span><div><b style={{ display: "block" }}>{product.name}</b><small>{product.reason} · {currency.format(product.priceCents / 100)}</small></div><button onClick={() => addUpsell(product)} style={{ border: 0, borderRadius: 999, padding: "8px 11px", fontWeight: 900, cursor: "pointer" }}>+ Adicionar</button></div>)}</div>}<div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>Entrega</span><b>{currency.format(menu.restaurant.deliveryFeeCents / 100)}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < menu.restaurant.minimumOrderCents} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : subtotal < menu.restaurant.minimumOrderCents ? `Faltam ${currency.format((menu.restaurant.minimumOrderCents - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço recalculado com segurança no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
+      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO · {fulfillmentLabel.toUpperCase()}</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.id}><span>{item.emoji}</span><div><b>{item.name}</b><small>{currency.format(item.priceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => add(item)}>+</button></div></div><em>{currency.format(item.priceCents * item.quantity / 100)}</em></article>)}</div>{recommendations.length > 0 && <div style={{ margin: "8px 16px 14px", padding: 14, borderRadius: 16, background: "#f2f8df", border: "1px solid #dbe9b5" }}><small style={{ fontWeight: 900, letterSpacing: ".08em" }}>✦ RAPIDEX SUGERE</small>{recommendations.slice(0, 1).map((product) => <div key={product.id} style={{ display: "grid", gridTemplateColumns: "42px 1fr auto", gap: 10, alignItems: "center", marginTop: 10 }}><span style={{ fontSize: 26 }}>{product.emoji}</span><div><b style={{ display: "block" }}>{product.name}</b><small>{product.reason} · {currency.format(product.priceCents / 100)}</small></div><button onClick={() => addUpsell(product)} style={{ border: 0, borderRadius: 999, padding: "8px 11px", fontWeight: 900, cursor: "pointer" }}>+ Adicionar</button></div>)}</div>}<div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>{deliveryActive ? "Entrega" : fulfillmentType === "pickup" ? "Retirada" : "Atendimento no local"}</span><b>{deliveryActive ? currency.format(deliveryFee / 100) : "R$ 0,00"}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < minimumRequired || (fulfillmentType === "dine_in" && !tableCode.trim())} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : fulfillmentType === "dine_in" && !tableCode.trim() ? "Informe a mesa" : subtotal < minimumRequired ? `Faltam ${currency.format((minimumRequired - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço e modalidade validados novamente no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
     </div>
 
     {itemCount > 0 && <button className="rm-mobile-cart" onClick={() => setCartOpen(true)}><span><b>{itemCount}</b> Ver sacola</span><strong>{currency.format(total / 100)}</strong></button>}
     {cartOpen && <button className="rm-cart-backdrop" onClick={() => setCartOpen(false)} aria-label="Fechar sacola" />}
-    {checkout && <Checkout menu={menu} entries={entries} total={total} clientOrderId={clientOrderId} close={() => setCheckout(false)} done={(order) => { setCheckout(false); setResult(order); setCart({}); setRecommendations([]); setCartOpen(false); }} />}
+    {checkout && <Checkout menu={menu} entries={entries} total={total} clientOrderId={clientOrderId} fulfillmentType={fulfillmentType} tableCode={tableCode.trim()} close={() => setCheckout(false)} done={(order) => { setCheckout(false); setResult(order); setCart({}); setRecommendations([]); setCartOpen(false); }} />}
     {result && <OrderSuccess result={result} close={() => setResult(null)} />}
   </main>;
 }
 
-function Checkout({ menu, entries, total, clientOrderId, close, done }: { menu: MenuData; entries: CartEntry[]; total: number; clientOrderId: string; close: () => void; done: (result: OrderResult) => void }) {
+function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableCode, close, done }: { menu: MenuData; entries: CartEntry[]; total: number; clientOrderId: string; fulfillmentType: FulfillmentType; tableCode: string; close: () => void; done: (result: OrderResult) => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [payment, setPayment] = useState(menu.restaurant.pixAvailable ? "pix" : "card_on_delivery");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/public/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restaurantSlug: menu.restaurant.slug, clientOrderId, source: "menu", customer: { name: form.get("name"), phone: form.get("phone"), email: form.get("email") || null, whatsappConsent: form.get("consent") === "on", address: { street: form.get("street"), number: form.get("number"), neighborhood: form.get("neighborhood"), city: form.get("city"), state: form.get("state"), postalCode: form.get("postalCode"), complement: form.get("complement") || null } }, items: entries.map((item) => ({ productId: item.id, quantity: item.quantity })), paymentMethod: payment }) });
+      const address = fulfillmentType === "delivery" ? { street: form.get("street"), number: form.get("number"), neighborhood: form.get("neighborhood"), city: form.get("city"), state: form.get("state"), postalCode: form.get("postalCode"), complement: form.get("complement") || null } : null;
+      const response = await fetch("/api/public/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restaurantSlug: menu.restaurant.slug, clientOrderId, source: "menu", fulfillmentType, tableCode: fulfillmentType === "dine_in" ? tableCode : null, customer: { name: form.get("name"), phone: form.get("phone"), email: form.get("email") || null, whatsappConsent: form.get("consent") === "on", address }, items: entries.map((item) => ({ productId: item.id, quantity: item.quantity })), paymentMethod: payment }) });
       const payload = await response.json() as OrderResult & { error?: { message?: string } }; if (!response.ok) throw new Error(payload.error?.message || "Não foi possível enviar o pedido."); done(payload);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar o pedido."); } finally { setBusy(false); }
   };
-  return <div className="rm-modal-backdrop" onMouseDown={close}><div className="rm-checkout" onMouseDown={(event) => event.stopPropagation()}><header><div><small>ÚLTIMO PASSO</small><h2>Finalizar pedido</h2><p>Total de {currency.format(total / 100)}</p></div><button onClick={close}>✕</button></header><form onSubmit={submit}><fieldset><legend>Seus dados</legend><label>Nome<input name="name" required minLength={2} autoComplete="name" /></label><label>WhatsApp<input name="phone" required inputMode="tel" autoComplete="tel" placeholder="(24) 99999-9999" /></label><label className="wide">E-mail <small>{payment === "pix" ? "necessário para gerar o Pix" : "opcional"}</small><input name="email" required={payment === "pix"} type="email" autoComplete="email" /></label></fieldset><fieldset><legend>Endereço de entrega</legend><label className="wide">Rua<input name="street" required autoComplete="address-line1" /></label><label>Número<input name="number" required /></label><label>Complemento<input name="complement" autoComplete="address-line2" /></label><label>Bairro<input name="neighborhood" required /></label><label>CEP<input name="postalCode" required inputMode="numeric" pattern="[0-9.\- ]{8,10}" autoComplete="postal-code" /></label><label>Cidade<input name="city" required defaultValue={menu.restaurant.city} autoComplete="address-level2" /></label><label>UF<input name="state" required minLength={2} maxLength={2} defaultValue={menu.restaurant.state} autoComplete="address-level1" /></label></fieldset><fieldset><legend>Pagamento</legend><div className="rm-payment-options">{menu.restaurant.pixAvailable && <label className={payment === "pix" ? "active" : ""}><input type="radio" name="payment" value="pix" checked={payment === "pix"} onChange={() => setPayment("pix")} /><span>▦</span><b>Pix</b><small>QR Code ou copia e cola</small></label>}<label className={payment === "cash" ? "active" : ""}><input type="radio" name="payment" value="cash" checked={payment === "cash"} onChange={() => setPayment("cash")} /><span>💵</span><b>Dinheiro</b><small>Na entrega</small></label><label className={payment === "card_on_delivery" ? "active" : ""}><input type="radio" name="payment" value="card_on_delivery" checked={payment === "card_on_delivery"} onChange={() => setPayment("card_on_delivery")} /><span>▣</span><b>Cartão</b><small>Na entrega</small></label></div></fieldset><label className="rm-consent"><input name="consent" type="checkbox" /><span>Quero receber novidades e lembretes de recompra pelo WhatsApp. Posso cancelar quando quiser.</span></label>{error && <p className="rm-checkout-error">{error}</p>}<button className="rm-submit-order" disabled={busy}>{busy ? "Criando pedido seguro…" : `Confirmar · ${currency.format(total / 100)}`}</button></form></div></div>;
+  const modeTitle = fulfillmentType === "delivery" ? "Entrega" : fulfillmentType === "pickup" ? "Retirada no estabelecimento" : `Consumo no local · Mesa ${tableCode}`;
+  const paymentMoment = fulfillmentType === "delivery" ? "Na entrega" : fulfillmentType === "pickup" ? "Na retirada" : "No atendimento";
+  return <div className="rm-modal-backdrop" onMouseDown={close}><div className="rm-checkout" onMouseDown={(event) => event.stopPropagation()}><header><div><small>ÚLTIMO PASSO · {modeTitle.toUpperCase()}</small><h2>Finalizar pedido</h2><p>Total de {currency.format(total / 100)}</p></div><button onClick={close}>✕</button></header><form onSubmit={submit}><fieldset><legend>Seus dados</legend><label>Nome<input name="name" required minLength={2} autoComplete="name" /></label><label>WhatsApp<input name="phone" required inputMode="tel" autoComplete="tel" placeholder="(24) 99999-9999" /></label><label className="wide">E-mail <small>{payment === "pix" ? "necessário para gerar o Pix" : "opcional"}</small><input name="email" required={payment === "pix"} type="email" autoComplete="email" /></label></fieldset>{fulfillmentType === "delivery" && <fieldset><legend>Endereço de entrega</legend><label className="wide">Rua<input name="street" required autoComplete="address-line1" /></label><label>Número<input name="number" required /></label><label>Complemento<input name="complement" autoComplete="address-line2" /></label><label>Bairro<input name="neighborhood" required /></label><label>CEP<input name="postalCode" required inputMode="numeric" pattern="[0-9.\- ]{8,10}" autoComplete="postal-code" /></label><label>Cidade<input name="city" required defaultValue={menu.restaurant.city} autoComplete="address-level2" /></label><label>UF<input name="state" required minLength={2} maxLength={2} defaultValue={menu.restaurant.state} autoComplete="address-level1" /></label></fieldset>}{fulfillmentType !== "delivery" && <fieldset><legend>{modeTitle}</legend><p style={{ margin: 0, lineHeight: 1.5 }}>{fulfillmentType === "pickup" ? `Seu pedido será preparado para retirada em ${menu.restaurant.name}. Nenhuma taxa de entrega será cobrada.` : `Este pedido ficará vinculado à mesa ${tableCode}. Nenhum endereço de entrega é necessário.`}</p></fieldset>}<fieldset><legend>Pagamento</legend><div className="rm-payment-options">{menu.restaurant.pixAvailable && <label className={payment === "pix" ? "active" : ""}><input type="radio" name="payment" value="pix" checked={payment === "pix"} onChange={() => setPayment("pix")} /><span>▦</span><b>Pix</b><small>QR Code ou copia e cola</small></label>}<label className={payment === "cash" ? "active" : ""}><input type="radio" name="payment" value="cash" checked={payment === "cash"} onChange={() => setPayment("cash")} /><span>💵</span><b>Dinheiro</b><small>{paymentMoment}</small></label><label className={payment === "card_on_delivery" ? "active" : ""}><input type="radio" name="payment" value="card_on_delivery" checked={payment === "card_on_delivery"} onChange={() => setPayment("card_on_delivery")} /><span>▣</span><b>Cartão</b><small>{paymentMoment}</small></label></div></fieldset><label className="rm-consent"><input name="consent" type="checkbox" /><span>Quero receber novidades e lembretes de recompra pelo WhatsApp. Posso cancelar quando quiser.</span></label>{error && <p className="rm-checkout-error">{error}</p>}<button className="rm-submit-order" disabled={busy}>{busy ? "Criando pedido seguro…" : `Confirmar · ${currency.format(total / 100)}`}</button></form></div></div>;
 }
 
 function OrderSuccess({ result, close }: { result: OrderResult; close: () => void }) {
   const [copied, setCopied] = useState(false); const pix = result.payment?.pixCode;
-  return <div className="rm-modal-backdrop"><div className="rm-success-modal"><span>✓</span><small>PEDIDO RECEBIDO</small><h2>Pedido #{result.order.number}</h2><p>{result.order.restaurantName} recebeu seu pedido. Promessa segura: {result.order.promisedFromMinutes}–{result.order.promisedToMinutes} minutos.</p>{result.payment?.qrCodeBase64 && <Image className="rm-pix-qr" src={`data:image/png;base64,${result.payment.qrCodeBase64}`} width={180} height={180} unoptimized alt="QR Code Pix" />}{pix && <div className="rm-pix-code"><input readOnly value={pix} /><button onClick={async () => { await navigator.clipboard.writeText(pix); setCopied(true); }}>{copied ? "Copiado!" : "Copiar Pix"}</button></div>}{result.payment?.ticketUrl && <a className="rm-pix-link" href={result.payment.ticketUrl} target="_blank" rel="noreferrer">Abrir página de pagamento ↗</a>}{result.payment?.error && <p className="rm-payment-warning">{result.payment.error}</p>}{!result.payment?.providerConfigured && <p className="rm-payment-warning">O pedido foi criado. O Pix do restaurante ainda não está conectado; combine o pagamento diretamente com a loja.</p>}<a className="rm-track-link" href={`/acompanhar/${result.order.trackingToken}`}>Acompanhar pedido →</a><button className="rm-success-close" onClick={close}>Voltar ao cardápio</button></div></div>;
+  const mode = result.order.fulfillmentType === "pickup" ? "Retirada" : result.order.fulfillmentType === "dine_in" ? `Mesa ${result.order.tableCode || ""}`.trim() : "Entrega";
+  return <div className="rm-modal-backdrop"><div className="rm-success-modal"><span>✓</span><small>PEDIDO RECEBIDO · {mode.toUpperCase()}</small><h2>Pedido #{result.order.number}</h2><p>{result.order.restaurantName} recebeu seu pedido. Promessa segura: {result.order.promisedFromMinutes}–{result.order.promisedToMinutes} minutos.</p>{result.payment?.qrCodeBase64 && <Image className="rm-pix-qr" src={`data:image/png;base64,${result.payment.qrCodeBase64}`} width={180} height={180} unoptimized alt="QR Code Pix" />}{pix && <div className="rm-pix-code"><input readOnly value={pix} /><button onClick={async () => { await navigator.clipboard.writeText(pix); setCopied(true); }}>{copied ? "Copiado!" : "Copiar Pix"}</button></div>}{result.payment?.ticketUrl && <a className="rm-pix-link" href={result.payment.ticketUrl} target="_blank" rel="noreferrer">Abrir página de pagamento ↗</a>}{result.payment?.error && <p className="rm-payment-warning">{result.payment.error}</p>}{!result.payment?.providerConfigured && result.order.fulfillmentType === "delivery" && <p className="rm-payment-warning">O pedido foi criado. O Pix do restaurante ainda não está conectado; combine o pagamento diretamente com a loja.</p>}<a className="rm-track-link" href={`/acompanhar/${result.order.trackingToken}`}>Acompanhar pedido →</a><button className="rm-success-close" onClick={close}>Voltar ao cardápio</button></div></div>;
+}
+
+function modeButton(active: boolean): React.CSSProperties {
+  return {
+    border: active ? "2px solid var(--store-accent)" : "1px solid #ddd",
+    background: active ? "#fff7f0" : "#fff",
+    borderRadius: 999,
+    padding: "8px 12px",
+    fontWeight: 900,
+    cursor: "pointer",
+  };
 }
 
 function StoreLoading() { return <main className="rm-store-state"><span className="rm-state-logo">⚡</span><i /><p>Abrindo cardápio…</p></main>; }
