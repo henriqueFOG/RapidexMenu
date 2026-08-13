@@ -39,14 +39,15 @@ export async function PATCH(
         to: nextStatus,
       });
     }
+
     const timestamp = Date.now();
-    await db
+    const updated = await db
       .prepare(
         `UPDATE orders SET status = ?, updated_at = ?,
          confirmed_at = CASE WHEN ? IN ('confirmed','preparing') AND confirmed_at IS NULL THEN ? ELSE confirmed_at END,
          delivered_at = CASE WHEN ? = 'delivered' THEN ? ELSE delivered_at END,
          canceled_at = CASE WHEN ? = 'canceled' THEN ? ELSE canceled_at END
-         WHERE id = ? AND restaurant_id = ?`,
+         WHERE id = ? AND restaurant_id = ? AND status = ?`,
       )
       .bind(
         nextStatus,
@@ -59,8 +60,24 @@ export async function PATCH(
         timestamp,
         id,
         context.restaurantId,
+        current.status,
       )
       .run();
+
+    if (!(updated.meta.changes ?? 0)) {
+      const latest = await db
+        .prepare("SELECT status FROM orders WHERE id = ? AND restaurant_id = ?")
+        .bind(id, context.restaurantId)
+        .first<{ status: string }>();
+      if (!latest) throw new HttpError(404, "Pedido não encontrado.", "order_not_found");
+      throw new HttpError(
+        409,
+        "O pedido mudou enquanto você processava esta ação. Atualize a fila e tente novamente.",
+        "order_state_conflict",
+        { expected: current.status, actual: latest.status, requested: nextStatus },
+      );
+    }
+
     await audit(context, "order.status_changed", "order", id, { from: current.status, to: nextStatus });
     const notification = await notifyWhatsAppOrderStatus(db, context.restaurantId, id, nextStatus);
     return json({ ok: true, status: nextStatus, notification });
