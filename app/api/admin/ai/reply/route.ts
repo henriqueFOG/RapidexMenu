@@ -45,6 +45,7 @@ export async function POST(request: Request) {
           .all<{ order_number: number; total_cents: number; id: string }>()
       : { results: [] as Array<{ order_number: number; total_cents: number; id: string }> };
     const reply = await generateSalesReply({
+      restaurantId: context.restaurantId,
       restaurantName: context.restaurantName,
       message,
       customerName: customer?.name || optionalString(body.customerName, "Cliente", 80),
