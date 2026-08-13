@@ -1,4 +1,5 @@
 import { requireAdminContext, requireRole } from "@/lib/admin-auth";
+import { hasCommercialFeature } from "@/lib/entitlements";
 import { apiError, assertSameOrigin, json } from "@/lib/http";
 import {
   disconnectRestaurantWhatsApp,
@@ -15,6 +16,8 @@ export async function GET() {
     const config = whatsappEmbeddedSignupPublicConfig();
     return json({
       ok: true,
+      entitled: hasCommercialFeature(context, "whatsapp_connection"),
+      requiredPlan: "growth",
       configured: config.configured,
       connected: Boolean(connection),
       connection: connection ? {
@@ -35,6 +38,7 @@ export async function DELETE(request: Request) {
     assertSameOrigin(request);
     const context = await requireAdminContext();
     requireRole(context, ["owner"]);
+    // A loja sempre pode desconectar a integração, inclusive após downgrade de plano.
     const result = await disconnectRestaurantWhatsApp(context.restaurantId);
     return json({ ok: true, ...result });
   } catch (error) {
