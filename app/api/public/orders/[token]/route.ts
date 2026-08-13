@@ -14,7 +14,7 @@ export async function GET(
     const order = await db
       .prepare(
         `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
-                o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
+                o.fulfillment_type, o.table_code, o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
                 o.promised_from_minutes, o.promised_to_minutes, o.created_at, o.updated_at,
                 r.name AS restaurant_name
          FROM orders o JOIN restaurants r ON r.id = o.restaurant_id
@@ -47,6 +47,8 @@ export async function GET(
         status: order.status,
         paymentStatus: order.payment_status,
         paymentMethod: order.payment_method,
+        fulfillmentType: order.fulfillment_type || "delivery",
+        tableCode: order.table_code || null,
         subtotalCents: order.subtotal_cents,
         deliveryFeeCents: order.delivery_fee_cents,
         totalCents: order.total_cents,
