@@ -6,6 +6,16 @@ import Link from "next/link";
 import Image from "next/image";
 
 type FulfillmentType = "delivery" | "pickup" | "dine_in";
+type PricingStrategy = "sum" | "highest" | "average" | "included";
+type ProductOption = { id: string; name: string; priceDeltaCents: number };
+type ProductOptionGroup = {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  pricingStrategy: PricingStrategy;
+  options: ProductOption[];
+};
 type Product = {
   id: string;
   name: string;
@@ -16,6 +26,7 @@ type Product = {
   imageUrl: string | null;
   available: boolean;
   prepMinutes: number;
+  optionGroups: ProductOptionGroup[];
 };
 type SmartUpsell = {
   id: string;
@@ -52,7 +63,13 @@ type MenuData = {
   categories: Array<{ id: string; name: string; products: Product[] }>;
   uncategorized: Product[];
 };
-type CartEntry = Product & { quantity: number };
+type CartEntry = Product & {
+  cartKey: string;
+  quantity: number;
+  optionIds: string[];
+  optionSummary: string;
+  unitPriceCents: number;
+};
 type OrderResult = {
   order: {
     id: string;
@@ -92,6 +109,7 @@ export default function StoreClient({ slug }: { slug: string }) {
   const [recommendations, setRecommendations] = useState<SmartUpsell[]>([]);
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("delivery");
   const [tableCode, setTableCode] = useState("");
+  const [customizing, setCustomizing] = useState<Product | null>(null);
   const [clientOrderId] = useState(() => typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
   useEffect(() => {
@@ -130,10 +148,10 @@ export default function StoreClient({ slug }: { slug: string }) {
     return inCategory && (!term || `${product.name} ${product.description}`.toLowerCase().includes(term));
   });
   const entries = Object.values(cart);
-  const selectedProductIds = useMemo(() => Object.keys(cart).sort(), [cart]);
+  const selectedProductIds = useMemo(() => Array.from(new Set(entries.map((entry) => entry.id))).sort(), [entries]);
   const selectedKey = selectedProductIds.join(",");
   const itemCount = entries.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = entries.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+  const subtotal = entries.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0);
   const deliveryActive = fulfillmentType === "delivery";
   const deliveryFee = deliveryActive ? (menu?.restaurant.deliveryFeeCents || 0) : 0;
   const total = subtotal + deliveryFee;
@@ -170,25 +188,36 @@ export default function StoreClient({ slug }: { slug: string }) {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [menu, clientOrderId, selectedKey, selectedProductIds]);
 
-  const add = (product: Product) => setCart((current) => ({
-    ...current,
-    [product.id]: { ...product, quantity: Math.min(20, (current[product.id]?.quantity || 0) + 1) },
-  }));
-  const addUpsell = (product: SmartUpsell) => add({
-    id: product.id,
-    name: product.name,
-    description: product.description,
-    priceCents: product.priceCents,
-    emoji: product.emoji,
-    tag: product.tag,
-    imageUrl: null,
-    available: true,
-    prepMinutes: product.prepMinutes,
-  });
-  const change = (product: Product, delta: number) => setCart((current) => {
-    const quantity = (current[product.id]?.quantity || 0) + delta;
+  const addConfigured = (product: Product, optionIds: string[]) => {
+    const normalizedIds = Array.from(new Set(optionIds)).sort();
+    const cartKey = `${product.id}|${normalizedIds.join(",")}`;
+    const unitPriceCents = configuredPrice(product, normalizedIds);
+    const optionSummary = configuredSummary(product, normalizedIds);
+    setCart((current) => ({
+      ...current,
+      [cartKey]: {
+        ...product,
+        cartKey,
+        optionIds: normalizedIds,
+        optionSummary,
+        unitPriceCents,
+        quantity: Math.min(20, (current[cartKey]?.quantity || 0) + 1),
+      },
+    }));
+  };
+  const addProduct = (product: Product) => {
+    if (product.optionGroups?.length) setCustomizing(product);
+    else addConfigured(product, []);
+  };
+  const addUpsell = (product: SmartUpsell) => {
+    const actual = allProducts.find((item) => item.id === product.id);
+    if (actual) addProduct(actual);
+  };
+  const change = (entry: CartEntry, delta: number) => setCart((current) => {
+    const quantity = (current[entry.cartKey]?.quantity || 0) + delta;
     const next = { ...current };
-    if (quantity <= 0) delete next[product.id]; else next[product.id] = { ...product, quantity };
+    if (quantity <= 0) delete next[entry.cartKey];
+    else next[entry.cartKey] = { ...entry, quantity: Math.min(20, quantity) };
     return next;
   });
 
@@ -215,18 +244,53 @@ export default function StoreClient({ slug }: { slug: string }) {
         </div>}
         <div className="rm-store-tools"><label>⌕<input id="rm-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar no cardápio" /></label><nav><button className={category === "all" ? "active" : ""} onClick={() => setCategory("all")}>Todos</button>{menu.categories.map((item) => <button className={category === item.id ? "active" : ""} onClick={() => setCategory(item.id)} key={item.id}>{item.name}</button>)}</nav></div>
         <div className="rm-store-section-title"><div><small>FEITO NA HORA</small><h2>{category === "all" ? "Cardápio completo" : menu.categories.find((item) => item.id === category)?.name}</h2></div><span>{visibleProducts.length} opções</span></div>
-        <div className="rm-store-products">{visibleProducts.map((product) => <article className={!product.available ? "unavailable" : ""} key={product.id}><div className="rm-store-product-image">{product.imageUrl ? <Image src={product.imageUrl} width={320} height={320} unoptimized alt="" /> : <span>{product.emoji}</span>}{product.tag && <small>{product.tag}</small>}</div><div className="rm-store-product-copy"><div><h3>{product.name}</h3><p>{product.description}</p></div><footer><strong>{currency.format(product.priceCents / 100)}</strong>{product.available ? cart[product.id] ? <div className="rm-qty"><button onClick={() => change(product, -1)}>−</button><b>{cart[product.id].quantity}</b><button onClick={() => add(product)}>+</button></div> : <button onClick={() => add(product)}>Adicionar +</button> : <em>Esgotado</em>}</footer></div></article>)}</div>
+        <div className="rm-store-products">{visibleProducts.map((product) => <article className={!product.available ? "unavailable" : ""} key={product.id}><div className="rm-store-product-image">{product.imageUrl ? <Image src={product.imageUrl} width={320} height={320} unoptimized alt="" /> : <span>{product.emoji}</span>}{product.tag && <small>{product.tag}</small>}</div><div className="rm-store-product-copy"><div><h3>{product.name}</h3><p>{product.description}</p>{product.optionGroups?.length > 0 && <small style={{ fontWeight: 800 }}>{product.optionGroups.map((group) => group.name).join(" · ")}</small>}</div><footer><strong>{product.optionGroups?.length ? `A partir de ${currency.format(product.priceCents / 100)}` : currency.format(product.priceCents / 100)}</strong>{product.available ? <button onClick={() => addProduct(product)}>{product.optionGroups?.length ? "Personalizar" : "Adicionar +"}</button> : <em>Esgotado</em>}</footer></div></article>)}</div>
         {!visibleProducts.length && <div className="rm-store-empty">Nenhum item encontrado nessa busca.</div>}
       </section>
 
-      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO · {fulfillmentLabel.toUpperCase()}</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.id}><span>{item.emoji}</span><div><b>{item.name}</b><small>{currency.format(item.priceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => add(item)}>+</button></div></div><em>{currency.format(item.priceCents * item.quantity / 100)}</em></article>)}</div>{recommendations.length > 0 && <div style={{ margin: "8px 16px 14px", padding: 14, borderRadius: 16, background: "#f2f8df", border: "1px solid #dbe9b5" }}><small style={{ fontWeight: 900, letterSpacing: ".08em" }}>✦ RAPIDEX SUGERE</small>{recommendations.slice(0, 1).map((product) => <div key={product.id} style={{ display: "grid", gridTemplateColumns: "42px 1fr auto", gap: 10, alignItems: "center", marginTop: 10 }}><span style={{ fontSize: 26 }}>{product.emoji}</span><div><b style={{ display: "block" }}>{product.name}</b><small>{product.reason} · {currency.format(product.priceCents / 100)}</small></div><button onClick={() => addUpsell(product)} style={{ border: 0, borderRadius: 999, padding: "8px 11px", fontWeight: 900, cursor: "pointer" }}>+ Adicionar</button></div>)}</div>}<div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>{deliveryActive ? "Entrega" : fulfillmentType === "pickup" ? "Retirada" : "Atendimento no local"}</span><b>{deliveryActive ? currency.format(deliveryFee / 100) : "R$ 0,00"}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < minimumRequired || (fulfillmentType === "dine_in" && !tableCode.trim())} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : fulfillmentType === "dine_in" && !tableCode.trim() ? "Informe a mesa" : subtotal < minimumRequired ? `Faltam ${currency.format((minimumRequired - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço e modalidade validados novamente no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
+      <aside className={`rm-cart ${cartOpen ? "open" : ""}`}><header><div><small>SEU PEDIDO · {fulfillmentLabel.toUpperCase()}</small><h2>Sacola</h2></div><button onClick={() => setCartOpen(false)}>✕</button></header>{entries.length ? <><div className="rm-cart-items">{entries.map((item) => <article key={item.cartKey}><span>{item.emoji}</span><div><b>{item.name}</b>{item.optionSummary && <small>{item.optionSummary}</small>}<small>{currency.format(item.unitPriceCents / 100)} cada</small><div className="rm-qty"><button onClick={() => change(item, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => change(item, 1)}>+</button></div></div><em>{currency.format(item.unitPriceCents * item.quantity / 100)}</em></article>)}</div>{recommendations.length > 0 && <div style={{ margin: "8px 16px 14px", padding: 14, borderRadius: 16, background: "#f2f8df", border: "1px solid #dbe9b5" }}><small style={{ fontWeight: 900, letterSpacing: ".08em" }}>✦ RAPIDEX SUGERE</small>{recommendations.slice(0, 1).map((product) => <div key={product.id} style={{ display: "grid", gridTemplateColumns: "42px 1fr auto", gap: 10, alignItems: "center", marginTop: 10 }}><span style={{ fontSize: 26 }}>{product.emoji}</span><div><b style={{ display: "block" }}>{product.name}</b><small>{product.reason} · {currency.format(product.priceCents / 100)}</small></div><button onClick={() => addUpsell(product)} style={{ border: 0, borderRadius: 999, padding: "8px 11px", fontWeight: 900, cursor: "pointer" }}>+ Adicionar</button></div>)}</div>}<div className="rm-cart-summary"><p><span>Subtotal</span><b>{currency.format(subtotal / 100)}</b></p><p><span>{deliveryActive ? "Entrega" : fulfillmentType === "pickup" ? "Retirada" : "Atendimento no local"}</span><b>{deliveryActive ? currency.format(deliveryFee / 100) : "R$ 0,00"}</b></p><p className="total"><span>Total</span><b>{currency.format(total / 100)}</b></p></div><button className="rm-checkout-button" disabled={!menu.restaurant.isOpen || subtotal < minimumRequired || (fulfillmentType === "dine_in" && !tableCode.trim())} onClick={() => setCheckout(true)}>{!menu.restaurant.isOpen ? "Loja fechada" : fulfillmentType === "dine_in" && !tableCode.trim() ? "Informe a mesa" : subtotal < minimumRequired ? `Faltam ${currency.format((minimumRequired - subtotal) / 100)}` : "Finalizar pedido →"}</button><small className="rm-cart-promise">🔒 Preço, opções e modalidade validados novamente no servidor</small></> : <div className="rm-cart-empty"><span>🛍️</span><h3>Sua sacola está vazia</h3><p>Adicione seus favoritos para começar.</p></div>}</aside>
     </div>
 
     {itemCount > 0 && <button className="rm-mobile-cart" onClick={() => setCartOpen(true)}><span><b>{itemCount}</b> Ver sacola</span><strong>{currency.format(total / 100)}</strong></button>}
     {cartOpen && <button className="rm-cart-backdrop" onClick={() => setCartOpen(false)} aria-label="Fechar sacola" />}
+    {customizing && <ProductCustomizer product={customizing} close={() => setCustomizing(null)} add={(optionIds) => { addConfigured(customizing, optionIds); setCustomizing(null); }} />}
     {checkout && <Checkout menu={menu} entries={entries} total={total} clientOrderId={clientOrderId} fulfillmentType={fulfillmentType} tableCode={tableCode.trim()} close={() => setCheckout(false)} done={(order) => { setCheckout(false); setResult(order); setCart({}); setRecommendations([]); setCartOpen(false); }} />}
     {result && <OrderSuccess result={result} close={() => setResult(null)} />}
   </main>;
+}
+
+function ProductCustomizer({ product, close, add }: { product: Product; close: () => void; add: (optionIds: string[]) => void }) {
+  const [selected, setSelected] = useState<Record<string, string[]>>({});
+  const selectedIds = product.optionGroups.flatMap((group) => selected[group.id] || []);
+  const valid = product.optionGroups.every((group) => {
+    const count = (selected[group.id] || []).length;
+    return count >= group.minSelect && count <= group.maxSelect;
+  });
+  const price = configuredPrice(product, selectedIds);
+
+  const toggle = (group: ProductOptionGroup, optionId: string) => {
+    setSelected((current) => {
+      const values = current[group.id] || [];
+      if (values.includes(optionId)) return { ...current, [group.id]: values.filter((id) => id !== optionId) };
+      if (group.maxSelect === 1) return { ...current, [group.id]: [optionId] };
+      if (values.length >= group.maxSelect) return current;
+      return { ...current, [group.id]: [...values, optionId] };
+    });
+  };
+
+  return <div className="rm-modal-backdrop" onMouseDown={close}><div className="rm-checkout" onMouseDown={(event) => event.stopPropagation()} style={{ maxWidth: 640 }}>
+    <header><div><small>PERSONALIZE SEU PEDIDO</small><h2>{product.emoji} {product.name}</h2><p>{product.description}</p></div><button onClick={close}>✕</button></header>
+    <div style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
+      {product.optionGroups.map((group) => {
+        const chosen = selected[group.id] || [];
+        return <fieldset key={group.id} style={{ border: "1px solid #e5e5e5", borderRadius: 14, padding: 14 }}><legend style={{ fontWeight: 900 }}>{group.name}</legend><small style={{ display: "block", marginBottom: 10 }}>{selectionRule(group)}</small><div style={{ display: "grid", gap: 8 }}>{group.options.map((option) => {
+          const checked = chosen.includes(option.id);
+          return <label key={option.id} style={{ display: "grid", gridTemplateColumns: "24px 1fr auto", gap: 10, alignItems: "center", padding: 10, border: checked ? "2px solid var(--store-accent)" : "1px solid #ddd", borderRadius: 12, cursor: "pointer" }}><input type={group.maxSelect === 1 ? "radio" : "checkbox"} name={`option-${group.id}`} checked={checked} onChange={() => toggle(group, option.id)} /><b>{option.name}</b><span>{option.priceDeltaCents > 0 ? `+ ${currency.format(option.priceDeltaCents / 100)}` : "Incluído"}</span></label>;
+        })}</div></fieldset>;
+      })}
+      <button className="rm-submit-order" disabled={!valid} onClick={() => add(selectedIds)}>{valid ? `Adicionar · ${currency.format(price / 100)}` : "Complete as escolhas obrigatórias"}</button>
+    </div>
+  </div></div>;
 }
 
 function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableCode, close, done }: { menu: MenuData; entries: CartEntry[]; total: number; clientOrderId: string; fulfillmentType: FulfillmentType; tableCode: string; close: () => void; done: (result: OrderResult) => void }) {
@@ -235,7 +299,7 @@ function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableC
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     try {
       const address = fulfillmentType === "delivery" ? { street: form.get("street"), number: form.get("number"), neighborhood: form.get("neighborhood"), city: form.get("city"), state: form.get("state"), postalCode: form.get("postalCode"), complement: form.get("complement") || null } : null;
-      const response = await fetch("/api/public/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restaurantSlug: menu.restaurant.slug, clientOrderId, source: "menu", fulfillmentType, tableCode: fulfillmentType === "dine_in" ? tableCode : null, customer: { name: form.get("name"), phone: form.get("phone"), email: form.get("email") || null, whatsappConsent: form.get("consent") === "on", address }, items: entries.map((item) => ({ productId: item.id, quantity: item.quantity })), paymentMethod: payment }) });
+      const response = await fetch("/api/public/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restaurantSlug: menu.restaurant.slug, clientOrderId, source: "menu", fulfillmentType, tableCode: fulfillmentType === "dine_in" ? tableCode : null, customer: { name: form.get("name"), phone: form.get("phone"), email: form.get("email") || null, whatsappConsent: form.get("consent") === "on", address }, items: entries.map((item) => ({ productId: item.id, quantity: item.quantity, optionIds: item.optionIds })), paymentMethod: payment }) });
       const payload = await response.json() as OrderResult & { error?: { message?: string } }; if (!response.ok) throw new Error(payload.error?.message || "Não foi possível enviar o pedido."); done(payload);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar o pedido."); } finally { setBusy(false); }
   };
@@ -247,7 +311,30 @@ function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableC
 function OrderSuccess({ result, close }: { result: OrderResult; close: () => void }) {
   const [copied, setCopied] = useState(false); const pix = result.payment?.pixCode;
   const mode = result.order.fulfillmentType === "pickup" ? "Retirada" : result.order.fulfillmentType === "dine_in" ? `Mesa ${result.order.tableCode || ""}`.trim() : "Entrega";
-  return <div className="rm-modal-backdrop"><div className="rm-success-modal"><span>✓</span><small>PEDIDO RECEBIDO · {mode.toUpperCase()}</small><h2>Pedido #{result.order.number}</h2><p>{result.order.restaurantName} recebeu seu pedido. Promessa segura: {result.order.promisedFromMinutes}–{result.order.promisedToMinutes} minutos.</p>{result.payment?.qrCodeBase64 && <Image className="rm-pix-qr" src={`data:image/png;base64,${result.payment.qrCodeBase64}`} width={180} height={180} unoptimized alt="QR Code Pix" />}{pix && <div className="rm-pix-code"><input readOnly value={pix} /><button onClick={async () => { await navigator.clipboard.writeText(pix); setCopied(true); }}>{copied ? "Copiado!" : "Copiar Pix"}</button></div>}{result.payment?.ticketUrl && <a className="rm-pix-link" href={result.payment.ticketUrl} target="_blank" rel="noreferrer">Abrir página de pagamento ↗</a>}{result.payment?.error && <p className="rm-payment-warning">{result.payment.error}</p>}{!result.payment?.providerConfigured && result.order.fulfillmentType === "delivery" && <p className="rm-payment-warning">O pedido foi criado. O Pix do restaurante ainda não está conectado; combine o pagamento diretamente com a loja.</p>}<a className="rm-track-link" href={`/acompanhar/${result.order.trackingToken}`}>Acompanhar pedido →</a><button className="rm-success-close" onClick={close}>Voltar ao cardápio</button></div></div>;
+  return <div className="rm-modal-backdrop"><div className="rm-success-modal"><span>✓</span><small>PEDIDO RECEBIDO · {mode.toUpperCase()}</small><h2>Pedido #{result.order.number}</h2><p>{result.order.restaurantName} recebeu seu pedido. Promessa segura: {result.order.promisedFromMinutes}–{result.order.promisedToMinutes} minutos.</p>{result.payment?.qrCodeBase64 && <Image className="rm-pix-qr" src={`data:image/png;base64,${result.payment.qrCodeBase64}`} width={180} height={180} unoptimized alt="QR Code Pix" />}{pix && <div className="rm-pix-code"><input readOnly value={pix} /><button onClick={async () => { await navigator.clipboard.writeText(pix); setCopied(true); }}>{copied ? "Copiado!" : "Copiar Pix"}</button></div>}{result.payment?.ticketUrl && <a className="rm-pix-link" href={result.payment.ticketUrl} target="_blank" rel="noreferrer">Abrir página de pagamento ↗</a>}{result.payment?.error && <p className="rm-payment-warning">{result.payment.error}</p>}<a className="rm-track-link" href={`/acompanhar/${result.order.trackingToken}`}>Acompanhar pedido →</a><button className="rm-success-close" onClick={close}>Voltar ao cardápio</button></div></div>;
+}
+
+function configuredPrice(product: Product, selectedIds: string[]) {
+  return product.priceCents + product.optionGroups.reduce((sum, group) => {
+    const values = group.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.priceDeltaCents);
+    if (!values.length || group.pricingStrategy === "included") return sum;
+    if (group.pricingStrategy === "highest") return sum + Math.max(...values);
+    if (group.pricingStrategy === "average") return sum + Math.round(values.reduce((total, value) => total + value, 0) / values.length);
+    return sum + values.reduce((total, value) => total + value, 0);
+  }, 0);
+}
+
+function configuredSummary(product: Product, selectedIds: string[]) {
+  return product.optionGroups.map((group) => {
+    const names = group.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.name);
+    return names.length ? `${group.name}: ${names.join(", ")}` : "";
+  }).filter(Boolean).join(" · ");
+}
+
+function selectionRule(group: ProductOptionGroup) {
+  if (group.minSelect === group.maxSelect) return `Escolha ${group.minSelect}`;
+  if (group.minSelect === 0) return `Opcional · até ${group.maxSelect}`;
+  return `Escolha de ${group.minSelect} a ${group.maxSelect}`;
 }
 
 function modeButton(active: boolean): React.CSSProperties {
