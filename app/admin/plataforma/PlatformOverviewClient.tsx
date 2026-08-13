@@ -16,6 +16,13 @@ type Overview = {
     payingRestaurants: number;
     mrrCents: number;
     arrRunRateCents: number;
+    has30dSubscriptionHistory: boolean;
+    newMrr30dCents: number;
+    expansionMrr30dCents: number;
+    contractionMrr30dCents: number;
+    churnMrr30dCents: number;
+    nrr30d: number | null;
+    logoChurn30d: number | null;
   };
   operations: {
     jobsQueued: number;
@@ -79,7 +86,7 @@ export default function PlatformOverviewClient() {
     <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
     <small className={styles.kicker}>BACKOFFICE DA PLATAFORMA</small>
     <h1 className={styles.title}>Saúde comercial do ativo</h1>
-    <p className={styles.intro}>Receita, ativação e sinais operacionais calculados a partir dos dados reais. MRR considera a assinatura mais recente autorizada de cada restaurante.</p>
+    <p className={styles.intro}>Receita, ativação e sinais operacionais calculados a partir dos dados reais. Métricas de retenção só aparecem quando existe uma janela observada completa.</p>
 
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, margin: "22px 0" }}>
       <Metric label="Restaurantes" value={String(m.restaurants)} note={`${m.published} publicados`} />
@@ -89,6 +96,19 @@ export default function PlatformOverviewClient() {
       <Metric label="Pagantes" value={String(m.payingRestaurants)} note="assinatura autorizada" />
       <Metric label="MRR contratado" value={currency.format(m.mrrCents / 100)} note={`ARR run-rate ${currency.format(m.arrRunRateCents / 100)}`} />
     </div>
+
+    <section className={styles.panel}>
+      <h2>Qualidade da receita · 30 dias</h2>
+      <p>{m.has30dSubscriptionHistory ? "Movimentos observados no ledger de assinaturas." : "A janela de 30 dias ainda está sendo formada. NRR e churn ficam indisponíveis até haver histórico real suficiente."}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 10 }}>
+        <Metric label="New MRR" value={currency.format(m.newMrr30dCents / 100)} note="receita que entrou" />
+        <Metric label="Expansion MRR" value={currency.format(m.expansionMrr30dCents / 100)} note="expansão observada" />
+        <Metric label="Contraction MRR" value={currency.format(m.contractionMrr30dCents / 100)} note="redução observada" />
+        <Metric label="Churned MRR" value={currency.format(m.churnMrr30dCents / 100)} note="receita perdida" />
+        <Metric label="NRR" value={m.nrr30d === null ? "Formando janela" : `${m.nrr30d}%`} note="exclui new MRR" />
+        <Metric label="Logo churn" value={m.logoChurn30d === null ? "Formando janela" : `${m.logoChurn30d}%`} note="restaurantes perdidos" />
+      </div>
+    </section>
 
     <section className={styles.panel}>
       <h2>Saúde operacional</h2>
@@ -101,6 +121,7 @@ export default function PlatformOverviewClient() {
         <Metric label="IA hoje" value={number.format(o.aiResponsesToday)} note={`${number.format(o.aiTranscriptionsToday)} transcrições`} />
         <Metric label="Tokens IA hoje" value={number.format(o.aiInputTokensToday + o.aiOutputTokensToday)} note={`${number.format(o.aiInputTokensToday)} in · ${number.format(o.aiOutputTokensToday)} out`} />
       </div>
+      <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin/plataforma/jobs">Abrir fila e DLQ →</Link></div>
     </section>
 
     <section className={styles.panel}>
