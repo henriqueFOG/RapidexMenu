@@ -1,4 +1,5 @@
 import { ensureDemoData } from "@/lib/demo-data";
+import { fulfillmentSettingsFrom } from "@/lib/fulfillment";
 import { apiError, json, HttpError } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
 import { isRestaurantAcceptingOrders } from "@/lib/store-availability";
@@ -70,6 +71,7 @@ export async function GET(
 
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(String(restaurant.settings_json || "{}")); } catch { settings = {}; }
+    const fulfillment = fulfillmentSettingsFrom(settings);
     const acceptingOrders = isRestaurantAcceptingOrders({
       isOpen: Number(restaurant.is_open),
       timezone: String(restaurant.timezone || "America/Sao_Paulo"),
@@ -94,9 +96,12 @@ export async function GET(
         pixAvailable: Boolean(paymentConnection),
         deliveryFeeCents: restaurant.delivery_fee_cents,
         minimumOrderCents: restaurant.minimum_order_cents,
+        prepMinutes: Number(restaurant.average_prep_minutes),
+        deliveryMinutes: Number(restaurant.delivery_minutes),
         estimatedMinutes: Number(restaurant.average_prep_minutes) + Number(restaurant.delivery_minutes),
         brandColor,
         cuisine: settings.cuisine || "Restaurante",
+        fulfillment,
       },
       categories: categories.results.map((category) => ({
         id: category.id,
