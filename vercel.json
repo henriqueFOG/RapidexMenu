@@ -5,6 +5,10 @@
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
   "crons": [
     {
+      "path": "/api/internal/process-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/internal/reconcile-payments",
       "schedule": "*/15 * * * *"
     },
