@@ -1,9 +1,8 @@
+import { billingDunningStage, type BillingDunningStage } from "./billing-dunning-policy";
 import { getBindings, getDatabase } from "./runtime";
 import { escapeEmailHtml, sendTransactionalEmail, transactionalEmailConfigured } from "./transactional-email";
 
 const RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
-
-type DunningStage = "grace_started" | "grace_24h" | "suspended";
 
 type BillingRow = {
   subscription_id: string;
@@ -31,7 +30,7 @@ export async function processBillingDunning(limit = 100) {
      FROM platform_subscriptions ps
      JOIN restaurants r ON r.id = ps.restaurant_id
      WHERE ps.provider = 'mercado_pago'
-       AND ps.status IN ('pending', 'paused', 'cancelled')
+       AND ps.status IN ('pending', 'paused')
        AND r.owner_email IS NOT NULL
      ORDER BY ps.updated_at ASC
      LIMIT ?`,
@@ -42,7 +41,12 @@ export async function processBillingDunning(limit = 100) {
   let failed = 0;
 
   for (const row of rows.results) {
-    const stage = dunningStage(row, now);
+    const stage = billingDunningStage({
+      subscriptionStatus: row.subscription_status,
+      restaurantStatus: row.restaurant_status,
+      accessEndsAt: row.access_ends_at,
+      now,
+    });
     if (!stage) continue;
     candidates += 1;
     const cycleKey = dunningCycleKey(row);
@@ -81,24 +85,11 @@ export async function processBillingDunning(limit = 100) {
   return { configured: true, candidates, sent, failed };
 }
 
-function dunningStage(row: BillingRow, now: number): DunningStage | null {
-  const accessEndsAt = Number(row.access_ends_at || 0);
-  if (row.restaurant_status === "paused" || (accessEndsAt > 0 && accessEndsAt <= now)) {
-    return "suspended";
-  }
-  if (!accessEndsAt || accessEndsAt <= now) return null;
-  const remaining = accessEndsAt - now;
-  if (remaining <= 24 * 60 * 60 * 1000) return "grace_24h";
-  return "grace_started";
-}
-
 function dunningCycleKey(row: BillingRow) {
-  // Access end is the immutable identifier of a grace/suspension cycle. Fallback
-  // to provider next-payment when a future provider cycle is the only reference.
   return String(Math.trunc(Number(row.access_ends_at || row.next_payment_at || 0)));
 }
 
-async function claimDunningEvent(row: BillingRow, stage: DunningStage, cycleKey: string, now: number) {
+async function claimDunningEvent(row: BillingRow, stage: BillingDunningStage, cycleKey: string, now: number) {
   const retryBefore = now - RETRY_AFTER_MS;
   return getDatabase().prepare(
     `INSERT INTO billing_dunning_events
@@ -127,7 +118,7 @@ async function claimDunningEvent(row: BillingRow, stage: DunningStage, cycleKey:
   ).first<{ id: string }>();
 }
 
-function dunningMessage(row: BillingRow, stage: DunningStage) {
+function dunningMessage(row: BillingRow, stage: BillingDunningStage) {
   const baseUrl = String(getBindings().RAPIDEX_PUBLIC_URL || "").replace(/\/$/, "");
   const billingUrl = `${baseUrl || "https://rapidexmenu.com.br"}/assinatura`;
   const restaurant = escapeEmailHtml(row.restaurant_name);
