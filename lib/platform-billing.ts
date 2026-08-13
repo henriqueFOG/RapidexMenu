@@ -3,6 +3,7 @@ import { getBindings, getDatabase } from "./runtime";
 
 export const PLAN_PRICES = { start: 9700, growth: 29700, scale: 59700 } as const;
 export type RapidexPlan = keyof typeof PLAN_PRICES;
+export const BILLING_GRACE_MS = 72 * 60 * 60 * 1000;
 
 type ProviderSubscription = {
   id?: string;
@@ -44,7 +45,9 @@ export async function createBillingCheckout(input: {
       status: "pending",
     }),
   });
-  const provider = await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
+  const provider = response.ok
+    ? await response.json().catch(() => ({})) as ProviderSubscription & { message?: string }
+    : await response.json().catch(() => ({})) as ProviderSubscription & { message?: string };
   if (!response.ok || !provider.id || !provider.init_point) {
     console.error("Rapidex billing checkout failed", response.status, provider.message || "unknown");
     throw new HttpError(502, "Não foi possível abrir a assinatura agora.", "billing_provider_error");
@@ -97,13 +100,14 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
   if (!provider.id || !provider.external_reference) throw new HttpError(400, "Assinatura inválida.", "invalid_subscription");
   const db = getDatabase();
   const local = await db.prepare(
-    `SELECT id, restaurant_id, plan, amount_cents, next_payment_at FROM platform_subscriptions
+    `SELECT id, restaurant_id, plan, amount_cents, status, next_payment_at FROM platform_subscriptions
      WHERE provider = 'mercado_pago' AND provider_subscription_id = ? LIMIT 1`,
   ).bind(provider.id).first<{
     id: string;
     restaurant_id: string;
     plan: RapidexPlan;
     amount_cents: number;
+    status: string;
     next_payment_at: number | null;
   }>();
   if (!local || local.restaurant_id !== String(provider.external_reference)) {
@@ -120,19 +124,49 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
   const paidThrough = providerNextPayment || Number(local.next_payment_at || 0) || null;
   const subscriptionNextPayment = providerNextPayment || local.next_payment_at || null;
   const restaurantStatements: D1PreparedStatement[] = [];
+  let accessEndsAt: number | null = null;
+  let accessReason: "authorized" | "paid_period" | "grace" | "ended" | "unchanged" = "unchanged";
 
   if (status === "authorized") {
+    accessReason = "authorized";
     restaurantStatements.push(
       db.prepare(
         `UPDATE restaurants SET status = 'active', plan = ?, access_ends_at = NULL, updated_at = ? WHERE id = ?`,
       ).bind(local.plan, now, local.restaurant_id),
     );
-  } else if (status === "paused" || status === "cancelled") {
-    const accessEndsAt = paidThrough && paidThrough > now ? paidThrough : now;
+  } else if (status === "cancelled") {
+    accessEndsAt = paidThrough && paidThrough > now ? paidThrough : now;
+    accessReason = accessEndsAt > now ? "paid_period" : "ended";
     restaurantStatements.push(
       db.prepare(
         `UPDATE restaurants SET status = ?, plan = ?, access_ends_at = ?, updated_at = ? WHERE id = ?`,
       ).bind(accessEndsAt > now ? "active" : "paused", local.plan, accessEndsAt, now, local.restaurant_id),
+    );
+  } else if (status === "paused") {
+    if (paidThrough && paidThrough > now) {
+      accessEndsAt = paidThrough;
+      accessReason = "paid_period";
+    } else if (local.status === "authorized") {
+      accessEndsAt = now + BILLING_GRACE_MS;
+      accessReason = "grace";
+    } else {
+      accessEndsAt = now;
+      accessReason = "ended";
+    }
+    restaurantStatements.push(
+      db.prepare(
+        `UPDATE restaurants SET status = ?, plan = ?, access_ends_at = ?, updated_at = ? WHERE id = ?`,
+      ).bind(accessEndsAt > now ? "active" : "paused", local.plan, accessEndsAt, now, local.restaurant_id),
+    );
+  } else if (status === "pending" && local.status === "authorized") {
+    // A renewal can transiently leave the provider pending. Preserve service for a short,
+    // explicit grace window instead of causing an immediate checkout outage.
+    accessEndsAt = paidThrough && paidThrough > now ? paidThrough : now + BILLING_GRACE_MS;
+    accessReason = paidThrough && paidThrough > now ? "paid_period" : "grace";
+    restaurantStatements.push(
+      db.prepare(
+        `UPDATE restaurants SET status = 'active', plan = ?, access_ends_at = ?, updated_at = ? WHERE id = ?`,
+      ).bind(local.plan, accessEndsAt, now, local.restaurant_id),
     );
   }
 
@@ -143,7 +177,32 @@ export async function syncProviderSubscription(provider: ProviderSubscription) {
     ).bind(status, subscriptionNextPayment, JSON.stringify(provider), now, local.id),
     ...restaurantStatements,
   ]);
-  return { restaurantId: local.restaurant_id, status, plan: local.plan, accessEndsAt: paidThrough };
+  return { restaurantId: local.restaurant_id, status, plan: local.plan, accessEndsAt, accessReason };
+}
+
+export async function reconcilePlatformSubscriptions(limit = 50) {
+  if (!billingConfigured()) return { configured: false, scanned: 0, reconciled: 0, failed: 0 };
+  const db = getDatabase();
+  const rows = await db.prepare(
+    `SELECT provider_subscription_id
+     FROM platform_subscriptions
+     WHERE provider = 'mercado_pago' AND status IN ('pending', 'authorized', 'paused')
+     ORDER BY updated_at ASC
+     LIMIT ?`,
+  ).bind(Math.max(1, Math.min(100, limit))).all<{ provider_subscription_id: string }>();
+  let reconciled = 0;
+  let failed = 0;
+  for (const row of rows.results) {
+    try {
+      const provider = await fetchProviderSubscription(row.provider_subscription_id);
+      await syncProviderSubscription(provider);
+      reconciled += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("Rapidex billing reconciliation failed", row.provider_subscription_id, error instanceof Error ? error.message : "unknown");
+    }
+  }
+  return { configured: true, scanned: rows.results.length, reconciled, failed };
 }
 
 function normalizeStatus(value: unknown): "pending" | "authorized" | "paused" | "cancelled" | "unknown" {
