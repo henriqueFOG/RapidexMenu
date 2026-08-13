@@ -5,7 +5,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 ## Legenda
 
 - ✅ implementado e já validado por teste/gate técnico aplicável.
-- 🧪 implementado no branch de hardening, aguardando ou repetindo validação no SHA final.
+- 🧪 implementado no branch de hardening, aguardando validação externa ou integração real.
 - ⏳ trabalho técnico ainda pendente para a fase indicada.
 - 🔒 dependência externa/empresarial que não pode ser concluída apenas por código.
 - ➡️ deliberadamente movido para fase posterior porque não faz parte da oferta comercial atual.
@@ -23,7 +23,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ E2E PostgreSQL com duas compras disputando a última unidade.
 - ✅ Mudança de status com compare-and-set; operador com estado antigo recebe `409 order_state_conflict`.
 - ✅ E2E PostgreSQL para duas transições concorrentes do mesmo pedido.
-- 🧪 Numeração de pedidos: teste com 12 checkouts simultâneos adicionado; primeiro run provou que o rate-limit funcionava e foi isolado em bucket próprio para testar a sequência sem desabilitar a proteção de produção.
+- ✅ Numeração de pedidos validada com 12 checkouts simultâneos em PostgreSQL isolado, sem colisões nem lacunas internas.
 - ✅ Isolamento multi-tenant adversarial para produtos, mídia, pedidos e clientes.
 
 **Aceite:** nenhum overselling silencioso, colisão de status ou acesso cruzado entre restaurantes.
@@ -34,7 +34,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ Webhook/idempotência e associação de pagamento ao pedido/tenant.
 - ✅ Job de reconciliação de pagamentos pendentes implementado.
 - ✅ Cron protegido por Bearer secret e compatível com `CRON_SECRET` nativo da Vercel.
-- 🧪 Gate HMG do cron deve permanecer verde no SHA final.
+- ✅ HMG validou cron sem Bearer = 401, segredo incorreto = 401 e segredo correto = 200.
 - 🔒 Validar Pix real ponta a ponta com credencial/conta definitiva do restaurante.
 - 🔒 Validar webhook real duplicado, atrasado, inválido e webhook perdido em produção.
 
@@ -69,7 +69,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ Rejeição server-side de endereço fora da cobertura quando a loja usa cobertura restrita.
 - ✅ Tela administrativa `/admin/entrega`.
 - ✅ API pública de cotação e E2E de cobertura/taxa/mínimo/snapshot.
-- 🧪 Checkout público agora consulta CEP+bairro antes da confirmação, mostra zona/taxa/mínimo/prazo reais e bloqueia endereço fora da cobertura; aguarda Playwright do SHA final.
+- ✅ Checkout público consulta CEP+bairro antes da confirmação, mostra zona/taxa/mínimo/prazo reais e bloqueia endereço fora da cobertura; Playwright completo passou no mesmo SHA dos demais gates.
 - ➡️ Polígonos/mapa e integração logística movidos para P2.
 
 ## 6. Planos e entitlements
@@ -79,7 +79,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ IA administrativa protegida por entitlement.
 - ✅ Conexão WhatsApp protegida por entitlement.
 - ✅ KDS básico protegido para Scale.
-- 🧪 Webhook WhatsApp preserva histórico inbound, mas interrompe o bot pago e transfere para humano após perda de entitlement; aguarda gate final.
+- 🧪 Webhook WhatsApp preserva histórico inbound e interrompe o bot pago após perda de entitlement; implementação compilada/testada estaticamente, mas o fluxo oficial depende de conta Meta real para validação final.
 - ✅ Landing removeu promessa de multiunidade/fila que ainda não estava entregue.
 - ➡️ Multiunidade deixou de ser P0 enquanto não fizer parte da oferta vendida; permanece no roadmap P2.
 
@@ -109,7 +109,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ Limites internos diários por tenant/plano para respostas e transcrição.
 - ✅ Contabilização de tokens por restaurante/dia.
 - ✅ Circuit breaker por restaurante/provedor e fallback/handoff quando OpenAI falha.
-- 🧪 Fluxo completo de WhatsApp + quota/circuit deve permanecer verde no SHA final.
+- 🧪 Fluxo real WhatsApp + OpenAI + áudio + quota/circuit permanece dependente de credenciais Meta/OpenAI de produção para validação integrada.
 
 **Aceite:** IA nunca é autoridade de preço/pagamento/reembolso e uma loja não pode gerar custo ilimitado nem derrubar IA das demais.
 
@@ -122,7 +122,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ PBKDF2 com salt e recuperação de senha com token hash/expiração/anti-enumeração.
 - ✅ Dependency audit obrigatório no CI.
 - ✅ Secret scan obrigatório no CI.
-- ✅ Dependências de produção atualizadas; audit retornou zero vulnerabilidades no refresh validado.
+- ✅ Dependências de produção atualizadas; audit retornou zero vulnerabilidades high/critical no gate validado.
 - ✅ GitHub Actions atualizadas para v5.
 - 🔒 Rotacionar/confirmar segredos definitivos de produção e aplicar menor privilégio em todas as contas externas.
 - 🔒 Revisão de segurança externa antes de aquisição em escala.
@@ -273,7 +273,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ⏳ Logo churn / revenue churn / NRR.
 - ⏳ ARPA e margem bruta real.
 - ⏳ CAC/payback/LTV-CAC.
-- 🧪 Uso/tokens de IA por tenant já instrumentados; converter em custo financeiro real quando houver faturamento de API.
+- ✅ Uso/tokens de IA por tenant instrumentados; ⏳ converter em custo financeiro real quando houver faturamento de API.
 - ⏳ Custo Meta/infra/storage/suporte por tenant.
 - ⏳ Dashboard de ativação D2, retenção W4 e receita recuperada/mensalidade.
 
@@ -281,9 +281,9 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 
 # Gate para declarar “pronto para comercializar em escala”
 
-- 🧪 Nenhum P0 **técnico controlável por código** aberto no SHA final.
-- 🧪 CI + migrations + E2E + isolamento multi-tenant verdes no mesmo SHA final.
-- 🧪 Delivery/retirada/mesa, modificadores e cotação de zona validados ponta a ponta no SHA final.
+- ✅ Todos os P0 técnicos controláveis e cobertos pelo ambiente automatizado passaram no mesmo SHA de código validado.
+- ✅ CI + migrations + E2E + isolamento multi-tenant ficaram verdes simultaneamente no SHA técnico `6384828868f464e558b7e8d71cd7fcec60e8c5d5`.
+- ✅ Delivery/retirada/mesa, modificadores, zonas, concorrência, cron e Playwright foram validados no gate HMG desse SHA.
 - 🔒 Pix real e cobrança recorrente validados com contas definitivas.
 - 🔒 WhatsApp oficial validado com conta/número definitivo/teste aprovado.
 - 🔒 E-mail transacional e object storage definitivos configurados/testados.
@@ -296,9 +296,11 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ Onboarding técnico self-service validado; ⏳ medir ativação real em clientes piloto.
 - ⏳ MRR, churn, ativação e retenção medidos com base real.
 
-## Próximo gate técnico imediato
+## Próximo gate imediato
 
-1. Fazer o **SHA final deste PR** ficar verde simultaneamente em CI, HMG E2E, Security audit e Secret scan.
-2. Confirmar no HMG o novo teste de 12 pedidos concorrentes e o checkout de cotação de entrega no Playwright.
-3. Depois do gate técnico, não abrir produção pública: executar os gates externos de jurídico, credenciais reais, object storage e restore de backup.
-4. Rodar piloto controlado com restaurantes reais e usar telemetria para priorizar os P1, em vez de adicionar features sem evidência.
+O gate técnico automatizado do branch de hardening foi concluído no SHA de código `6384828868f464e558b7e8d71cd7fcec60e8c5d5`. O produto ainda **não deve ser declarado pronto para escala pública** até concluir os gates externos abaixo:
+
+1. Jurídico/LGPD: entidade contratante, Termos, Privacidade, DPA, retenção e subprocessadores.
+2. Produção real: Mercado Pago, Meta/WhatsApp, e-mail transacional e object storage com credenciais definitivas.
+3. Continuidade: backup contratado, restore comprovado e monitoramento/alertas de produção.
+4. Piloto controlado: restaurantes reais, sete dias sem incidente grave, pagamento/renovação e métricas de ativação/retenção.
