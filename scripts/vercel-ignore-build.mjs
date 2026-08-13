@@ -1,4 +1,5 @@
 const productionProjectId = "prj_qteZJoZgpPaJGhEnICDqYzkxKxZT";
+const hmgProjectId = "prj_zRAZLCCi4dLXN91ZepzNXcaV2euO";
 const retiredProjectIds = new Set([
   "prj_aVc1xdFF4aUM1TOCgTkCUrRolkc2",
   "prj_9YXJVWpIK0RGWWPrWjUmcfZ5lCnq",
@@ -15,11 +16,13 @@ if (retiredProjectIds.has(projectId)) {
 } else if (projectId === productionProjectId) {
   // O projeto oficial de produção nunca recebe branches de HMG/feature.
   shouldBuild = branch === "master";
-} else if (environment === "hmg") {
-  // Um projeto HMG separado só pode construir a branch permanente hmg.
+} else if (projectId === hmgProjectId) {
+  // O projeto HMG é identificado pelo próprio Vercel Project ID.
+  // O Ignore Build Step roda antes de depender de variáveis customizadas de runtime,
+  // portanto RAPIDEX_ENV não pode ser a única autoridade para decidir o deploy.
   shouldBuild = branch === "hmg";
 } else {
-  // Projetos desconhecidos ficam bloqueados por padrão.
+  // Projetos desconhecidos ficam bloqueados por padrão, mesmo que recebam RAPIDEX_ENV=hmg.
   shouldBuild = false;
 }
 
