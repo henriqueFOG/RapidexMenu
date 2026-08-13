@@ -7,7 +7,11 @@ const productionProjectId = "prj_qteZJoZgpPaJGhEnICDqYzkxKxZT";
 const hmgProjectId = "prj_zRAZLCCi4dLXN91ZepzNXcaV2euO";
 
 function run(projectId: string, branch: string, rapidexEnv?: string) {
-  const env = { ...process.env, VERCEL_PROJECT_ID: projectId, VERCEL_GIT_COMMIT_REF: branch };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    VERCEL_PROJECT_ID: projectId,
+    VERCEL_GIT_COMMIT_REF: branch,
+  };
   if (rapidexEnv === undefined) delete env.RAPIDEX_ENV;
   else env.RAPIDEX_ENV = rapidexEnv;
   return spawnSync(process.execPath, [script.pathname], { env, encoding: "utf8" });
