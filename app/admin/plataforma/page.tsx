@@ -1,9 +1,9 @@
 import { requirePlatformAdmin } from "@/lib/platform-admin";
-import PlatformOverviewClient from "./PlatformOverviewClient";
+import PlatformConsoleClient from "./PlatformConsoleClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlatformOverviewPage() {
   await requirePlatformAdmin();
-  return <PlatformOverviewClient />;
+  return <PlatformConsoleClient />;
 }
