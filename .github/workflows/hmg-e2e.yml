@@ -106,6 +106,9 @@ jobs:
       - name: Run API commercial HMG E2E
         run: node scripts/hmg-e2e.mjs
 
+      - name: Validate protected reconciliation cron endpoints
+        run: node scripts/cron-auth-e2e.mjs
+
       - name: Run canonical Playwright full UI and tenant isolation HMG E2E
         run: npx playwright test tests/landing-functional-ui.spec.mjs tests/hmg-public-e2e.spec.mjs tests/hmg-tenant-isolation.spec.mjs --reporter=line
 
