@@ -79,7 +79,7 @@ export default function JobsClient() {
         </tr>)}</tbody>
       </table></div>}
     </section>}
-    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin/plataforma">← Saúde da plataforma</Link></div>
+    <div className={styles.footerActions}><Link className={styles.linkButton} href="/central">← Saúde da plataforma</Link></div>
   </section></main>;
 }
 

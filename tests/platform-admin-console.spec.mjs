@@ -10,10 +10,13 @@ mkdirSync(artifactsDir, { recursive: true });
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
 test.setTimeout(120_000);
 
-test("central da plataforma é exclusiva do admin e mostra gestão do SaaS", async ({ browser }) => {
+test("central da plataforma tem rota própria e é exclusiva do admin geral", async ({ browser }) => {
   const anonymous = await browser.newContext();
   const denied = await anonymous.request.get("/api/internal/platform/overview");
   expect(denied.status()).toBe(401);
+  const centralAnonymous = await anonymous.request.get("/central", { maxRedirects: 0 });
+  expect([302, 303, 307, 308]).toContain(centralAnonymous.status());
+  expect(centralAnonymous.headers().location || "").toContain("/central/entrar");
   await anonymous.close();
 
   const context = await browser.newContext();
@@ -33,7 +36,8 @@ test("central da plataforma é exclusiva do admin e mostra gestão do SaaS", asy
     page.getByRole("button", { name: /Criar minha loja/i }).click(),
   ]);
 
-  await page.goto("/admin/plataforma", { waitUntil: "networkidle" });
+  await page.goto("/central", { waitUntil: "networkidle" });
+  await expect(page).toHaveURL(/\/central$/);
   await expect(page.getByRole("heading", { name: "Central de gerenciamento" })).toBeVisible();
   await expect(page.getByText("ADMINISTRAÇÃO DA PLATAFORMA")).toBeVisible();
   await expect(page.getByRole("button", { name: "Visão geral" })).toBeVisible();
@@ -56,6 +60,10 @@ test("central da plataforma é exclusiva do admin e mostra gestão do SaaS", asy
   await expect(page.getByText("Integrações", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("DATABASE_URL");
   await expect(page.locator("body")).not.toContainText("RAPIDEX_SESSION_SECRET");
+
+  await page.goto("/admin/plataforma", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/central$/);
+
   await page.screenshot({ path: `${artifactsDir}/platform-admin-console.png`, fullPage: true });
   await context.close();
 });
