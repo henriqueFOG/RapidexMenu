@@ -1,10 +1,28 @@
 import { ensureDemoData } from "@/lib/demo-data";
+import { fulfillmentSettingsFrom } from "@/lib/fulfillment";
 import { apiError, json, HttpError } from "@/lib/http";
 import { getDatabase } from "@/lib/runtime";
 import { isRestaurantAcceptingOrders } from "@/lib/store-availability";
 import { safeSlug } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+type PublicGroup = {
+  id: string;
+  product_id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  pricing_strategy: string;
+  position: number;
+};
+type PublicOption = {
+  id: string;
+  group_id: string;
+  name: string;
+  price_delta_cents: number;
+  position: number;
+};
 
 export async function GET(
   _request: Request,
@@ -30,7 +48,7 @@ export async function GET(
       .first<Record<string, unknown>>();
     if (!restaurant) throw new HttpError(404, "Loja não encontrada ou temporariamente indisponível.", "store_not_found");
 
-    const [categories, products, paymentConnection] = await Promise.all([
+    const [categories, products, paymentConnection, optionGroups, productOptions] = await Promise.all([
       db
         .prepare(
           `SELECT id, name, position FROM categories
@@ -66,10 +84,24 @@ export async function GET(
         )
         .bind(restaurant.id)
         .first<{ id: string }>(),
+      db.prepare(
+        `SELECT id, product_id, name, min_select, max_select, pricing_strategy, position
+         FROM product_option_groups
+         WHERE restaurant_id = ? AND active = 1
+         ORDER BY product_id, position, created_at`,
+      ).bind(restaurant.id).all<PublicGroup>(),
+      db.prepare(
+        `SELECT po.id, po.group_id, po.name, po.price_delta_cents, po.position
+         FROM product_options po
+         JOIN product_option_groups pog ON pog.id = po.group_id
+         WHERE po.restaurant_id = ? AND po.available = 1 AND pog.active = 1
+         ORDER BY po.group_id, po.position, po.created_at`,
+      ).bind(restaurant.id).all<PublicOption>(),
     ]);
 
     let settings: Record<string, unknown> = {};
     try { settings = JSON.parse(String(restaurant.settings_json || "{}")); } catch { settings = {}; }
+    const fulfillment = fulfillmentSettingsFrom(settings);
     const acceptingOrders = isRestaurantAcceptingOrders({
       isOpen: Number(restaurant.is_open),
       timezone: String(restaurant.timezone || "America/Sao_Paulo"),
@@ -78,6 +110,8 @@ export async function GET(
     });
     const configuredBrandColor = typeof settings.brandColor === "string" ? settings.brandColor.toLowerCase() : "";
     const brandColor = !configuredBrandColor || configuredBrandColor === "#c9ff4a" ? "#ff650b" : configuredBrandColor;
+    const groups = optionGroups.results;
+    const options = productOptions.results;
 
     return json({
       ok: true,
@@ -94,16 +128,19 @@ export async function GET(
         pixAvailable: Boolean(paymentConnection),
         deliveryFeeCents: restaurant.delivery_fee_cents,
         minimumOrderCents: restaurant.minimum_order_cents,
+        prepMinutes: Number(restaurant.average_prep_minutes),
+        deliveryMinutes: Number(restaurant.delivery_minutes),
         estimatedMinutes: Number(restaurant.average_prep_minutes) + Number(restaurant.delivery_minutes),
         brandColor,
         cuisine: settings.cuisine || "Restaurante",
+        fulfillment,
       },
       categories: categories.results.map((category) => ({
         id: category.id,
         name: category.name,
-        products: products.results.filter((product) => product.category_id === category.id).map(publicProduct),
+        products: products.results.filter((product) => product.category_id === category.id).map((product) => publicProduct(product, groups, options)),
       })),
-      uncategorized: products.results.filter((product) => !product.category_id).map(publicProduct),
+      uncategorized: products.results.filter((product) => !product.category_id).map((product) => publicProduct(product, groups, options)),
     });
   } catch (error) {
     return apiError(error);
@@ -120,7 +157,8 @@ function publicProduct(product: {
   image_key: string | null;
   available: number;
   prep_minutes: number;
-}) {
+}, groups: PublicGroup[], options: PublicOption[]) {
+  const productGroups = groups.filter((group) => group.product_id === product.id);
   return {
     id: product.id,
     name: product.name,
@@ -131,6 +169,18 @@ function publicProduct(product: {
     imageUrl: product.image_key ? `/api/public/media/${encodeKey(product.image_key)}` : null,
     available: Boolean(product.available),
     prepMinutes: product.prep_minutes,
+    optionGroups: productGroups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      minSelect: Number(group.min_select),
+      maxSelect: Number(group.max_select),
+      pricingStrategy: group.pricing_strategy,
+      options: options.filter((option) => option.group_id === group.id).map((option) => ({
+        id: option.id,
+        name: option.name,
+        priceDeltaCents: Number(option.price_delta_cents),
+      })),
+    })),
   };
 }
 

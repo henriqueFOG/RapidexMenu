@@ -1,0 +1,28 @@
+name: Security audit
+
+on:
+  pull_request:
+    branches: [hmg]
+  push:
+    branches: [hmg, agent/commercial-hardening-p1]
+  schedule:
+    - cron: "17 10 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Block high/critical production vulnerabilities
+        run: npm audit --omit=dev --audit-level=high

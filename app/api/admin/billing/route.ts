@@ -2,6 +2,7 @@ import { requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { billingConfigured, cancelProviderSubscription, createBillingCheckout, fetchProviderSubscription, PLAN_PRICES, syncProviderSubscription, type RapidexPlan } from "@/lib/platform-billing";
 import { getDatabase } from "@/lib/runtime";
+import { subscriptionEventStatement } from "@/lib/subscription-events";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
       prices: PLAN_PRICES,
     });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     });
     return json({ ok: true, checkoutUrl: checkout.checkoutUrl, subscriptionId: checkout.id }, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -87,12 +88,14 @@ export async function DELETE(request: Request) {
     requireRole(context, ["owner"]);
     const db = getDatabase();
     const local = await db.prepare(
-      `SELECT id, provider_subscription_id, status, next_payment_at
+      `SELECT id, provider_subscription_id, plan, amount_cents, status, next_payment_at
        FROM platform_subscriptions
        WHERE restaurant_id = ? ORDER BY updated_at DESC LIMIT 1`,
     ).bind(context.restaurantId).first<{
       id: string;
       provider_subscription_id: string | null;
+      plan: RapidexPlan;
+      amount_cents: number;
       status: string;
       next_payment_at: number | null;
     }>();
@@ -120,10 +123,18 @@ export async function DELETE(request: Request) {
       db.prepare(
         `UPDATE restaurants SET access_ends_at = ?, updated_at = ? WHERE id = ?`,
       ).bind(accessEndsAt, now, context.restaurantId),
+      subscriptionEventStatement(db, {
+        subscriptionId: local.id,
+        restaurantId: context.restaurantId,
+        source: "manual_cancel",
+        before: { status: local.status, plan: local.plan, amountCents: Number(local.amount_cents) },
+        after: { status: "cancelled", plan: local.plan, amountCents: Number(local.amount_cents) },
+        occurredAt: now,
+      }),
     ]);
     return json({ ok: true, cancelled: true, accessEndsAt });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 

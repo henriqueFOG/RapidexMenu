@@ -1,4 +1,5 @@
 import { audit, requireAdminContext, requireRole } from "@/lib/admin-auth";
+import { requireCommercialFeature } from "@/lib/entitlements";
 import { apiError, assertSameOrigin, json, readJson } from "@/lib/http";
 import { completeWhatsAppEmbeddedSignup } from "@/lib/whatsapp-connection";
 
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const context = await requireAdminContext();
     requireRole(context, ["owner"]);
+    requireCommercialFeature(context, "whatsapp_connection");
     const body = await readJson<{
       code?: unknown;
       wabaId?: unknown;

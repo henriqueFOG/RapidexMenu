@@ -1,5 +1,6 @@
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
 import { hashPassword, isNativeAuthMode, nativeAuthConfigured, setCommercialSession, signupEnabled } from "@/lib/commercial-auth";
+import { RAPIDEX_PRIVACY_VERSION, RAPIDEX_TERMS_VERSION } from "@/lib/legal";
 import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getDatabase } from "@/lib/runtime";
 import { normalizePhone, optionalString, requiredString } from "@/lib/validation";
@@ -81,6 +82,16 @@ export async function POST(request: Request) {
         `INSERT INTO categories (id, restaurant_id, name, position, active, created_at, updated_at)
          VALUES (?, ?, 'Principais', 0, 1, ?, ?)`,
       ).bind(categoryId, restaurantId, now, now),
+      db.prepare(
+        `INSERT INTO legal_acceptances
+         (id, user_id, restaurant_id, document_type, document_version, source, accepted_at, created_at)
+         VALUES (?, ?, ?, 'terms', ?, 'signup', ?, ?)`,
+      ).bind(crypto.randomUUID(), userId, restaurantId, RAPIDEX_TERMS_VERSION, now, now),
+      db.prepare(
+        `INSERT INTO legal_acceptances
+         (id, user_id, restaurant_id, document_type, document_version, source, accepted_at, created_at)
+         VALUES (?, ?, ?, 'privacy', ?, 'signup', ?, ?)`,
+      ).bind(crypto.randomUUID(), userId, restaurantId, RAPIDEX_PRIVACY_VERSION, now, now),
     ]);
 
     await setCommercialSession({ id: userId, email, authVersion: 1 });
@@ -88,6 +99,10 @@ export async function POST(request: Request) {
       ok: true,
       next: "/onboarding",
       trialEndsAt,
+      legal: {
+        termsVersion: RAPIDEX_TERMS_VERSION,
+        privacyVersion: RAPIDEX_PRIVACY_VERSION,
+      },
       restaurant: { id: restaurantId, name: restaurantName, slug, plan },
     }, { status: 201 });
   } catch (error) {

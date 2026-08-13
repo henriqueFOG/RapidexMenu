@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [master, hmg]
   push:
-    branches: [master, hmg, agent/commercial-ready]
+    branches: [master, hmg, agent/commercial-ready, agent/commercial-hardening-p1]
 
 permissions:
   contents: read
@@ -26,10 +26,10 @@ jobs:
       RAPIDEX_PUBLIC_URL: http://localhost:3000
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

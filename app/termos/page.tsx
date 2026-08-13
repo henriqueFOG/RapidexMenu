@@ -1,3 +1,4 @@
+import { RAPIDEX_TERMS_VERSION_LABEL } from "@/lib/legal";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import styles from "../commercial.module.css";
@@ -7,7 +8,7 @@ export const metadata = { title: "Termos de Uso | RapidexMenu" };
 export default function TermsPage() {
   return <main className={styles.shell}><article className={styles.card}>
     <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
-    <small className={styles.kicker}>TERMOS DE USO · VERSÃO 07/08/2026</small>
+    <small className={styles.kicker}>TERMOS DE USO · VERSÃO {RAPIDEX_TERMS_VERSION_LABEL}</small>
     <h1 className={styles.title}>Termos de Uso do RapidexMenu</h1>
     <p className={styles.intro}>Estes termos regulam o uso da plataforma RapidexMenu por restaurantes, estabelecimentos e seus usuários autorizados.</p>
     <Legal title="1. Serviço">O RapidexMenu oferece cardápio digital, gestão de pedidos, relacionamento com clientes e recursos de automação. Funcionalidades que dependem de terceiros, como WhatsApp, inteligência artificial e meios de pagamento, podem exigir credenciais, aprovação ou tarifas desses fornecedores.</Legal>

@@ -4,6 +4,7 @@ import { HttpError } from "./http";
 import { getBindings, getDatabase } from "./runtime";
 
 export type MemberRole = "owner" | "manager" | "operator" | "finance";
+export type RapidexPlan = "start" | "growth" | "scale";
 
 export type AdminContext = {
   user: ChatGPTUser;
@@ -11,6 +12,10 @@ export type AdminContext = {
   restaurantName: string;
   restaurantSlug: string;
   role: MemberRole;
+  plan: RapidexPlan;
+  restaurantStatus: string;
+  trialEndsAt: number | null;
+  accessEndsAt: number | null;
 };
 
 type MembershipRow = {
@@ -18,6 +23,10 @@ type MembershipRow = {
   restaurant_name: string;
   restaurant_slug: string;
   role: MemberRole;
+  plan: RapidexPlan;
+  restaurant_status: string;
+  trial_ends_at: number | null;
+  access_ends_at: number | null;
 };
 
 export async function requireAdminContext(): Promise<AdminContext> {
@@ -32,7 +41,8 @@ export async function requireAdminContext(): Promise<AdminContext> {
   if (!membership) {
     const ownedRestaurant = await db
       .prepare(
-        `SELECT id AS restaurant_id, name AS restaurant_name, slug AS restaurant_slug, 'owner' AS role
+        `SELECT id AS restaurant_id, name AS restaurant_name, slug AS restaurant_slug, 'owner' AS role,
+                plan, status AS restaurant_status, trial_ends_at, access_ends_at
          FROM restaurants WHERE lower(owner_email) = ? LIMIT 1`,
       )
       .bind(email)
@@ -70,6 +80,10 @@ export async function requireAdminContext(): Promise<AdminContext> {
     restaurantName: membership.restaurant_name,
     restaurantSlug: membership.restaurant_slug,
     role: membership.role,
+    plan: membership.plan,
+    restaurantStatus: membership.restaurant_status,
+    trialEndsAt: membership.trial_ends_at,
+    accessEndsAt: membership.access_ends_at,
   };
 }
 
@@ -109,7 +123,8 @@ export async function audit(
 async function findMembership(db: D1Database, email: string) {
   return db
     .prepare(
-      `SELECT m.restaurant_id, r.name AS restaurant_name, r.slug AS restaurant_slug, m.role
+      `SELECT m.restaurant_id, r.name AS restaurant_name, r.slug AS restaurant_slug, m.role,
+              r.plan, r.status AS restaurant_status, r.trial_ends_at, r.access_ends_at
        FROM members m
        JOIN restaurants r ON r.id = m.restaurant_id
        WHERE lower(m.email) = ? AND m.active = 1 AND r.status != 'canceled'

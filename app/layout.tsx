@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { getBindings, getRapidexEnvironment } from "@/lib/runtime";
 import CommercialEntry from "./CommercialEntry";
 import ConversionLayer from "./ConversionLayer";
+import PwaLifecycle from "./PwaLifecycle";
 import "./globals.css";
 import "./operational.css";
 import "./storefront.css";
@@ -15,10 +16,24 @@ import "./fidelity-overrides.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#11120f",
+};
+
 export const metadata: Metadata = {
+  applicationName: "RapidexMenu",
   title: "RapidexMenu — Cardápio online, pedidos e entrega",
   description: "Cardápio online, pedidos, gestão e automação para restaurantes venderem no canal próprio sem comissão por pedido.",
   keywords: ["cardápio digital", "delivery próprio", "pedidos WhatsApp", "restaurante", "vendas diretas", "RapidexMenu"],
+  appleWebApp: {
+    capable: true,
+    title: "RapidexMenu",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
   openGraph: {
     title: "RapidexMenu — Cardápio Online. Pedidos. Entrega. Simples assim.",
     description: "A plataforma completa para restaurantes venderem direto, organizarem pedidos e encantarem clientes.",
@@ -33,7 +48,11 @@ export const metadata: Metadata = {
     images: ["/rapidex-og.svg"],
   },
   other: { "codex-preview": "development" },
-  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: [{ url: "/api/pwa/icon/180", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -42,6 +61,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const commercialEntryEnabled = bindings.RAPIDEX_AUTH_MODE === "native" && Boolean(bindings.RAPIDEX_SESSION_SECRET && bindings.RAPIDEX_SESSION_SECRET.length >= 32);
   return <html lang="pt-BR"><body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
     {environment === "hmg" && <div className="rm-hmg-env-badge" style={hmgBadge}>HMG · NÃO É PRODUÇÃO</div>}
+    <PwaLifecycle />
     {children}
     <ConversionLayer />
     <CommercialEntry enabled={commercialEntryEnabled} />

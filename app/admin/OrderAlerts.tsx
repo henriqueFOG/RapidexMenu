@@ -36,6 +36,7 @@ export default function OrderAlerts() {
     if (pathname === "/admin/login") return;
     let disposed = false;
     async function poll() {
+      if (!navigator.onLine || document.visibilityState !== "visible") return;
       try {
         const response = await fetch("/api/admin/orders?status=received", { cache: "no-store" });
         if (!response.ok) return;
@@ -52,16 +53,21 @@ export default function OrderAlerts() {
         setLatest(fresh[0]);
         if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
         dismissTimer.current = window.setTimeout(() => setLatest(null), 12_000);
-        if (enabled) for (const order of fresh.reverse()) announce(order);
+        if (enabled) for (const order of fresh.reverse()) void announce(order);
       } catch {
         // O painel principal continua operando mesmo se o alerta auxiliar falhar.
       }
     }
+    const resume = () => void poll();
     void poll();
     const interval = window.setInterval(() => void poll(), 8_000);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
     return () => {
       disposed = true;
       window.clearInterval(interval);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
       if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
     };
   }, [enabled, pathname]);
@@ -85,21 +91,41 @@ export default function OrderAlerts() {
     }
   }
 
-  function announce(order: OrderRow) {
+  async function announce(order: OrderRow) {
     beep();
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      const total = Number(order.total_cents || 0) / 100;
-      const notification = new Notification(`Novo pedido #${order.order_number || ""}`.trim(), {
-        body: total > 0
-          ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.`
-          : "Abra o painel para conferir.",
-        tag: `rapidex-order-${order.id}`,
-      });
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    const total = Number(order.total_cents || 0) / 100;
+    const options: NotificationOptions = {
+      body: total > 0
+        ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.`
+        : "Abra o painel para conferir.",
+      tag: `rapidex-order-${order.id}`,
+      icon: "/api/pwa/icon/192",
+      badge: "/api/pwa/icon/192",
+      data: { url: "/admin" },
+    };
+    const title = `Novo pedido #${order.order_number || ""}`.trim();
+
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(title, options);
+        return;
+      } catch {
+        // Alguns navegadores desktop ainda aceitam a notificação direta; tentamos abaixo.
+      }
+    }
+
+    try {
+      const notification = new Notification(title, options);
       notification.onclick = () => {
         window.focus();
         window.location.assign("/admin");
         notification.close();
       };
+    } catch {
+      // O toast visual permanece como fallback obrigatório.
     }
   }
 
@@ -134,15 +160,15 @@ export default function OrderAlerts() {
 }
 
 const buttonStyle: React.CSSProperties = {
-  position: "fixed", right: 18, bottom: 18, zIndex: 85, border: "1px solid #e3e3df", borderRadius: 999,
-  padding: "10px 13px", background: "white", color: "#333", fontSize: 11, fontWeight: 850, cursor: "pointer",
-  boxShadow: "0 10px 28px rgba(0,0,0,.08)",
+  position: "fixed", right: 18, bottom: "max(18px, env(safe-area-inset-bottom))", zIndex: 85, border: "1px solid #e3e3df", borderRadius: 999,
+  minHeight: 44, padding: "10px 13px", background: "white", color: "#333", fontSize: 11, fontWeight: 850, cursor: "pointer",
+  boxShadow: "0 10px 28px rgba(0,0,0,.08)", touchAction: "manipulation",
 };
 const badgeStyle: React.CSSProperties = {
   ...buttonStyle, background: "#111", borderColor: "#222", color: "#ff7a1a", cursor: "default",
 };
 const toastStyle: React.CSSProperties = {
-  position: "fixed", right: 18, bottom: 70, zIndex: 90, width: "min(370px, calc(100vw - 36px))",
+  position: "fixed", right: 18, bottom: "max(70px, calc(env(safe-area-inset-bottom) + 58px))", zIndex: 90, width: "min(370px, calc(100vw - 36px))",
   display: "grid", gridTemplateColumns: "38px 1fr auto", alignItems: "center", gap: 10,
   padding: 14, borderRadius: 16, background: "#111", color: "white", border: "1px solid #2b2b2b",
   boxShadow: "0 18px 42px rgba(0,0,0,.22)",

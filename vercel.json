@@ -2,5 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "npm run build:vercel",
-  "ignoreCommand": "node scripts/vercel-ignore-build.mjs"
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
+  "crons": [
+    {
+      "path": "/api/internal/process-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/reconcile-payments",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/reconcile-subscriptions",
+      "schedule": "7 * * * *"
+    }
+  ]
 }

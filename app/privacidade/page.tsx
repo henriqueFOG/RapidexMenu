@@ -1,3 +1,4 @@
+import { RAPIDEX_PRIVACY_VERSION_LABEL } from "@/lib/legal";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import styles from "../commercial.module.css";
@@ -7,7 +8,7 @@ export const metadata = { title: "Política de Privacidade | RapidexMenu" };
 export default function PrivacyPage() {
   return <main className={styles.shell}><article className={styles.card}>
     <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
-    <small className={styles.kicker}>PRIVACIDADE E LGPD · VERSÃO 07/08/2026</small>
+    <small className={styles.kicker}>PRIVACIDADE E LGPD · VERSÃO {RAPIDEX_PRIVACY_VERSION_LABEL}</small>
     <h1 className={styles.title}>Política de Privacidade</h1>
     <p className={styles.intro}>Esta política explica como o RapidexMenu trata dados para criar contas, operar lojas, processar pedidos, manter segurança e disponibilizar automações aos estabelecimentos.</p>
     <Legal title="1. Dados tratados">Podemos tratar dados cadastrais do estabelecimento e de seus usuários, como nome, e-mail, telefone, função e dados da loja; dados operacionais de pedidos; dados de clientes informados durante pedidos, como nome, contato e endereço; registros técnicos de segurança, consentimentos e uso da plataforma.</Legal>
@@ -20,7 +21,7 @@ export default function PrivacyPage() {
     <Legal title="8. Direitos do titular">Titulares podem solicitar, quando aplicável, confirmação de tratamento, acesso, correção, anonimização, bloqueio, eliminação, portabilidade, informações sobre compartilhamento e revisão ou revogação de consentimento. As solicitações podem exigir validação de identidade.</Legal>
     <Legal title="9. Cookies e sessão">Utilizamos cookies estritamente necessários para manter sessões autenticadas e proteger o acesso ao painel. Recursos adicionais de medição, caso sejam ativados, deverão respeitar as configurações e bases legais aplicáveis.</Legal>
     <Legal title="10. Contato e atualização">Solicitações de privacidade podem ser feitas pelo canal de suporte disponibilizado na plataforma. Esta política pode ser atualizada para refletir mudanças legais, técnicas ou de produto; alterações relevantes serão comunicadas de maneira adequada.</Legal>
-    <p className={styles.note}>O cadastro registra a data do aceite desta política para fins de rastreabilidade.</p>
+    <p className={styles.note}>O cadastro registra a data e a versão aceita desta política para fins de rastreabilidade.</p>
   </article></main>;
 }
 

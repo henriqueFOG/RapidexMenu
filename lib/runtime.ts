@@ -11,6 +11,8 @@ export type RapidexBindings = {
   RAPIDEX_AUTH_MODE?: string;
   RAPIDEX_SESSION_SECRET?: string;
   RAPIDEX_INTEGRATION_SECRET?: string;
+  CRON_SECRET?: string;
+  RAPIDEX_CRON_SECRET?: string;
   RAPIDEX_SIGNUP_ENABLED?: string;
   RAPIDEX_HMG_OWNER_EMAIL?: string;
   RAPIDEX_HMG_OWNER_NAME?: string;
@@ -45,6 +47,13 @@ export function getBindings(): RapidexBindings {
 
 export function getRapidexEnvironment() {
   return normalizeRapidexEnvironment(getBindings().RAPIDEX_ENV);
+}
+
+export function reconciliationSecret() {
+  const bindings = getBindings();
+  // CRON_SECRET is the native Vercel convention. Keep RAPIDEX_CRON_SECRET
+  // as a compatibility alias for non-Vercel/local environments.
+  return String(bindings.CRON_SECRET || bindings.RAPIDEX_CRON_SECRET || "").trim();
 }
 
 export function getDatabase(): D1Database {
@@ -86,6 +95,7 @@ export function integrationReadiness() {
       bindings.WHATSAPP_APP_SECRET,
   );
   const postgresConfigured = Boolean(bindings.DATABASE_URL || bindings.POSTGRES_URL);
+  const cronSecret = reconciliationSecret();
   return {
     environment: environmentCheck.environment,
     environmentSafe: environmentCheck.issues.length === 0,
@@ -101,6 +111,7 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET &&
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
+    reconciliation: cronSecret.length >= 32,
     metaEmbeddedSignup,
     uploads: Boolean(bindings.BUCKET || postgresConfigured),
     openai: Boolean(bindings.OPENAI_API_KEY),
