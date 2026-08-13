@@ -54,6 +54,8 @@ async function signup({ suffix, slug, restaurantName }) {
   );
   assert.equal(payload.ok, true);
   assert.equal(payload.restaurant.slug, slug);
+  assert.equal(payload.legal?.termsVersion, "2026-08-07");
+  assert.equal(payload.legal?.privacyVersion, "2026-08-07");
   return { cookie: sessionCookie(response), restaurant: payload.restaurant };
 }
 
@@ -71,6 +73,18 @@ async function createProduct(cookie, categoryId, body) {
   return payload.id;
 }
 
+async function patchProduct(cookie, productId, body) {
+  return call(
+    `/api/admin/products/${encodeURIComponent(productId)}`,
+    {
+      method: "PATCH",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify(body),
+    },
+    [200],
+  );
+}
+
 async function changeStatus(cookie, orderId, status, expectedStatuses = [200]) {
   return call(
     `/api/admin/orders/${encodeURIComponent(orderId)}`,
@@ -81,6 +95,31 @@ async function changeStatus(cookie, orderId, status, expectedStatuses = [200]) {
     },
     expectedStatuses,
   );
+}
+
+function orderPayload({ clientOrderId, productId, phone, name = "Cliente HMG" }) {
+  return {
+    restaurantSlug: "hmg-burger-a",
+    clientOrderId,
+    source: "menu",
+    customer: {
+      name,
+      phone,
+      email: `${clientOrderId}@rapidex-hmg.test`,
+      whatsappConsent: false,
+      address: {
+        street: "Rua do Teste",
+        number: "10",
+        neighborhood: "Centro",
+        city: "Petrópolis",
+        state: "RJ",
+        postalCode: "25600000",
+        complement: "E2E",
+      },
+    },
+    items: [{ productId, quantity: 1, priceCents: 1 }],
+    paymentMethod: "cash",
+  };
 }
 
 console.log("[HMG E2E] health");
@@ -243,6 +282,32 @@ const duplicate = await call(
 assert.equal(duplicate.payload.order.id, orderId);
 assert.equal(duplicate.payload.order.existing, true);
 
+console.log("[HMG E2E] concorrência de estoque: a última unidade só pode gerar um pedido");
+const lastUnitId = await createProduct(tenantA.cookie, categoryId, {
+  name: "Última Unidade HMG",
+  description: "Produto usado para validar lock transacional de estoque",
+  priceCents: 1900,
+  costCents: 700,
+  emoji: "🔒",
+  prepMinutes: 3,
+});
+await patchProduct(tenantA.cookie, lastUnitId, { stockControlEnabled: true, stockQuantity: 1, minimumStock: 0 });
+const stockRace = await Promise.all([
+  call(
+    "/api/public/orders",
+    { method: "POST", headers: jsonHeaders(), body: JSON.stringify(orderPayload({ clientOrderId: "hmg-stock-race-a", productId: lastUnitId, phone: "+5524977770001", name: "Race Estoque A" })) },
+    [201, 409, 500],
+  ),
+  call(
+    "/api/public/orders",
+    { method: "POST", headers: jsonHeaders(), body: JSON.stringify(orderPayload({ clientOrderId: "hmg-stock-race-b", productId: lastUnitId, phone: "+5524977770002", name: "Race Estoque B" })) },
+    [201, 409, 500],
+  ),
+]);
+const stockStatuses = stockRace.map((result) => result.response.status).sort((a, b) => a - b);
+assert.deepEqual(stockStatuses, [201, 500], "uma transação deve vencer e a concorrente deve ser abortada pelo guard de estoque");
+assert.ok(stockRace.some((result) => result.payload?.order?.id), "uma compra da última unidade deve ser criada");
+
 console.log("[HMG E2E] tracking + Profit Engine");
 const tracking = await call(`/api/public/orders/${trackingToken}`, {}, [200]);
 assert.equal(tracking.payload.order.status, "received");
@@ -264,6 +329,30 @@ await changeStatus(tenantA.cookie, orderId, "delivered", [200]);
 const deliveredTracking = await call(`/api/public/orders/${trackingToken}`, {}, [200]);
 assert.equal(deliveredTracking.payload.order.status, "delivered");
 
+console.log("[HMG E2E] concorrência de status: compare-and-set impede sobrescrita silenciosa");
+const statusRaceCreated = await call(
+  "/api/public/orders",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(orderPayload({
+      clientOrderId: "hmg-status-race-0001",
+      productId: friesId,
+      phone: "+5524966660001",
+      name: "Race Status",
+    })),
+  },
+  [201],
+);
+const statusRaceId = statusRaceCreated.payload.order.id;
+const statusRace = await Promise.all([
+  changeStatus(tenantA.cookie, statusRaceId, "confirmed", [200, 409]),
+  changeStatus(tenantA.cookie, statusRaceId, "canceled", [200, 409]),
+]);
+assert.equal(statusRace.filter((result) => result.response.status === 200).length, 1, "somente uma transição concorrente pode vencer");
+const conflict = statusRace.find((result) => result.response.status === 409);
+assert.equal(conflict?.payload.error?.code, "order_state_conflict");
+
 console.log("[HMG E2E] tenant B isolation");
 const tenantB = await signup({ suffix: "b", slug: "hmg-burger-b", restaurantName: "HMG Burger B" });
 const tenantBOrders = await call("/api/admin/orders", { headers: { cookie: tenantB.cookie } }, [200]);
@@ -271,4 +360,4 @@ assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxerga
 const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
 assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
 
-console.log("[HMG E2E] PASS: signup, importação, horários, catálogo, recomendação, pedido, idempotência, tracking, ROI, status e isolamento multiempresa");
+console.log("[HMG E2E] PASS: signup, aceite legal versionado, importação, horários, catálogo, recomendação, pedido, idempotência, concorrência de estoque, tracking, ROI, status concorrente e isolamento multiempresa");
