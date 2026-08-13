@@ -1,0 +1,31 @@
+name: Platform Admin Console CI
+
+on:
+  push:
+    branches: [agent/platform-admin-console-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAPIDEX_RUNTIME: vercel
+      RAPIDEX_ENV: ci
+      RAPIDEX_AUTH_MODE: native
+      RAPIDEX_SESSION_SECRET: ci-only-session-secret-32-characters-minimum
+      RAPIDEX_SIGNUP_ENABLED: "true"
+      RAPIDEX_PUBLIC_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build:vercel
