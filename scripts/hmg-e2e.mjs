@@ -97,27 +97,34 @@ async function changeStatus(cookie, orderId, status, expectedStatuses = [200]) {
   );
 }
 
-function orderPayload({ clientOrderId, productId, phone, name = "Cliente HMG" }) {
+function deliveryAddress(overrides = {}) {
+  return {
+    street: "Rua do Teste",
+    number: "10",
+    neighborhood: "Centro",
+    city: "Petrópolis",
+    state: "RJ",
+    postalCode: "25600000",
+    complement: "E2E",
+    ...overrides,
+  };
+}
+
+function orderPayload({ clientOrderId, productId, phone, name = "Cliente HMG", quantity = 1, fulfillmentType = "delivery", tableCode = null, optionIds = [] }) {
   return {
     restaurantSlug: "hmg-burger-a",
     clientOrderId,
     source: "menu",
+    fulfillmentType,
+    tableCode,
     customer: {
       name,
       phone,
       email: `${clientOrderId}@rapidex-hmg.test`,
       whatsappConsent: false,
-      address: {
-        street: "Rua do Teste",
-        number: "10",
-        neighborhood: "Centro",
-        city: "Petrópolis",
-        state: "RJ",
-        postalCode: "25600000",
-        complement: "E2E",
-      },
+      ...(fulfillmentType === "delivery" ? { address: deliveryAddress() } : {}),
     },
-    items: [{ productId, quantity: 1, priceCents: 1 }],
+    items: [{ productId, quantity, optionIds, priceCents: 1 }],
     paymentMethod: "cash",
   };
 }
@@ -155,7 +162,7 @@ const friesId = await createProduct(tenantA.cookie, categoryId, {
   prepMinutes: 5,
 });
 
-console.log("[HMG E2E] importação de cardápio + horários");
+console.log("[HMG E2E] importação de cardápio + horários + modalidades");
 const imported = await call(
   "/api/admin/menu-import",
   {
@@ -196,12 +203,17 @@ await call(
   {
     method: "PATCH",
     headers: jsonHeaders(tenantA.cookie),
-    body: JSON.stringify({ weeklyHours: alwaysOpenHours }),
+    body: JSON.stringify({
+      weeklyHours: alwaysOpenHours,
+      fulfillment: { deliveryEnabled: true, pickupEnabled: true, dineInEnabled: true },
+    }),
   },
   [200],
 );
 const settings = await call("/api/admin/settings", { headers: { cookie: tenantA.cookie } }, [200]);
 assert.deepEqual(settings.payload.settings.weeklyHours, alwaysOpenHours);
+assert.equal(settings.payload.settings.fulfillment.pickupEnabled, true);
+assert.equal(settings.payload.settings.fulfillment.dineInEnabled, true);
 
 const catalogAfterImport = await call("/api/admin/products", { headers: { cookie: tenantA.cookie } }, [200]);
 assert.equal(catalogAfterImport.payload.products.length, 3);
@@ -216,6 +228,8 @@ await call(
 console.log("[HMG E2E] cardápio público + recomendação");
 const menu = await call("/api/public/menu/hmg-burger-a", {}, [200]);
 assert.equal(menu.payload.restaurant.isOpen, true);
+assert.equal(menu.payload.restaurant.fulfillment.pickupEnabled, true);
+assert.equal(menu.payload.restaurant.fulfillment.dineInEnabled, true);
 const publicProducts = [...menu.payload.categories.flatMap((category) => category.products), ...(menu.payload.uncategorized || [])];
 assert.equal(publicProducts.length, 3);
 assert.ok(publicProducts.some((product) => product.id === burgerId && product.priceCents === 2500));
@@ -243,20 +257,13 @@ const orderBody = {
   restaurantSlug: "hmg-burger-a",
   clientOrderId,
   source: "menu",
+  fulfillmentType: "delivery",
   customer: {
     name: "Cliente HMG",
     phone: "+5524988880001",
     email: "cliente@rapidex-hmg.test",
     whatsappConsent: false,
-    address: {
-      street: "Rua do Teste",
-      number: "10",
-      neighborhood: "Centro",
-      city: "Petrópolis",
-      state: "RJ",
-      postalCode: "25600000",
-      complement: "E2E",
-    },
+    address: deliveryAddress(),
   },
   items: [
     { productId: burgerId, quantity: 1, priceCents: 1 },
@@ -270,6 +277,7 @@ const created = await call(
   [201],
 );
 assert.equal(created.payload.order.subtotalCents, 3700, "servidor deve ignorar preço adulterado pelo cliente");
+assert.equal(created.payload.order.deliveryFeeCents, 0, "nova loja não deve cobrar frete arbitrário antes da configuração");
 assert.equal(created.payload.order.existing, false);
 const orderId = created.payload.order.id;
 const trackingToken = created.payload.order.trackingToken;
@@ -282,11 +290,164 @@ const duplicate = await call(
 assert.equal(duplicate.payload.order.id, orderId);
 assert.equal(duplicate.payload.order.existing, true);
 
+console.log("[HMG E2E] modificadores: obrigatório, preço server-side e snapshot");
+const configuredOptions = await call(
+  `/api/admin/products/${encodeURIComponent(burgerId)}/options`,
+  {
+    method: "PUT",
+    headers: jsonHeaders(tenantA.cookie),
+    body: JSON.stringify({
+      groups: [
+        {
+          name: "Tamanho",
+          minSelect: 1,
+          maxSelect: 1,
+          pricingStrategy: "sum",
+          options: [
+            { name: "Normal", priceDeltaCents: 0, costDeltaCents: 0, available: true },
+            { name: "Grande", priceDeltaCents: 800, costDeltaCents: 300, available: true },
+          ],
+        },
+      ],
+    }),
+  },
+  [200],
+);
+const sizeGroup = configuredOptions.payload.groups[0];
+const largeOption = sizeGroup.options.find((option) => option.name === "Grande");
+assert.ok(largeOption?.id, "opção Grande deve receber ID server-side");
+
+const missingRequiredOption = await call(
+  "/api/public/orders",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(orderPayload({
+      clientOrderId: "hmg-option-required",
+      productId: burgerId,
+      phone: "+5524955550001",
+      fulfillmentType: "pickup",
+    })),
+  },
+  [409],
+);
+assert.equal(missingRequiredOption.payload.error?.code, "option_selection_invalid");
+
+const pickupConfigured = await call(
+  "/api/public/orders",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(orderPayload({
+      clientOrderId: "hmg-pickup-configured",
+      productId: burgerId,
+      phone: "+5524955550002",
+      fulfillmentType: "pickup",
+      optionIds: [largeOption.id],
+    })),
+  },
+  [201],
+);
+assert.equal(pickupConfigured.payload.order.fulfillmentType, "pickup");
+assert.equal(pickupConfigured.payload.order.deliveryFeeCents, 0);
+assert.equal(pickupConfigured.payload.order.subtotalCents, 3300, "servidor deve cobrar preço base + opção, ignorando preço do cliente");
+const pickupTracking = await call(`/api/public/orders/${pickupConfigured.payload.order.trackingToken}`, {}, [200]);
+assert.equal(pickupTracking.payload.order.items[0].options[0].name, "Grande");
+assert.equal(pickupTracking.payload.order.items[0].options[0].chargedDeltaCents, 800);
+
+console.log("[HMG E2E] mesa: pedido sem endereço e sem frete");
+const dineIn = await call(
+  "/api/public/orders",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(orderPayload({
+      clientOrderId: "hmg-dine-in",
+      productId: friesId,
+      phone: "+5524955550003",
+      fulfillmentType: "dine_in",
+      tableCode: "12",
+    })),
+  },
+  [201],
+);
+assert.equal(dineIn.payload.order.fulfillmentType, "dine_in");
+assert.equal(dineIn.payload.order.tableCode, "12");
+assert.equal(dineIn.payload.order.deliveryFeeCents, 0);
+assert.equal(dineIn.payload.order.subtotalCents, 1200);
+
+console.log("[HMG E2E] zonas de entrega: cotação, bloqueio e snapshot");
+await call(
+  "/api/admin/delivery-zones",
+  {
+    method: "PUT",
+    headers: jsonHeaders(tenantA.cookie),
+    body: JSON.stringify({
+      restrictToZones: true,
+      zones: [
+        {
+          name: "Centro CEP",
+          matchType: "postal_prefix",
+          matchValue: "25600",
+          feeCents: 900,
+          minimumOrderCents: 3000,
+          extraMinutes: 10,
+          active: true,
+        },
+      ],
+    }),
+  },
+  [200],
+);
+const quote = await call(
+  "/api/public/delivery-quote",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ restaurantSlug: "hmg-burger-a", postalCode: "25600000", neighborhood: "Centro" }),
+  },
+  [200],
+);
+assert.equal(quote.payload.quote.zoneName, "Centro CEP");
+assert.equal(quote.payload.quote.feeCents, 900);
+assert.equal(quote.payload.quote.minimumOrderCents, 3000);
+
+const outsideQuote = await call(
+  "/api/public/delivery-quote",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ restaurantSlug: "hmg-burger-a", postalCode: "20000000", neighborhood: "Outro" }),
+  },
+  [409],
+);
+assert.equal(outsideQuote.payload.error?.code, "delivery_outside_area");
+
+const zonedOrder = await call(
+  "/api/public/orders",
+  {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(orderPayload({
+      clientOrderId: "hmg-zoned-delivery",
+      productId: friesId,
+      quantity: 3,
+      phone: "+5524955550004",
+      fulfillmentType: "delivery",
+    })),
+  },
+  [201],
+);
+assert.equal(zonedOrder.payload.order.subtotalCents, 3600);
+assert.equal(zonedOrder.payload.order.deliveryFeeCents, 900);
+assert.equal(zonedOrder.payload.order.totalCents, 4500);
+assert.equal(zonedOrder.payload.order.deliveryZoneName, "Centro CEP");
+
 console.log("[HMG E2E] concorrência de estoque: a última unidade só pode gerar um pedido");
 const lastUnitId = await createProduct(tenantA.cookie, categoryId, {
   name: "Última Unidade HMG",
   description: "Produto usado para validar lock transacional de estoque",
-  priceCents: 1900,
+  priceCents: 3100,
   costCents: 700,
   emoji: "🔒",
   prepMinutes: 3,
@@ -305,7 +466,7 @@ const stockRace = await Promise.all([
   ),
 ]);
 const stockStatuses = stockRace.map((result) => result.response.status).sort((a, b) => a - b);
-assert.deepEqual(stockStatuses, [201, 409], "uma transação deve vencer e a concorrente deve receber conflito de estoque");
+assert.deepEqual(stockStatuses, [201, 409], `uma transação deve vencer e a concorrente deve receber conflito de estoque; recebidos=${JSON.stringify(stockRace.map((item) => ({ status: item.response.status, code: item.payload?.error?.code })))}`);
 const stockConflict = stockRace.find((result) => result.response.status === 409);
 assert.equal(stockConflict?.payload.error?.code, "insufficient_stock");
 assert.ok(stockRace.some((result) => result.payload?.order?.id), "uma compra da última unidade deve ser criada");
@@ -340,6 +501,7 @@ const statusRaceCreated = await call(
     body: JSON.stringify(orderPayload({
       clientOrderId: "hmg-status-race-0001",
       productId: friesId,
+      quantity: 3,
       phone: "+5524966660001",
       name: "Race Status",
     })),
@@ -362,4 +524,4 @@ assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxerga
 const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
 assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
 
-console.log("[HMG E2E] PASS: signup, aceite legal versionado, importação, horários, catálogo, recomendação, pedido, idempotência, concorrência de estoque, tracking, ROI, status concorrente e isolamento multiempresa");
+console.log("[HMG E2E] PASS: signup, legal versionado, importação, modalidades, modificadores, zonas, pedido, idempotência, concorrência de estoque, tracking, ROI, status concorrente e isolamento multiempresa");
