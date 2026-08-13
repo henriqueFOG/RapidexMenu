@@ -24,12 +24,27 @@ type SubscriptionRow = {
   updated_at: number;
 };
 type IntegrationRow = { restaurant_id: string; provider: string; status: string };
+type CountRow = { status: string; total: number };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requirePlatformAdmin();
     const db = getDatabase();
-    const [restaurantsResult, firstOrdersResult, subscriptionsResult, integrationsResult] = await Promise.all([
+    const now = Date.now();
+    const today = new Date(now).toISOString().slice(0, 10);
+    const stalePaymentCutoff = now - 30 * 60_000;
+    const webhookCutoff = now - 24 * 60 * 60_000;
+    const [
+      restaurantsResult,
+      firstOrdersResult,
+      subscriptionsResult,
+      integrationsResult,
+      jobsResult,
+      aiUsage,
+      dunningResult,
+      failedWebhooks,
+      stalePayments,
+    ] = await Promise.all([
       db.prepare(
         `SELECT id, name, slug, plan, status, published_at, trial_ends_at, access_ends_at, created_at
          FROM restaurants
@@ -49,6 +64,32 @@ export async function GET() {
       db.prepare(
         `SELECT restaurant_id, provider, status FROM integrations`,
       ).all<IntegrationRow>(),
+      db.prepare(
+        `SELECT status, COUNT(*) AS total FROM job_queue GROUP BY status`,
+      ).all<CountRow>(),
+      db.prepare(
+        `SELECT COALESCE(SUM(response_requests),0) AS response_requests,
+                COALESCE(SUM(transcription_requests),0) AS transcription_requests,
+                COALESCE(SUM(input_tokens),0) AS input_tokens,
+                COALESCE(SUM(output_tokens),0) AS output_tokens
+         FROM ai_usage_daily WHERE usage_day = ?`,
+      ).bind(today).first<{
+        response_requests: number;
+        transcription_requests: number;
+        input_tokens: number;
+        output_tokens: number;
+      }>(),
+      db.prepare(
+        `SELECT status, COUNT(*) AS total FROM billing_dunning_events GROUP BY status`,
+      ).all<CountRow>(),
+      db.prepare(
+        `SELECT COUNT(*) AS total FROM webhook_events
+         WHERE status = 'failed' AND received_at >= ?`,
+      ).bind(webhookCutoff).first<{ total: number }>(),
+      db.prepare(
+        `SELECT COUNT(*) AS total FROM payments
+         WHERE status = 'pending' AND created_at <= ?`,
+      ).bind(stalePaymentCutoff).first<{ total: number }>(),
     ]);
 
     const restaurants = restaurantsResult.results;
@@ -64,6 +105,8 @@ export async function GET() {
       integrations.set(integration.restaurant_id, current);
     }
 
+    const jobCounts = Object.fromEntries(jobsResult.results.map((row) => [row.status, Number(row.total)]));
+    const dunningCounts = Object.fromEntries(dunningResult.results.map((row) => [row.status, Number(row.total)]));
     const paying = Array.from(latestSubscriptions.values()).filter((subscription) => subscription.status === "authorized");
     const mrrCents = paying.reduce((sum, subscription) => sum + Number(subscription.amount_cents), 0);
     const published = restaurants.filter((restaurant) => Boolean(restaurant.published_at));
@@ -73,7 +116,6 @@ export async function GET() {
       return first - Number(restaurant.created_at) <= 48 * 60 * 60 * 1000;
     });
     const trials = restaurants.filter((restaurant) => restaurant.status === "trial");
-    const now = Date.now();
     const expiringTrials = trials.filter((restaurant) => restaurant.trial_ends_at && Number(restaurant.trial_ends_at) > now && Number(restaurant.trial_ends_at) <= now + 3 * 24 * 60 * 60 * 1000);
 
     return json({
@@ -89,6 +131,20 @@ export async function GET() {
         payingRestaurants: paying.length,
         mrrCents,
         arrRunRateCents: mrrCents * 12,
+      },
+      operations: {
+        jobsQueued: Number(jobCounts.queued || 0),
+        jobsRunning: Number(jobCounts.running || 0),
+        jobsRetry: Number(jobCounts.retry || 0),
+        jobsDead: Number(jobCounts.dead || 0),
+        failedWebhooks24h: Number(failedWebhooks?.total || 0),
+        stalePendingPayments: Number(stalePayments?.total || 0),
+        dunningFailed: Number(dunningCounts.failed || 0),
+        dunningSending: Number(dunningCounts.sending || 0),
+        aiResponsesToday: Number(aiUsage?.response_requests || 0),
+        aiTranscriptionsToday: Number(aiUsage?.transcription_requests || 0),
+        aiInputTokensToday: Number(aiUsage?.input_tokens || 0),
+        aiOutputTokensToday: Number(aiUsage?.output_tokens || 0),
       },
       restaurants: restaurants.slice(0, 200).map((restaurant) => {
         const subscription = latestSubscriptions.get(restaurant.id);
@@ -114,8 +170,8 @@ export async function GET() {
           integrations: restaurantIntegrations.map((integration) => ({ provider: integration.provider, status: integration.status })),
         };
       }),
-    });
+    }, { headers: { "x-request-id": request.headers.get("x-request-id") || crypto.randomUUID() } });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
