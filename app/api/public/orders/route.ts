@@ -137,6 +137,7 @@ export async function POST(request: Request) {
           totalCents: order.totalCents,
           subtotalCents: order.subtotalCents,
           deliveryFeeCents: order.deliveryFeeCents,
+          deliveryZoneName: order.deliveryZoneName,
           fulfillmentType: order.fulfillmentType,
           tableCode: order.tableCode,
           status: "received",
