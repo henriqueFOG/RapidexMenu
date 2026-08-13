@@ -33,7 +33,7 @@ SELECT
   plan,
   NULL,
   amount_cents,
-  updated_at,
+  (extract(epoch FROM clock_timestamp()) * 1000),
   (extract(epoch FROM clock_timestamp()) * 1000)
 FROM platform_subscriptions
 ON CONFLICT (id) DO NOTHING;
