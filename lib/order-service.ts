@@ -1,3 +1,4 @@
+import { resolveDeliveryTerms } from "./delivery-zones";
 import { HttpError } from "./http";
 import { attributeAcceptedUpsells } from "./profit-engine";
 import { isRestaurantAcceptingOrders } from "./store-availability";
@@ -100,6 +101,7 @@ export type CreatedOrder = {
   totalCents: number;
   subtotalCents: number;
   deliveryFeeCents: number;
+  deliveryZoneName: string | null;
   contributionMarginCents: number;
   paymentMethod: "pix" | "cash" | "card_on_delivery";
   fulfillmentType: FulfillmentType;
@@ -225,11 +227,23 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     costCents += priced.unitCostCents * item.quantity;
     pricedItems.push(priced);
   }
-  if (fulfillmentType === "delivery" && subtotalCents < restaurant.minimum_order_cents) {
+
+  const deliveryTerms = fulfillmentType === "delivery" && address
+    ? await resolveDeliveryTerms(db, {
+        restaurantId: restaurant.id,
+        settingsValue: restaurant.settings_json,
+        address: { neighborhood: address.neighborhood, postalCode: address.postalCode },
+        defaultFeeCents: Number(restaurant.delivery_fee_cents),
+        defaultMinimumOrderCents: Number(restaurant.minimum_order_cents),
+      })
+    : null;
+  const effectiveMinimumOrderCents = deliveryTerms?.minimumOrderCents ?? 0;
+  if (fulfillmentType === "delivery" && subtotalCents < effectiveMinimumOrderCents) {
     throw new HttpError(
       409,
-      `Pedido mínimo de R$ ${(restaurant.minimum_order_cents / 100).toFixed(2).replace(".", ",")} para entrega.`,
+      `Pedido mínimo de R$ ${(effectiveMinimumOrderCents / 100).toFixed(2).replace(".", ",")} para esta entrega.`,
       "minimum_order",
+      { zoneName: deliveryTerms?.zoneName || null, minimumOrderCents: effectiveMinimumOrderCents },
     );
   }
 
@@ -241,7 +255,9 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     .bind(restaurant.id)
     .first<{ total: number }>();
   const kitchenRounds = Math.floor((active?.total ?? 0) / Math.max(1, restaurant.max_concurrent_orders));
-  const logisticsMinutes = fulfillmentType === "delivery" ? restaurant.delivery_minutes : 0;
+  const logisticsMinutes = fulfillmentType === "delivery"
+    ? restaurant.delivery_minutes + (deliveryTerms?.extraMinutes ?? 0)
+    : 0;
   const promisedFromMinutes = restaurant.average_prep_minutes * (1 + kitchenRounds) + logisticsMinutes;
   const promisedToMinutes = promisedFromMinutes + 8;
 
@@ -287,7 +303,7 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
 
   const orderId = crypto.randomUUID();
   const trackingToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
-  const deliveryFeeCents = fulfillmentType === "delivery" ? restaurant.delivery_fee_cents : 0;
+  const deliveryFeeCents = fulfillmentType === "delivery" ? (deliveryTerms?.feeCents ?? 0) : 0;
   const totalCents = subtotalCents + deliveryFeeCents;
   const contributionMarginCents = subtotalCents - costCents;
   const timestamp = Date.now();
@@ -296,10 +312,11 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
       .prepare(
         `INSERT INTO orders
          (id, restaurant_id, customer_id, order_number, client_order_id, tracking_token, source,
-          fulfillment_type, table_code, status, payment_status, payment_method, subtotal_cents,
-          delivery_fee_cents, total_cents, cost_cents, contribution_margin_cents, address_json, notes,
-          promised_from_minutes, promised_to_minutes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          fulfillment_type, table_code, delivery_zone_id, delivery_zone_name, status, payment_status,
+          payment_method, subtotal_cents, delivery_fee_cents, total_cents, cost_cents,
+          contribution_margin_cents, address_json, notes, promised_from_minutes, promised_to_minutes,
+          created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         orderId,
@@ -311,6 +328,8 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
         source,
         fulfillmentType,
         tableCode,
+        deliveryTerms?.zoneId ?? null,
+        deliveryTerms?.zoneName ?? null,
         paymentMethod,
         subtotalCents,
         deliveryFeeCents,
@@ -424,6 +443,7 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     totalCents,
     subtotalCents,
     deliveryFeeCents,
+    deliveryZoneName: deliveryTerms?.zoneName ?? null,
     contributionMarginCents,
     paymentMethod,
     fulfillmentType,
@@ -510,8 +530,8 @@ async function findExistingOrder(
   const row = await db
     .prepare(
       `SELECT id, customer_id, tracking_token, order_number, total_cents, subtotal_cents,
-              delivery_fee_cents, contribution_margin_cents, payment_method, fulfillment_type, table_code,
-              promised_from_minutes, promised_to_minutes
+              delivery_fee_cents, delivery_zone_name, contribution_margin_cents, payment_method,
+              fulfillment_type, table_code, promised_from_minutes, promised_to_minutes
        FROM orders WHERE restaurant_id = ? AND client_order_id = ? LIMIT 1`,
     )
     .bind(restaurant.id, clientOrderId)
@@ -523,6 +543,7 @@ async function findExistingOrder(
       total_cents: number;
       subtotal_cents: number;
       delivery_fee_cents: number;
+      delivery_zone_name: string | null;
       contribution_margin_cents: number;
       payment_method: CreatedOrder["paymentMethod"];
       fulfillment_type: FulfillmentType;
@@ -541,6 +562,7 @@ async function findExistingOrder(
     totalCents: row.total_cents,
     subtotalCents: row.subtotal_cents,
     deliveryFeeCents: row.delivery_fee_cents,
+    deliveryZoneName: row.delivery_zone_name,
     contributionMarginCents: row.contribution_margin_cents,
     paymentMethod: row.payment_method,
     fulfillmentType: row.fulfillment_type || "delivery",
