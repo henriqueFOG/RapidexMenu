@@ -26,10 +26,10 @@ jobs:
       RAPIDEX_PUBLIC_URL: http://localhost:3000
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
