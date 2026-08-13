@@ -14,6 +14,7 @@ type PublicGroup = {
   min_select: number;
   max_select: number;
   pricing_strategy: string;
+  kind: "modifier" | "variant";
   position: number;
 };
 type PublicOption = {
@@ -21,6 +22,8 @@ type PublicOption = {
   group_id: string;
   name: string;
   price_delta_cents: number;
+  stock_control_enabled: number;
+  stock_quantity: number | null;
   position: number;
 };
 
@@ -85,16 +88,20 @@ export async function GET(
         .bind(restaurant.id)
         .first<{ id: string }>(),
       db.prepare(
-        `SELECT id, product_id, name, min_select, max_select, pricing_strategy, position
+        `SELECT id, product_id, name, min_select, max_select, pricing_strategy, kind, position
          FROM product_option_groups
          WHERE restaurant_id = ? AND active = 1
          ORDER BY product_id, position, created_at`,
       ).bind(restaurant.id).all<PublicGroup>(),
       db.prepare(
-        `SELECT po.id, po.group_id, po.name, po.price_delta_cents, po.position
+        `SELECT po.id, po.group_id, po.name, po.price_delta_cents,
+                po.stock_control_enabled, po.stock_quantity, po.position
          FROM product_options po
          JOIN product_option_groups pog ON pog.id = po.group_id
-         WHERE po.restaurant_id = ? AND po.available = 1 AND pog.active = 1
+         WHERE po.restaurant_id = ?
+           AND po.available = 1
+           AND pog.active = 1
+           AND (pog.kind <> 'variant' OR po.stock_control_enabled = 0 OR po.stock_quantity > 0)
          ORDER BY po.group_id, po.position, po.created_at`,
       ).bind(restaurant.id).all<PublicOption>(),
     ]);
@@ -159,18 +166,22 @@ function publicProduct(product: {
   prep_minutes: number;
 }, groups: PublicGroup[], options: PublicOption[]) {
   const productGroups = groups.filter((group) => group.product_id === product.id);
+  const variantGroup = productGroups.find((group) => group.kind === "variant") || null;
+  const orderableVariants = variantGroup ? options.filter((option) => option.group_id === variantGroup.id) : [];
   return {
     id: product.id,
     name: product.name,
     description: product.description,
     priceCents: product.price_cents,
+    priceIsFrom: Boolean(variantGroup),
     emoji: product.emoji,
     tag: product.tag,
     imageUrl: product.image_key ? `/api/public/media/${encodeKey(product.image_key)}` : null,
-    available: Boolean(product.available),
+    available: Boolean(product.available) && (!variantGroup || orderableVariants.length > 0),
     prepMinutes: product.prep_minutes,
     optionGroups: productGroups.map((group) => ({
       id: group.id,
+      kind: group.kind || "modifier",
       name: group.name,
       minSelect: Number(group.min_select),
       maxSelect: Number(group.max_select),
