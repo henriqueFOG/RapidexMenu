@@ -3,10 +3,14 @@ import { attributeAcceptedUpsells } from "./profit-engine";
 import { isRestaurantAcceptingOrders } from "./store-availability";
 import { booleanValue, normalizePhone, optionalString, positiveInteger, requiredString, safeSlug } from "./validation";
 
+export type FulfillmentType = "delivery" | "pickup" | "dine_in";
+
 type OrderInput = {
   restaurantSlug?: unknown;
   clientOrderId?: unknown;
   source?: unknown;
+  fulfillmentType?: unknown;
+  tableCode?: unknown;
   customer?: {
     name?: unknown;
     phone?: unknown;
@@ -54,6 +58,8 @@ export type CreatedOrder = {
   deliveryFeeCents: number;
   contributionMarginCents: number;
   paymentMethod: "pix" | "cash" | "card_on_delivery";
+  fulfillmentType: FulfillmentType;
+  tableCode: string | null;
   promisedFromMinutes: number;
   promisedToMinutes: number;
   existing: boolean;
@@ -70,7 +76,11 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
   if (email && !/^\S+@\S+\.\S+$/.test(email)) {
     throw new HttpError(400, "E-mail inválido.", "validation_error", { field: "email" });
   }
-  const address = validateAddress(customer.address);
+  const fulfillmentType = validateFulfillmentType(input.fulfillmentType);
+  const address = fulfillmentType === "delivery" ? validateAddress(customer.address) : null;
+  const tableCode = fulfillmentType === "dine_in"
+    ? requiredString(input.tableCode, "Mesa", 1, 30)
+    : null;
   const whatsappConsent = booleanValue(customer.whatsappConsent);
   const notes = optionalString(input.notes, "Observações", 500);
   const source = validateSource(input.source);
@@ -154,10 +164,10 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     subtotalCents += product.price_cents * item.quantity;
     costCents += product.cost_cents * item.quantity;
   }
-  if (subtotalCents < restaurant.minimum_order_cents) {
+  if (fulfillmentType === "delivery" && subtotalCents < restaurant.minimum_order_cents) {
     throw new HttpError(
       409,
-      `Pedido mínimo de R$ ${(restaurant.minimum_order_cents / 100).toFixed(2).replace(".", ",")}.`,
+      `Pedido mínimo de R$ ${(restaurant.minimum_order_cents / 100).toFixed(2).replace(".", ",")} para entrega.`,
       "minimum_order",
     );
   }
@@ -170,8 +180,8 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     .bind(restaurant.id)
     .first<{ total: number }>();
   const kitchenRounds = Math.floor((active?.total ?? 0) / Math.max(1, restaurant.max_concurrent_orders));
-  const promisedFromMinutes =
-    restaurant.average_prep_minutes * (1 + kitchenRounds) + restaurant.delivery_minutes;
+  const logisticsMinutes = fulfillmentType === "delivery" ? restaurant.delivery_minutes : 0;
+  const promisedFromMinutes = restaurant.average_prep_minutes * (1 + kitchenRounds) + logisticsMinutes;
   const promisedToMinutes = promisedFromMinutes + 8;
 
   const customerId = crypto.randomUUID();
@@ -196,7 +206,7 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
       customerName,
       phone,
       email,
-      JSON.stringify(address),
+      address ? JSON.stringify(address) : null,
       whatsappConsent ? 1 : 0,
       whatsappConsent ? Date.now() : null,
       Date.now(),
@@ -216,7 +226,7 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
 
   const orderId = crypto.randomUUID();
   const trackingToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
-  const deliveryFeeCents = restaurant.delivery_fee_cents;
+  const deliveryFeeCents = fulfillmentType === "delivery" ? restaurant.delivery_fee_cents : 0;
   const totalCents = subtotalCents + deliveryFeeCents;
   const contributionMarginCents = subtotalCents - costCents;
   const timestamp = Date.now();
@@ -225,10 +235,10 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
       .prepare(
         `INSERT INTO orders
          (id, restaurant_id, customer_id, order_number, client_order_id, tracking_token, source,
-          status, payment_status, payment_method, subtotal_cents, delivery_fee_cents, total_cents,
-          cost_cents, contribution_margin_cents, address_json, notes, promised_from_minutes,
-          promised_to_minutes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          fulfillment_type, table_code, status, payment_status, payment_method, subtotal_cents,
+          delivery_fee_cents, total_cents, cost_cents, contribution_margin_cents, address_json, notes,
+          promised_from_minutes, promised_to_minutes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         orderId,
@@ -238,13 +248,15 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
         clientOrderId,
         trackingToken,
         source,
+        fulfillmentType,
+        tableCode,
         paymentMethod,
         subtotalCents,
         deliveryFeeCents,
         totalCents,
         costCents,
         contributionMarginCents,
-        JSON.stringify(address),
+        address ? JSON.stringify(address) : null,
         notes,
         promisedFromMinutes,
         promisedToMinutes,
@@ -334,6 +346,8 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     deliveryFeeCents,
     contributionMarginCents,
     paymentMethod,
+    fulfillmentType,
+    tableCode,
     promisedFromMinutes,
     promisedToMinutes,
     existing: false,
@@ -350,7 +364,7 @@ async function findExistingOrder(
   const row = await db
     .prepare(
       `SELECT id, customer_id, tracking_token, order_number, total_cents, subtotal_cents,
-              delivery_fee_cents, contribution_margin_cents, payment_method,
+              delivery_fee_cents, contribution_margin_cents, payment_method, fulfillment_type, table_code,
               promised_from_minutes, promised_to_minutes
        FROM orders WHERE restaurant_id = ? AND client_order_id = ? LIMIT 1`,
     )
@@ -365,6 +379,8 @@ async function findExistingOrder(
       delivery_fee_cents: number;
       contribution_margin_cents: number;
       payment_method: CreatedOrder["paymentMethod"];
+      fulfillment_type: FulfillmentType;
+      table_code: string | null;
       promised_from_minutes: number;
       promised_to_minutes: number;
     }>();
@@ -381,6 +397,8 @@ async function findExistingOrder(
     deliveryFeeCents: row.delivery_fee_cents,
     contributionMarginCents: row.contribution_margin_cents,
     paymentMethod: row.payment_method,
+    fulfillmentType: row.fulfillment_type || "delivery",
+    tableCode: row.table_code,
     promisedFromMinutes: row.promised_from_minutes,
     promisedToMinutes: row.promised_to_minutes,
     existing: true,
@@ -404,6 +422,16 @@ function validateAddress(value: unknown) {
     postalCode: requiredString(address.postalCode, "CEP", 8, 10).replace(/\D/g, ""),
     complement: optionalString(address.complement, "Complemento", 120),
   };
+}
+
+function validateFulfillmentType(value: unknown): FulfillmentType {
+  const type = value ?? "delivery";
+  if (!["delivery", "pickup", "dine_in"].includes(String(type))) {
+    throw new HttpError(400, "Tipo de atendimento inválido.", "validation_error", {
+      field: "fulfillmentType",
+    });
+  }
+  return type as FulfillmentType;
 }
 
 function validateSource(value: unknown): "menu" | "whatsapp" | "counter" | "link" | "admin" {
