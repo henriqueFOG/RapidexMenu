@@ -106,6 +106,9 @@ jobs:
       - name: Run API commercial HMG E2E
         run: node scripts/hmg-e2e.mjs
 
+      - name: Validate concurrent order numbering
+        run: node scripts/order-number-race-e2e.mjs
+
       - name: Validate protected reconciliation cron endpoints
         run: node scripts/cron-auth-e2e.mjs
 
