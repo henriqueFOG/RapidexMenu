@@ -2,7 +2,7 @@ name: RapidexMenu HMG E2E
 
 on:
   push:
-    branches: [hmg, agent/commercial-ready]
+    branches: [hmg, agent/commercial-ready, agent/commercial-hardening-p1]
   pull_request:
     branches: [hmg]
   workflow_dispatch:
@@ -109,7 +109,28 @@ jobs:
       - name: Validate concurrent order numbering
         run: node scripts/order-number-race-e2e.mjs
 
-      - name: Validate protected reconciliation cron endpoints
+      - name: Validate durable queue retry and dead-letter
+        run: |
+          job_id="queue-e2e-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          idem="queue-e2e:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+          now_ms="$(date +%s%3N)"
+          payload='{"to":"queue-e2e@rapidex-hmg.test","subject":"Queue E2E","html":"<p>retry test</p>"}'
+          psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO job_queue (id, restaurant_id, job_type, idempotency_key, payload_json, status, attempt_count, max_attempts, available_at, created_at, updated_at) VALUES ('$job_id', NULL, 'transactional_email', '$idem', '$payload', 'queued', 0, 2, $now_ms, $now_ms, $now_ms);"
+
+          curl --fail --silent -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/internal/process-jobs >/tmp/queue-worker-1.json
+          cat /tmp/queue-worker-1.json
+          first="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -tAc "SELECT status || ':' || attempt_count FROM job_queue WHERE id = '$job_id'")"
+          test "$first" = "retry:1"
+
+          psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -v ON_ERROR_STOP=1 \
+            -c "UPDATE job_queue SET available_at = 0 WHERE id = '$job_id';"
+          curl --fail --silent -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/internal/process-jobs >/tmp/queue-worker-2.json
+          cat /tmp/queue-worker-2.json
+          second="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -tAc "SELECT status || ':' || attempt_count FROM job_queue WHERE id = '$job_id'")"
+          test "$second" = "dead:2"
+
+      - name: Validate protected internal job endpoints
         run: node scripts/cron-auth-e2e.mjs
 
       - name: Run canonical Playwright full UI and tenant isolation HMG E2E
