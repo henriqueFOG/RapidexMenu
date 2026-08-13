@@ -1,4 +1,5 @@
 import { DEMO_RESTAURANT_ID, ensureDemoData } from "@/lib/demo-data";
+import { hasCommercialFeature } from "@/lib/entitlements";
 import { apiError, HttpError } from "@/lib/http";
 import { generateSalesReply, transcribeAudio } from "@/lib/integrations/openai";
 import { downloadWhatsAppMedia, sendWhatsAppText } from "@/lib/integrations/whatsapp";
@@ -200,6 +201,27 @@ async function processInboundMessage(
     )
     .run();
   if (conversation.status === "human") return;
+
+  const commercialState = await db.prepare(
+    "SELECT plan, status, trial_ends_at FROM restaurants WHERE id = ? LIMIT 1",
+  ).bind(restaurantId).first<{
+    plan: "start" | "growth" | "scale";
+    status: string;
+    trial_ends_at: number | null;
+  }>();
+  const whatsappEntitled = Boolean(commercialState && hasCommercialFeature({
+    plan: commercialState.plan,
+    restaurantStatus: commercialState.status,
+    trialEndsAt: commercialState.trial_ends_at,
+  }, "whatsapp_connection"));
+  if (!whatsappEntitled) {
+    // Preserve inbound history and provider status events, but stop paid bot
+    // automation immediately after entitlement loss.
+    await db.prepare("UPDATE conversations SET status = 'human', updated_at = ? WHERE id = ?")
+      .bind(Date.now(), conversation.id)
+      .run();
+    return;
+  }
 
   const draft = await getWhatsAppDraft(db, restaurantId, customer.id, conversation.id);
   const [restaurant, productRows, preferences, recentOrders] = await Promise.all([
