@@ -296,16 +296,18 @@ const stockRace = await Promise.all([
   call(
     "/api/public/orders",
     { method: "POST", headers: jsonHeaders(), body: JSON.stringify(orderPayload({ clientOrderId: "hmg-stock-race-a", productId: lastUnitId, phone: "+5524977770001", name: "Race Estoque A" })) },
-    [201, 409, 500],
+    [201, 409],
   ),
   call(
     "/api/public/orders",
     { method: "POST", headers: jsonHeaders(), body: JSON.stringify(orderPayload({ clientOrderId: "hmg-stock-race-b", productId: lastUnitId, phone: "+5524977770002", name: "Race Estoque B" })) },
-    [201, 409, 500],
+    [201, 409],
   ),
 ]);
 const stockStatuses = stockRace.map((result) => result.response.status).sort((a, b) => a - b);
-assert.deepEqual(stockStatuses, [201, 500], "uma transação deve vencer e a concorrente deve ser abortada pelo guard de estoque");
+assert.deepEqual(stockStatuses, [201, 409], "uma transação deve vencer e a concorrente deve receber conflito de estoque");
+const stockConflict = stockRace.find((result) => result.response.status === 409);
+assert.equal(stockConflict?.payload.error?.code, "insufficient_stock");
 assert.ok(stockRace.some((result) => result.payload?.order?.id), "uma compra da última unidade deve ser criada");
 
 console.log("[HMG E2E] tracking + Profit Engine");
