@@ -1,4 +1,5 @@
 import { requireAdminContext } from "@/lib/admin-auth";
+import { requireCommercialFeature } from "@/lib/entitlements";
 import { apiError, assertSameOrigin, json, readJson } from "@/lib/http";
 import { generateSalesReply } from "@/lib/integrations/openai";
 import { getDatabase } from "@/lib/runtime";
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const context = await requireAdminContext();
+    requireCommercialFeature(context, "ai_sales");
     const body = await readJson<Record<string, unknown>>(request, 20_000);
     const message = requiredString(body.message, "Mensagem", 1, 2000);
     const phone = body.phone ? normalizePhone(body.phone) : null;
