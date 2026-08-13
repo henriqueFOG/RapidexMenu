@@ -1,7 +1,7 @@
 import { requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json } from "@/lib/http";
 import { validateImageBytes } from "@/lib/image-validation";
-import { getBindings, getDatabase } from "@/lib/runtime";
+import { getBindings, getDatabase, getRapidexEnvironment } from "@/lib/runtime";
 import { Buffer } from "node:buffer";
 
 const allowedTypes: Record<string, string> = {
@@ -21,12 +21,19 @@ export async function POST(request: Request) {
     const context = await requireAdminContext();
     requireRole(context, ["owner", "manager"]);
     const bindings = getBindings();
+    const environment = getRapidexEnvironment();
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new HttpError(400, "Selecione uma imagem.", "validation_error");
     if (!allowedTypes[file.type]) throw new HttpError(415, "Use JPG, PNG ou WebP.", "unsupported_media");
 
-    const postgresFallback = !bindings.BUCKET && Boolean(bindings.DATABASE_URL || bindings.POSTGRES_URL);
+    // Postgres binary storage is deliberately a development/HMG safety net only.
+    // Production fails closed unless object storage is provisioned, so the
+    // transactional database cannot silently become the media layer at scale.
+    const postgresFallback =
+      environment !== "production" &&
+      !bindings.BUCKET &&
+      Boolean(bindings.DATABASE_URL || bindings.POSTGRES_URL);
     const maxSize = postgresFallback ? MAX_DATABASE_FILE_SIZE : MAX_BUCKET_FILE_SIZE;
     if (file.size > maxSize) {
       throw new HttpError(
@@ -66,7 +73,13 @@ export async function POST(request: Request) {
         )
         .run();
     } else {
-      throw new HttpError(503, "Uploads ainda não configurados.", "integration_not_configured");
+      throw new HttpError(
+        503,
+        environment === "production"
+          ? "Storage de imagens obrigatório não está configurado neste ambiente."
+          : "Uploads ainda não configurados.",
+        "integration_not_configured",
+      );
     }
 
     return json({
