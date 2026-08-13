@@ -68,10 +68,12 @@ export async function processBillingDunning(limit = 100) {
       });
       queued += 1;
     } catch {
+      // If the queue insert itself failed, no durable job exists to retry. Remove
+      // only the still-sending claim so the next reconciliation cycle can try
+      // to enqueue again. Jobs that reached retry/dead keep their ledger event.
       await db.prepare(
-        `UPDATE billing_dunning_events SET status = 'failed', last_error = 'job_enqueue_failed',
-         last_attempt_at = ? WHERE id = ?`,
-      ).bind(Date.now(), event.id).run();
+        `DELETE FROM billing_dunning_events WHERE id = ? AND status = 'sending'`,
+      ).bind(event.id).run();
       failed += 1;
     }
   }
