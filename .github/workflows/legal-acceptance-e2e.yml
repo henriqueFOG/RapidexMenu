@@ -1,0 +1,95 @@
+name: RapidexMenu Legal Acceptance E2E
+
+on:
+  push:
+    branches: [agent/checklist-p0-wave-4-lgpd-acceptance]
+  pull_request:
+    branches: [hmg]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rapidex
+          POSTGRES_DB: rapidex_hmg
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U rapidex -d rapidex_hmg"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      RAPIDEX_RUNTIME: vercel
+      RAPIDEX_ENV: hmg
+      RAPIDEX_PUBLIC_URL: http://localhost:3000
+      RAPIDEX_AUTH_MODE: native
+      RAPIDEX_SIGNUP_ENABLED: "true"
+      RAPIDEX_SESSION_SECRET: hmg-ci-session-secret-32-characters-minimum-only
+      DATABASE_URL: postgresql://rapidex@127.0.0.1:5432/rapidex_hmg?sslmode=disable
+      RAPIDEX_POSTGRES_WS_PROXY: 127.0.0.1:9876
+      RAPIDEX_E2E_URL: http://localhost:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Start disposable PostgreSQL proxy
+        run: |
+          nohup node scripts/hmg-wsproxy.mjs >/tmp/legal-wsproxy.log 2>&1 &
+          for attempt in $(seq 1 20); do
+            if grep -q "ws://127.0.0.1:9876" /tmp/legal-wsproxy.log 2>/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/legal-wsproxy.log || true
+          exit 1
+
+      - name: Build and migrate
+        run: npm run build:vercel
+
+      - name: Start HMG runtime
+        run: |
+          nohup npx --no-install next start -H 127.0.0.1 -p 3000 >/tmp/legal-runtime.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://localhost:3000/api/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/legal-runtime.log || true
+          exit 1
+
+      - name: Validate explicit consent and returned versions
+        run: node scripts/legal-acceptance-e2e.mjs
+
+      - name: Verify immutable acceptance evidence in PostgreSQL
+        run: |
+          rows="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -Atc "SELECT document_type || ':' || document_version || ':' || source FROM legal_acceptances ORDER BY document_type")"
+          echo "$rows"
+          echo "$rows" | grep -qx 'privacy:2026-08-07:signup'
+          echo "$rows" | grep -qx 'terms:2026-08-07:signup'
+          count="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -Atc "SELECT count(*) FROM legal_acceptances")"
+          test "$count" = "2"
+          nulls="$(psql -h 127.0.0.1 -U rapidex -d rapidex_hmg -Atc "SELECT count(*) FROM legal_acceptances WHERE user_id IS NULL OR restaurant_id IS NULL OR accepted_at IS NULL")"
+          test "$nulls" = "0"
+
+      - name: Log on failure
+        if: failure()
+        run: |
+          cat /tmp/legal-runtime.log || true
+          cat /tmp/legal-wsproxy.log || true
