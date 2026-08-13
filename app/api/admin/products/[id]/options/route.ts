@@ -89,9 +89,6 @@ export async function PUT(
     ];
 
     if (variantGroup && variantBasePrice !== null && variantBaseCost !== null) {
-      // A variant product uses the cheapest variant as its public base value. Each
-      // variant stores a non-negative delta from that base, so the existing server
-      // pricing engine remains deterministic. Stock lives on the variants only.
       statements.push(
         db.prepare(
           `UPDATE products
@@ -289,7 +286,7 @@ function normalizeGroups(value: unknown): NormalizedGroup[] {
       };
     });
 
-    if (minSelect > options.filter((option) => option.available && (!option.stockControlEnabled || Number(option.stockQuantity) > 0)).length) {
+    if (kind !== "variant" && minSelect > options.filter((option) => option.available).length) {
       throw new HttpError(400, `${name}: não há escolhas disponíveis suficientes para cumprir o mínimo.`, "validation_error");
     }
     return { kind, name, minSelect, maxSelect, pricingStrategy, options };
