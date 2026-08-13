@@ -5,6 +5,7 @@ import {
   recordAiProviderSuccess,
   reserveAiUsage,
 } from "../ai-usage";
+import { isSafeAiMemory, safeAiProductContext, safeConsumerReply } from "../ai-safety-policy";
 import { HttpError } from "../http";
 import { getBindings } from "../runtime";
 
@@ -138,11 +139,7 @@ export async function generateSalesReply(context: SalesContext): Promise<SalesRe
   const { restaurantId: _restaurantId, ...safeContext } = context;
   const modelContext = {
     ...safeContext,
-    products: context.products.map(({ marginPercent, ...product }) => ({
-      ...product,
-      commercialPriority:
-        marginPercent >= 35 ? "preferred" : marginPercent >= 20 ? "standard" : "low_priority",
-    })),
+    products: safeAiProductContext(context.products),
   };
 
   let response: Response;
@@ -262,28 +259,21 @@ function sanitizeReply(reply: SalesReply, context: SalesContext): SalesReply {
   const checkout = normalizeCheckout(reply.checkout, context.currentCheckout);
   const memory = Array.isArray(reply.memory)
     ? reply.memory
-        .filter((item) => isSafeMemory(item))
+        .filter((item) => isSafeAiMemory(item))
         .slice(0, 5)
         .map((item) => ({ kind: item.kind, value: item.value.trim().slice(0, 120) }))
     : [];
+  const consumerReply = safeConsumerReply(reply.reply);
   return {
-    reply: typeof reply.reply === "string" ? reply.reply.slice(0, 3500) : "",
+    reply: consumerReply.reply,
     intent: ["menu", "repeat", "order", "track", "human"].includes(reply.intent) ? reply.intent : "human",
     suggestedProductIds,
     cartItems,
     checkout,
-    requiresHuman: Boolean(reply.requiresHuman),
+    requiresHuman: Boolean(reply.requiresHuman || consumerReply.forcedHuman),
     memory,
     decisionReason: typeof reply.decisionReason === "string" ? reply.decisionReason.slice(0, 300) : "Resposta estruturada validada pelo servidor.",
   };
-}
-
-function isSafeMemory(item: { kind?: unknown; value?: unknown }) {
-  if (typeof item.kind !== "string" || typeof item.value !== "string") return false;
-  if (!["ingredient", "product", "delivery", "payment", "note"].includes(item.kind)) return false;
-  const value = item.value.trim();
-  if (!value || value.length > 120) return false;
-  return !/(ignore|ignorar|instruç|system|developer|prompt|senha|secret|token|credencial|margem|custo interno)/i.test(value);
 }
 
 function normalizeCheckout(value: SalesCheckout | undefined, current?: SalesContext["currentCheckout"]): SalesCheckout {
