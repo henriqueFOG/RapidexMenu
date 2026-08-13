@@ -1,5 +1,6 @@
 import { requireAdminContext, requireRole } from "@/lib/admin-auth";
 import { apiError, assertSameOrigin, HttpError, json } from "@/lib/http";
+import { validateImageBytes } from "@/lib/image-validation";
 import { getBindings, getDatabase } from "@/lib/runtime";
 import { Buffer } from "node:buffer";
 
@@ -35,13 +36,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const key = `public/restaurants/${context.restaurantId}/products/${crypto.randomUUID()}.${allowedTypes[file.type]}`;
     const bytes = await file.arrayBuffer();
+    const validated = validateImageBytes(bytes, file.type);
+    const key = `public/restaurants/${context.restaurantId}/products/${crypto.randomUUID()}.${validated.extension}`;
 
     if (bindings.BUCKET) {
       await bindings.BUCKET.put(key, bytes, {
-        httpMetadata: { contentType: file.type, cacheControl: "public, max-age=86400" },
-        customMetadata: { restaurantId: context.restaurantId, uploadedBy: context.user.email },
+        httpMetadata: { contentType: validated.mime, cacheControl: "public, max-age=86400" },
+        customMetadata: {
+          restaurantId: context.restaurantId,
+          uploadedBy: context.user.email,
+          width: String(validated.width),
+          height: String(validated.height),
+        },
       });
     } else if (postgresFallback) {
       await getDatabase()
@@ -52,7 +59,7 @@ export async function POST(request: Request) {
         .bind(
           key,
           context.restaurantId,
-          file.type,
+          validated.mime,
           Buffer.from(bytes).toString("base64"),
           file.size,
           Date.now(),
@@ -62,7 +69,12 @@ export async function POST(request: Request) {
       throw new HttpError(503, "Uploads ainda não configurados.", "integration_not_configured");
     }
 
-    return json({ ok: true, key, url: `/api/public/media/${key}` }, { status: 201 });
+    return json({
+      ok: true,
+      key,
+      url: `/api/public/media/${key}`,
+      image: { width: validated.width, height: validated.height, type: validated.mime },
+    }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }
