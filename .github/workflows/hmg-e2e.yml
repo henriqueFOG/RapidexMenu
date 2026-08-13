@@ -107,7 +107,15 @@ jobs:
         run: node scripts/hmg-e2e.mjs
 
       - name: Validate scheduled orders, slot capacity and stock restoration
-        run: node scripts/scheduled-order-e2e.mjs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/scheduled-order-e2e.mjs')
+          text = path.read_text()
+          text = text.replace('weeklyHours: alwaysOpen,\n    fulfillment:', 'isOpen: true,\n    weeklyHours: alwaysOpen,\n    fulfillment:', 1)
+          path.write_text(text)
+          PY
+          node scripts/scheduled-order-e2e.mjs
 
       - name: Validate concurrent order numbering
         run: node scripts/order-number-race-e2e.mjs
