@@ -4,6 +4,7 @@ import { isRestaurantAcceptingOrders } from "./store-availability";
 import { booleanValue, normalizePhone, optionalString, positiveInteger, requiredString, safeSlug } from "./validation";
 
 export type FulfillmentType = "delivery" | "pickup" | "dine_in";
+type PricingStrategy = "sum" | "highest" | "average" | "included";
 
 type OrderInput = {
   restaurantSlug?: unknown;
@@ -18,7 +19,7 @@ type OrderInput = {
     whatsappConsent?: unknown;
     address?: unknown;
   };
-  items?: Array<{ productId?: unknown; quantity?: unknown; notes?: unknown }>;
+  items?: Array<{ productId?: unknown; quantity?: unknown; notes?: unknown; optionIds?: unknown }>;
   paymentMethod?: unknown;
   notes?: unknown;
 };
@@ -44,6 +45,49 @@ type ProductRow = {
   cost_cents: number;
   stock_control_enabled: number;
   stock_quantity: number | null;
+};
+
+type OptionGroupRow = {
+  id: string;
+  product_id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  pricing_strategy: PricingStrategy;
+};
+
+type ProductOptionRow = {
+  id: string;
+  group_id: string;
+  product_id: string;
+  name: string;
+  price_delta_cents: number;
+  cost_delta_cents: number;
+};
+
+type NormalizedItem = {
+  productId: string;
+  quantity: number;
+  notes: string | null;
+  optionIds: string[];
+};
+
+type SelectedOptionSnapshot = {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  rawPriceDeltaCents: number;
+  costDeltaCents: number;
+  chargedDeltaCents: number;
+  pricingStrategy: PricingStrategy;
+};
+
+type PricedItem = NormalizedItem & {
+  product: ProductRow;
+  unitPriceCents: number;
+  unitCostCents: number;
+  selectedOptions: SelectedOptionSnapshot[];
 };
 
 export type CreatedOrder = {
@@ -90,23 +134,21 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     throw new HttpError(400, "Escolha de 1 a 30 itens.", "validation_error", { field: "items" });
   }
 
-  const normalizedItems = input.items.map((item, index) => ({
+  const normalizedItems = input.items.map((item, index): NormalizedItem => ({
     productId: requiredString(item.productId, `Produto ${index + 1}`, 2, 100),
     quantity: positiveInteger(item.quantity, `Quantidade do item ${index + 1}`, 20),
     notes: optionalString(item.notes, `Observação do item ${index + 1}`, 240),
+    optionIds: normalizeOptionIds(item.optionIds, index),
   }));
-  const compactItems = new Map<string, { productId: string; quantity: number; notes: string | null }>();
+  const compactItems = new Map<string, NormalizedItem>();
   for (const item of normalizedItems) {
-    const current = compactItems.get(item.productId);
+    const key = `${item.productId}|${item.optionIds.join(",")}|${item.notes || ""}`;
+    const current = compactItems.get(key);
     const nextQuantity = (current?.quantity ?? 0) + item.quantity;
     if (nextQuantity > 20) {
-      throw new HttpError(400, "Quantidade máxima por produto excedida.", "validation_error");
+      throw new HttpError(400, "Quantidade máxima por configuração de produto excedida.", "validation_error");
     }
-    compactItems.set(item.productId, {
-      productId: item.productId,
-      quantity: nextQuantity,
-      notes: [current?.notes, item.notes].filter(Boolean).join(" · ") || null,
-    });
+    compactItems.set(key, { ...item, quantity: nextQuantity });
   }
   const items = Array.from(compactItems.values());
 
@@ -135,22 +177,39 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
   const existing = await findExistingOrder(db, restaurant, clientOrderId, email);
   if (existing) return existing;
 
-  const placeholders = items.map(() => "?").join(", ");
-  const result = await db
-    .prepare(
+  const productIds = Array.from(new Set(items.map((item) => item.productId)));
+  const placeholders = productIds.map(() => "?").join(", ");
+  const [productResult, groupResult, optionResult] = await Promise.all([
+    db.prepare(
       `SELECT id, name, price_cents, cost_cents, stock_control_enabled, stock_quantity
        FROM products
        WHERE restaurant_id = ? AND active = 1 AND available = 1 AND id IN (${placeholders})`,
-    )
-    .bind(restaurant.id, ...items.map((item) => item.productId))
-    .all<ProductRow>();
-  const products = new Map(result.results.map((product) => [product.id, product]));
-  if (products.size !== items.length) {
+    ).bind(restaurant.id, ...productIds).all<ProductRow>(),
+    db.prepare(
+      `SELECT id, product_id, name, min_select, max_select, pricing_strategy
+       FROM product_option_groups
+       WHERE restaurant_id = ? AND active = 1 AND product_id IN (${placeholders})
+       ORDER BY position, created_at`,
+    ).bind(restaurant.id, ...productIds).all<OptionGroupRow>(),
+    db.prepare(
+      `SELECT po.id, po.group_id, pog.product_id, po.name, po.price_delta_cents, po.cost_delta_cents
+       FROM product_options po
+       JOIN product_option_groups pog ON pog.id = po.group_id
+       WHERE po.restaurant_id = ? AND po.available = 1 AND pog.active = 1
+         AND pog.product_id IN (${placeholders})
+       ORDER BY pog.position, po.position`,
+    ).bind(restaurant.id, ...productIds).all<ProductOptionRow>(),
+  ]);
+  const products = new Map(productResult.results.map((product) => [product.id, product]));
+  if (products.size !== productIds.length) {
     throw new HttpError(409, "Um dos produtos não está disponível.", "product_unavailable");
   }
+  const optionGroups = groupResult.results;
+  const optionsById = new Map(optionResult.results.map((option) => [option.id, option]));
 
   let subtotalCents = 0;
   let costCents = 0;
+  const pricedItems: PricedItem[] = [];
   for (const item of items) {
     const product = products.get(item.productId)!;
     if (
@@ -161,8 +220,10 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
         productId: product.id,
       });
     }
-    subtotalCents += product.price_cents * item.quantity;
-    costCents += product.cost_cents * item.quantity;
+    const priced = priceItemOptions(item, product, optionGroups, optionsById);
+    subtotalCents += priced.unitPriceCents * item.quantity;
+    costCents += priced.unitCostCents * item.quantity;
+    pricedItems.push(priced);
   }
   if (fulfillmentType === "delivery" && subtotalCents < restaurant.minimum_order_cents) {
     throw new HttpError(
@@ -272,8 +333,8 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
       .bind(totalCents, timestamp, timestamp, customerRow.id),
   ];
 
-  for (const item of items) {
-    const product = products.get(item.productId)!;
+  for (const item of pricedItems) {
+    const orderItemId = crypto.randomUUID();
     statements.push(
       db
         .prepare(
@@ -283,25 +344,47 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
-          crypto.randomUUID(),
+          orderItemId,
           orderId,
-          product.id,
-          product.name,
+          item.product.id,
+          item.product.name,
           item.quantity,
-          product.price_cents,
-          product.cost_cents,
+          item.unitPriceCents,
+          item.unitCostCents,
           item.notes,
           timestamp,
         ),
     );
-    if (product.stock_control_enabled) {
+    for (const option of item.selectedOptions) {
+      statements.push(
+        db.prepare(
+          `INSERT INTO order_item_options
+           (id, order_item_id, option_group_id, option_id, option_group_name, option_name,
+            price_delta_cents, cost_delta_cents, pricing_strategy, charged_delta_cents, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          crypto.randomUUID(),
+          orderItemId,
+          option.groupId,
+          option.optionId,
+          option.groupName,
+          option.optionName,
+          option.rawPriceDeltaCents,
+          option.costDeltaCents,
+          option.pricingStrategy,
+          option.chargedDeltaCents,
+          timestamp,
+        ),
+      );
+    }
+    if (item.product.stock_control_enabled) {
       statements.push(
         db
           .prepare(
             `UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = ?
              WHERE id = ? AND stock_quantity >= ?`,
           )
-          .bind(item.quantity, timestamp, product.id, item.quantity),
+          .bind(item.quantity, timestamp, item.product.id, item.quantity),
       );
     }
   }
@@ -320,15 +403,12 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
       restaurant.id,
       clientOrderId,
       orderId,
-      items.map((item) => {
-        const product = products.get(item.productId)!;
-        return {
-          productId: item.productId,
-          quantity: item.quantity,
-          priceCents: product.price_cents,
-          costCents: product.cost_cents,
-        };
-      }),
+      pricedItems.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        priceCents: item.unitPriceCents,
+        costCents: item.unitCostCents,
+      })),
     );
   } catch (error) {
     console.error("Profit attribution skipped", error instanceof Error ? error.message : "unknown");
@@ -353,6 +433,72 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Cr
     existing: false,
     customerEmail: email,
   };
+}
+
+function priceItemOptions(
+  item: NormalizedItem,
+  product: ProductRow,
+  groups: OptionGroupRow[],
+  optionsById: Map<string, ProductOptionRow>,
+): PricedItem {
+  const productGroups = groups.filter((group) => group.product_id === product.id);
+  const selectedRows: ProductOptionRow[] = [];
+  for (const optionId of item.optionIds) {
+    const option = optionsById.get(optionId);
+    if (!option || option.product_id !== product.id) {
+      throw new HttpError(409, `${product.name}: uma opção selecionada não está mais disponível.`, "option_unavailable", {
+        productId: product.id,
+        optionId,
+      });
+    }
+    selectedRows.push(option);
+  }
+
+  let optionPriceCents = 0;
+  let optionCostCents = 0;
+  const selectedOptions: SelectedOptionSnapshot[] = [];
+  for (const group of productGroups) {
+    const selected = selectedRows.filter((option) => option.group_id === group.id);
+    if (selected.length < Number(group.min_select) || selected.length > Number(group.max_select)) {
+      throw new HttpError(
+        409,
+        `${product.name}: escolha de ${group.min_select} a ${group.max_select} opção(ões) em “${group.name}”.`,
+        "option_selection_invalid",
+        { productId: product.id, groupId: group.id, min: group.min_select, max: group.max_select },
+      );
+    }
+    const groupPrice = calculateGroupCharge(selected.map((option) => Number(option.price_delta_cents)), group.pricing_strategy);
+    optionPriceCents += groupPrice;
+    optionCostCents += selected.reduce((sum, option) => sum + Number(option.cost_delta_cents), 0);
+    selected.forEach((option, index) => selectedOptions.push({
+      groupId: group.id,
+      groupName: group.name,
+      optionId: option.id,
+      optionName: option.name,
+      rawPriceDeltaCents: Number(option.price_delta_cents),
+      costDeltaCents: Number(option.cost_delta_cents),
+      chargedDeltaCents: index === 0 ? groupPrice : 0,
+      pricingStrategy: group.pricing_strategy,
+    }));
+  }
+
+  if (selectedRows.length !== selectedOptions.length) {
+    throw new HttpError(409, `${product.name}: configuração de opções inválida.`, "option_selection_invalid");
+  }
+  return {
+    ...item,
+    product,
+    unitPriceCents: product.price_cents + optionPriceCents,
+    unitCostCents: product.cost_cents + optionCostCents,
+    selectedOptions,
+  };
+}
+
+function calculateGroupCharge(values: number[], strategy: PricingStrategy) {
+  if (!values.length || strategy === "included") return 0;
+  if (strategy === "highest") return Math.max(...values);
+  if (strategy === "average") return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+  return values.reduce((sum, value) => sum + value, 0);
 }
 
 async function findExistingOrder(
@@ -404,6 +550,15 @@ async function findExistingOrder(
     existing: true,
     customerEmail: email,
   };
+}
+
+function normalizeOptionIds(value: unknown, itemIndex: number) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 50) {
+    throw new HttpError(400, `Opções do item ${itemIndex + 1} inválidas.`, "validation_error");
+  }
+  const ids = value.map((optionId, optionIndex) => requiredString(optionId, `Opção ${optionIndex + 1}`, 2, 100));
+  return Array.from(new Set(ids)).sort();
 }
 
 function validateAddress(value: unknown) {
