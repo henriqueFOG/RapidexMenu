@@ -1,6 +1,7 @@
 import { apiError, json } from "@/lib/http";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getDatabase } from "@/lib/runtime";
+import { addMrrMovements, classifyMrrMovement, EMPTY_MRR_MOVEMENT } from "@/lib/subscription-events";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,16 @@ type SubscriptionRow = {
 };
 type IntegrationRow = { restaurant_id: string; provider: string; status: string };
 type CountRow = { status: string; total: number };
+type SubscriptionEventRow = {
+  source: string;
+  status_before: string | null;
+  status_after: string;
+  plan_before: string | null;
+  plan_after: string;
+  amount_before_cents: number | null;
+  amount_after_cents: number;
+  occurred_at: number;
+};
 
 export async function GET(request: Request) {
   try {
@@ -32,6 +43,7 @@ export async function GET(request: Request) {
     const db = getDatabase();
     const now = Date.now();
     const today = new Date(now).toISOString().slice(0, 10);
+    const cutoff30d = now - 30 * 24 * 60 * 60_000;
     const stalePaymentCutoff = now - 30 * 60_000;
     const webhookCutoff = now - 24 * 60 * 60_000;
     const [
@@ -44,6 +56,8 @@ export async function GET(request: Request) {
       dunningResult,
       failedWebhooks,
       stalePayments,
+      subscriptionEvents,
+      eventWindow,
     ] = await Promise.all([
       db.prepare(
         `SELECT id, name, slug, plan, status, published_at, trial_ends_at, access_ends_at, created_at
@@ -90,6 +104,16 @@ export async function GET(request: Request) {
         `SELECT COUNT(*) AS total FROM payments
          WHERE status = 'pending' AND created_at <= ?`,
       ).bind(stalePaymentCutoff).first<{ total: number }>(),
+      db.prepare(
+        `SELECT source, status_before, status_after, plan_before, plan_after,
+                amount_before_cents, amount_after_cents, occurred_at
+         FROM platform_subscription_events
+         WHERE occurred_at >= ? AND source != 'migration_snapshot'
+         ORDER BY occurred_at ASC`,
+      ).bind(cutoff30d).all<SubscriptionEventRow>(),
+      db.prepare(
+        `SELECT MIN(occurred_at) AS oldest_event_at FROM platform_subscription_events`,
+      ).first<{ oldest_event_at: number | null }>(),
     ]);
 
     const restaurants = restaurantsResult.results;
@@ -109,6 +133,24 @@ export async function GET(request: Request) {
     const dunningCounts = Object.fromEntries(dunningResult.results.map((row) => [row.status, Number(row.total)]));
     const paying = Array.from(latestSubscriptions.values()).filter((subscription) => subscription.status === "authorized");
     const mrrCents = paying.reduce((sum, subscription) => sum + Number(subscription.amount_cents), 0);
+    const movements30d = subscriptionEvents.results.reduce((total, event) => addMrrMovements(total, classifyMrrMovement(
+      { status: event.status_before, plan: event.plan_before, amountCents: event.amount_before_cents },
+      { status: event.status_after, plan: event.plan_after, amountCents: event.amount_after_cents },
+    )), EMPTY_MRR_MOVEMENT);
+    const oldestEventAt = Number(eventWindow?.oldest_event_at || 0) || null;
+    const has30dSubscriptionHistory = Boolean(oldestEventAt && oldestEventAt <= cutoff30d);
+    const startingMrr30dCents = Math.max(0,
+      mrrCents - movements30d.newMrrCents - movements30d.expansionMrrCents +
+      movements30d.contractionMrrCents + movements30d.churnMrrCents,
+    );
+    const startingLogos30d = Math.max(0, paying.length - movements30d.newLogos + movements30d.churnedLogos);
+    const nrr30d = has30dSubscriptionHistory && startingMrr30dCents > 0
+      ? round1(((startingMrr30dCents + movements30d.expansionMrrCents - movements30d.contractionMrrCents - movements30d.churnMrrCents) / startingMrr30dCents) * 100)
+      : null;
+    const logoChurn30d = has30dSubscriptionHistory && startingLogos30d > 0
+      ? round1((movements30d.churnedLogos / startingLogos30d) * 100)
+      : null;
+
     const published = restaurants.filter((restaurant) => Boolean(restaurant.published_at));
     const activated = restaurants.filter((restaurant) => firstOrders.has(restaurant.id));
     const activated48h = activated.filter((restaurant) => {
@@ -116,7 +158,7 @@ export async function GET(request: Request) {
       return first - Number(restaurant.created_at) <= 48 * 60 * 60 * 1000;
     });
     const trials = restaurants.filter((restaurant) => restaurant.status === "trial");
-    const expiringTrials = trials.filter((restaurant) => restaurant.trial_ends_at && Number(restaurant.trial_ends_at) > now && Number(restaurant.trial_ends_at) <= now + 3 * 24 * 60 * 60 * 1000);
+    const expiringTrials = trials.filter((restaurant) => restaurant.trial_ends_at && Number(restaurant.trial_ends_at) > now && Number(restaurant.trial_ends_at) <= now + 3 * 24 * 60 * 60_000);
 
     return json({
       ok: true,
@@ -124,13 +166,20 @@ export async function GET(request: Request) {
         restaurants: restaurants.length,
         published: published.length,
         activated: activated.length,
-        activationRate: restaurants.length ? Math.round((activated.length / restaurants.length) * 1000) / 10 : 0,
-        activation48hRate: activated.length ? Math.round((activated48h.length / activated.length) * 1000) / 10 : 0,
+        activationRate: restaurants.length ? round1((activated.length / restaurants.length) * 100) : 0,
+        activation48hRate: activated.length ? round1((activated48h.length / activated.length) * 100) : 0,
         trials: trials.length,
         trialsExpiring72h: expiringTrials.length,
         payingRestaurants: paying.length,
         mrrCents,
         arrRunRateCents: mrrCents * 12,
+        has30dSubscriptionHistory,
+        newMrr30dCents: movements30d.newMrrCents,
+        expansionMrr30dCents: movements30d.expansionMrrCents,
+        contractionMrr30dCents: movements30d.contractionMrrCents,
+        churnMrr30dCents: movements30d.churnMrrCents,
+        nrr30d,
+        logoChurn30d,
       },
       operations: {
         jobsQueued: Number(jobCounts.queued || 0),
@@ -159,7 +208,7 @@ export async function GET(request: Request) {
           published: Boolean(restaurant.published_at),
           createdAt: restaurant.created_at,
           firstOrderAt,
-          activatedWithin48h: firstOrderAt ? firstOrderAt - Number(restaurant.created_at) <= 48 * 60 * 60 * 1000 : false,
+          activatedWithin48h: firstOrderAt ? firstOrderAt - Number(restaurant.created_at) <= 48 * 60 * 60_000 : false,
           trialEndsAt: restaurant.trial_ends_at,
           accessEndsAt: restaurant.access_ends_at,
           subscription: subscription ? {
@@ -174,4 +223,8 @@ export async function GET(request: Request) {
   } catch (error) {
     return apiError(error, request);
   }
+}
+
+function round1(value: number) {
+  return Math.round(value * 10) / 10;
 }
