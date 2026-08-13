@@ -51,13 +51,14 @@ export default function CategoriesClient() {
     <Link className={styles.brand} href="/admin"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
     <small className={styles.kicker}>CARDÁPIO</small>
     <h1 className={styles.title}>Organize suas categorias.</h1>
-    <p className={styles.intro}>Crie, renomeie ou oculte seções do cardápio. Produtos continuam vinculados com segurança ao seu restaurante.</p>
+    <p className={styles.intro}>Crie, renomeie ou oculte seções do cardápio. Para tamanhos, sabores, bordas e adicionais, use o editor de opções.</p>
     {error && <p className={styles.error}>{error}</p>}{message && <p className={styles.success}>{message}</p>}
+    <div className={styles.footerActions} style={{ justifyContent: "flex-start", marginBottom: 18 }}><Link className={styles.linkButton} href="/admin/opcoes">Tamanhos, sabores e adicionais →</Link></div>
     <form className={styles.row} onSubmit={create}><label className={styles.field}>Nova categoria<input name="name" minLength={2} maxLength={80} required placeholder="Ex.: Pizzas especiais" /></label><button disabled={Boolean(busy)}>{busy === "create" ? "Criando…" : "+ Criar"}</button></form>
     <section className={styles.panel} style={{ marginTop: 22 }}><h2>Categorias da loja</h2><div className={styles.productList}>
       {categories.length ? categories.map(category => { const active = category.active === true || category.active === 1; return <div className={styles.product} key={category.id}><span><b>{category.name}</b><small style={{ display: "block", color: "#777c72" }}>{active ? "Visível no cardápio" : "Oculta"}</small></span><span style={{ display: "flex", gap: 8 }}><button className={styles.linkButton} disabled={Boolean(busy)} onClick={() => void rename(category)}>Renomear</button><button className={styles.linkButton} disabled={Boolean(busy)} onClick={() => void toggle(category)}>{active ? "Ocultar" : "Reativar"}</button></span></div>; }) : <p>Nenhuma categoria cadastrada.</p>}
     </div></section>
-    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">← Voltar ao painel</Link><Link className={styles.linkButton} href="/assinatura">Assinatura</Link></div>
+    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">← Voltar ao painel</Link><Link className={styles.linkButton} href="/admin/opcoes">Opções de produtos</Link><Link className={styles.linkButton} href="/assinatura">Assinatura</Link></div>
   </section></main>;
 }
 
