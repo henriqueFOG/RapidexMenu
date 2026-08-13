@@ -1,9 +1,6 @@
 import { apiError, HttpError } from "@/lib/http";
-import {
-  getMercadoPagoOrder,
-  normalizeMercadoPagoStatus,
-  verifyMercadoPagoSignature,
-} from "@/lib/integrations/mercado-pago";
+import { verifyMercadoPagoSignature } from "@/lib/integrations/mercado-pago";
+import { reconcileMercadoPagoPayment } from "@/lib/payment-reconciliation";
 import { getDatabase } from "@/lib/runtime";
 import { sha256Hex } from "@/lib/security";
 
@@ -59,41 +56,15 @@ export async function POST(request: Request) {
     }
 
     try {
-      const providerOrder = await getMercadoPagoOrder(providerOrderId, paymentOwner.restaurant_id);
-      const orderId = typeof providerOrder.external_reference === "string" ? providerOrder.external_reference : null;
-      if (!orderId || orderId !== paymentOwner.order_id) {
-        throw new HttpError(400, "Referência do pedido não confere.", "invalid_webhook");
-      }
-      const status = normalizeMercadoPagoStatus(providerOrder);
-      const timestamp = Date.now();
-      await db.batch([
-        db
-          .prepare(
-            `UPDATE payments SET status = ?, provider_data_json = ?, updated_at = ?
-             WHERE provider = 'mercado_pago' AND provider_payment_id = ? AND restaurant_id = ?`,
-          )
-          .bind(
-            status,
-            JSON.stringify({ providerStatus: providerOrder.status || null }),
-            timestamp,
-            providerOrderId,
-            paymentOwner.restaurant_id,
-          ),
-        db
-          .prepare(
-            `UPDATE orders SET payment_status = ?,
-             status = CASE WHEN ? = 'paid' AND status = 'received' THEN 'confirmed' ELSE status END,
-             confirmed_at = CASE WHEN ? = 'paid' AND confirmed_at IS NULL THEN ? ELSE confirmed_at END,
-             updated_at = ? WHERE id = ? AND restaurant_id = ?`,
-          )
-          .bind(status, status, status, timestamp, timestamp, orderId, paymentOwner.restaurant_id),
-        db
-          .prepare(
-            `UPDATE webhook_events SET status = 'processed', processed_at = ?, error = NULL
-             WHERE provider = 'mercado_pago' AND provider_event_id = ?`,
-          )
-          .bind(timestamp, eventId),
-      ]);
+      await reconcileMercadoPagoPayment(db, {
+        providerOrderId,
+        restaurantId: paymentOwner.restaurant_id,
+        orderId: paymentOwner.order_id,
+      });
+      await db.prepare(
+        `UPDATE webhook_events SET status = 'processed', processed_at = ?, error = NULL
+         WHERE provider = 'mercado_pago' AND provider_event_id = ?`,
+      ).bind(Date.now(), eventId).run();
     } catch (error) {
       await db
         .prepare(
