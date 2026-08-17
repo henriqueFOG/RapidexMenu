@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "bash scripts/build-verified.sh",
     "build:vercel": "bash scripts/build-vercel.sh",
+    "release:check": "bash scripts/release-gate.sh",
     "readiness:production": "node --import tsx scripts/check-production-readiness.ts",
     "start": "vinext start",
     "test": "npm run build && node --experimental-loader ./scripts/cloudflare-validation-loader.mjs --test tests/rendered-html.test.mjs",
@@ -24,7 +25,9 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.8.0",
+    "@vercel/speed-insights": "^2.0.0",
     "drizzle-orm": "0.45.2",
     "next": "16.3.0",
     "react": "19.2.6",

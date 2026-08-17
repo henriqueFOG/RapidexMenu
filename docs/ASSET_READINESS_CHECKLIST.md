@@ -154,7 +154,7 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 - ✅ Produção falha fechada sem object storage; Postgres base64 permanece somente como fallback de desenvolvimento/HMG.
 - 🔒 Provisionar bucket/CDN definitivo e credenciais de produção.
 - ⏳ Re-encode/normalização de imagem e variantes otimizadas antes de grande escala.
-- ⏳ Job de limpeza de objetos órfãos após object storage definitivo.
+- ✅ Job de limpeza de objetos órfãos implementado para R2/Vercel Blob, com carência, paginação e limite por ciclo; validação real do provedor permanece vinculada ao provisionamento externo.
 
 ## 12. Backup e recuperação
 
@@ -170,18 +170,19 @@ Atualizado em 13/08/2026. Este documento é o gate operacional do produto; prese
 
 ## Observabilidade
 
-- ⏳ Error tracking centralizado.
-- ⏳ APM/latência p95/p99.
-- ⏳ Uptime monitor externo.
-- ⏳ Alertas para 5xx, pagamento/webhook, fila, WhatsApp, IA, banco, storage e e-mail.
+- 🧪 Web Analytics e Speed Insights incorporados à aplicação; dados reais dependem da ativação/observação do projeto Vercel.
+- 🧪 Canal HTTPS para alertas críticos implementado, com redaction de PII/segredos e autenticação Bearer opcional; depende do receiver externo definitivo.
+- ⏳ Error tracking/APM centralizado com retenção e alertas do fornecedor.
+- ⏳ Uptime monitor externo independente do mesmo provedor de hospedagem.
+- ⏳ Alertas externos validados para 5xx, pagamento/webhook, fila, WhatsApp, IA, banco, storage e e-mail.
 - 🧪 Correlation/request ID e logs estruturados com política de redaction implementados no hardening P1; aguardam gate integrado do branch e observação em HMG.
 - ⏳ Status page quando a base justificar.
 
 ## Jobs assíncronos e resiliência
 
-- 🧪 Fila durável para jobs, retry e DLQ implementados no hardening P1; aguardam gate integrado do branch/HMG.
-- 🧪 Idempotency key, inspeção e reprocessamento seguro implementados; aguardam validação operacional em HMG.
-- 🧪 Dashboard de jobs disponível no backoffice da plataforma; aguarda teste de suporte real.
+- ✅ Fila durável, retry e DLQ validados no E2E consolidado de HMG.
+- ✅ Idempotency key, inspeção e reprocessamento seguro cobertos pelos gates automatizados.
+- ✅ Dashboard de jobs disponível no backoffice da plataforma; uso por equipe real continua como validação operacional de piloto.
 - ⏳ Migrar todos os webhooks/trabalhos pesados elegíveis para processamento assíncrono depois de validar os fluxos prioritários.
 
 ## Onboarding e self-service

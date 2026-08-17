@@ -84,3 +84,7 @@ Enquanto imagens estiverem armazenadas no PostgreSQL, o restore do banco cobre o
 O primeiro restore drill está registrado em `docs/evidence/RESTORE_DRILL_2026-08-13.md`. Ele usou uma branch Neon descartável, simulou perda total dos pedidos e alteração de schema somente na cópia, confirmou que HMG permaneceu intacta e restaurou a cópia ao estado do parent.
 
 Esse drill comprova o mecanismo de recuperação para o estado corrente do parent. Ainda falta, para fechar o gate completo de produção, testar a release com migration `0026` em uma cópia restaurada, validar E2E contra essa cópia e incluir o object storage definitivo.
+
+Em 17/08/2026 foi executado um novo drill sobre a release `b7a7d8b`, com as 30 migrations até `0031_maintenance_schedules.sql`. A cópia isolada recebeu uma alteração-canário, foi resetada a partir do parent e voltou ao mesmo fingerprint de migrations, 44 tabelas e mesmas contagens críticas. O parent permaneceu intacto e a branch temporária foi excluída. Evidência em `docs/evidence/RESTORE_DRILL_2026-08-17.md`.
+
+Com isso, o mecanismo de restauração está comprovado para HMG/pilotos controlados na release atual. Produção continua bloqueada até existir banco/storage definitivos, retenção compatível com o RPO/RTO e um drill próprio do ambiente de produção.

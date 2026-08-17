@@ -69,6 +69,7 @@ type Health = {
     email?: boolean;
     sellerPayments?: boolean;
     reconciliation?: boolean;
+    alerts?: boolean;
     metaEmbeddedSignup?: boolean;
     openai?: boolean;
     whatsapp?: boolean;
@@ -411,6 +412,7 @@ function InfrastructurePanel({ health, operations, productionReadiness }: { heal
     integrationConfig("E-mail transacional", "Convites e recuperação de senha", Boolean(readiness?.email), "optional"),
     integrationConfig("Pix dos estabelecimentos", "OAuth do Mercado Pago por loja", Boolean(readiness?.sellerPayments), "optional"),
     integrationConfig("Reconciliação automática", "Conferência periódica de pagamentos", Boolean(readiness?.reconciliation), readiness?.billing ? "required" : "standby"),
+    integrationConfig("Alertas operacionais", "Avisos externos para falhas críticas e manutenção degradada", Boolean(readiness?.alerts), readiness?.environment === "production" ? "required" : "standby"),
     integrationConfig("WhatsApp Embedded Signup", "Conexão oficial por estabelecimento", Boolean(readiness?.metaEmbeddedSignup), "optional"),
     integrationConfig("OpenAI", "Atendimento e transcrição assistidos", Boolean(readiness?.openai), "optional"),
     integrationConfig("WhatsApp", "Canal de pedidos e atendimento", Boolean(readiness?.whatsapp), "optional"),

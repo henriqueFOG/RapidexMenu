@@ -42,11 +42,12 @@ export function structuredLog(
   event: string,
   metadata: Record<string, unknown> = {},
 ) {
+  const safeMetadata = redactLogValue(metadata) as Record<string, unknown>;
   const payload = {
+    ...safeMetadata,
     ts: new Date().toISOString(),
     level,
     event: event.slice(0, 120),
-    ...redactLogValue(metadata) as Record<string, unknown>,
   };
   const line = JSON.stringify(payload);
   if (level === "error") console.error(line);

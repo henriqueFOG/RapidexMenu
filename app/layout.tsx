@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getBindings, getRapidexEnvironment } from "@/lib/runtime";
 import CommercialEntry from "./CommercialEntry";
 import ConversionLayer from "./ConversionLayer";
@@ -24,6 +26,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://rapidexmenu.com.br"),
   applicationName: "RapidexMenu",
   title: "RapidexMenu — Cardápio online, pedidos e entrega",
   description: "Cardápio online, pedidos, gestão e automação para restaurantes venderem no canal próprio sem comissão por pedido.",
@@ -65,6 +68,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     {children}
     <ConversionLayer />
     <CommercialEntry enabled={commercialEntryEnabled} />
+    <Analytics />
+    <SpeedInsights />
   </body></html>;
 }
 

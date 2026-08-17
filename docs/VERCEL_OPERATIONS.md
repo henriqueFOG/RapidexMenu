@@ -7,7 +7,7 @@
 - Legado identificado: `rapidexmenu-v2` (`prj_oTZ9oKDzcmxlqjPBqhZw1rx58ifw`), sem domínio oficial e com builds atuais bloqueados pelo fail-closed de projeto desconhecido. Retirar integrações e excluir somente depois de confirmar ausência de tráfego, banco compartilhado e cron.
 - Projetos antigos adicionais: retirar domínio e integrações, marcar como arquivados e excluir somente depois de confirmar que não recebem tráfego nem cron. Não reutilizar seus bancos ou segredos.
 
-O código bloqueia builds de projetos desconhecidos por meio de `scripts/vercel-ignore-build.mjs`.
+O código bloqueia builds de projetos desconhecidos por meio de `scripts/vercel-ignore-build.mjs`. Mesmo nos projetos oficiais, um push comum não compila a aplicação: HMG exige `[deploy:hmg]` na mensagem do commit e produção exige `[deploy:prod]`. Branch e projeto continuam validados junto com o marcador.
 
 Auditoria somente leitura de 17/08/2026: produção estava em Node 20 e servindo uma release antiga configurada como homologação; HMG estava em Node 24. Ajustar ambos para Node 22 no painel antes do próximo deploy. O build do projeto oficial agora executa o gate de prontidão e falha antes de compilar enquanto qualquer requisito obrigatório estiver pendente.
 
@@ -28,8 +28,8 @@ As variáveis `RAPIDEX_*_READY` e `RAPIDEX_*_VERIFIED` do exemplo de produção 
 
 ## Publicação econômica
 
-1. Rodar typecheck, testes, lint e build local uma vez ao fechar o lote.
-2. Subir um único checkpoint em HMG.
+1. Rodar `npm run release:check` uma vez ao fechar o lote; essa rotina executa exatamente um build local.
+2. Publicar o commit final em `hmg` com `[deploy:hmg]` e gerar um único build remoto.
 3. Executar E2E de Central, estabelecimento e comprador.
 4. Obter aprovação do Henrique.
-5. Promover o mesmo commit para produção, sem reconstruções intermediárias deliberadas.
+5. Promover o mesmo código para `master` com `[deploy:prod]`. Como HMG e produção são projetos/ambientes isolados, haverá uma única compilação final de produção, sem compilações intermediárias deliberadas.

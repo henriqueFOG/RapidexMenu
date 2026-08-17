@@ -4,6 +4,7 @@ import { authorizeInternalJob } from "@/lib/internal-job-auth";
 import { runJobCycle } from "@/lib/job-cycle";
 import { cleanupOrphanMedia } from "@/lib/media-cleanup";
 import { structuredLog } from "@/lib/observability";
+import { notifyOperationalAlert } from "@/lib/operational-alerts";
 import { reconcilePlatformSubscriptions } from "@/lib/platform-billing";
 import { reconcilePendingPayments } from "@/lib/reconcile-pending-payments";
 
@@ -33,11 +34,30 @@ export async function GET(request: Request) {
       dunning,
       mediaCleanup,
     });
+    if (hasFailures) {
+      await notifyOperationalAlert({
+        event: "maintenance.degraded",
+        severity: jobs.dead > 0 ? "critical" : "warning",
+        summary: "O ciclo de manutenção terminou com falhas operacionais.",
+        metadata: {
+          jobsDead: jobs.dead,
+          paymentFailures: payments.failed,
+          subscriptionFailures: subscriptions.failed,
+          dunningFailures: dunning.failed,
+        },
+      });
+    }
     return json({ ok: true, jobs, payments, subscriptions, dunning, mediaCleanup, durationMs: Date.now() - startedAt }, {
       headers: { "x-request-id": requestId },
     });
   } catch (error) {
     structuredLog("error", "maintenance.failed", { requestId, durationMs: Date.now() - startedAt, error });
+    await notifyOperationalAlert({
+      event: "maintenance.failed",
+      severity: "critical",
+      summary: "O ciclo de manutenção da plataforma falhou.",
+      metadata: { requestId, durationMs: Date.now() - startedAt, error },
+    });
     return apiError(error, request);
   }
 }

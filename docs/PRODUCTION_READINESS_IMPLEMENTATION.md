@@ -4,9 +4,10 @@ Atualizado em 17/08/2026. Este é o checklist operacional desta rodada. Um item 
 
 ## Regra de publicação
 
-- [x] Trabalhar sobre o mesmo commit publicado em HMG (`d3214ec0d603ef091b4f823c9f26fa0b90aec8a7`).
+- [x] Trabalhar sobre o mesmo código publicado em HMG (`b7a7d8b56926fc049a26d1fae2a0ce4f96dbed28`).
 - [x] Não publicar cada ajuste individualmente.
-- [ ] Executar um único deploy de HMG somente após o pacote local ficar verde e Henrique aprovar.
+- [x] Exigir marcador explícito `[deploy:hmg]`/`[deploy:prod]` para impedir build remoto em push comum.
+- [ ] Executar um único deploy de HMG somente após o novo pacote local ficar verde.
 - [ ] Promover para produção somente quando código, infraestrutura e dependências externas obrigatórias estiverem concluídos.
 
 ## P0 técnico — antes dos pilotos
@@ -19,7 +20,7 @@ Atualizado em 17/08/2026. Este é o checklist operacional desta rodada. Um item 
 - [x] Adicionar páginas próprias de erro e 404.
 - [x] Reduzir informações técnicas expostas no health check público.
 - [x] Cobrir Central, comprador, estabelecimento e isolamento entre tenants nas suítes E2E.
-- [ ] Executar as suítes E2E contra o próximo deploy único de HMG.
+- [x] Executar as suítes E2E contra o deploy único `b7a7d8b` de HMG.
 - [ ] Validar instalação e operação móvel/PWA em preview; dispositivo físico continua como gate externo.
 
 ## P0 Central administrativa
@@ -52,6 +53,7 @@ Atualizado em 17/08/2026. Este é o checklist operacional desta rodada. Um item 
 - [ ] 🔒 Validar Vercel Pro com frequência de 5 minutos ou agendador externo equivalente antes de clientes.
 - [x] Distinguir integração inativa de incidente real no painel.
 - [x] Instrumentar erros e sinais operacionais sem registrar PII/segredos.
+- [x] Adicionar Web Analytics, Speed Insights e canal HTTPS opcional para alertas operacionais críticos.
 - [x] Criar verificação de readiness para produção.
 - [x] Padronizar Node 22 no código, CI e documentação de Vercel.
 - [x] Documentar aposentadoria dos projetos Vercel antigos.
@@ -61,12 +63,11 @@ Atualizado em 17/08/2026. Este é o checklist operacional desta rodada. Um item 
 
 - [x] TypeScript sem erros.
 - [x] ESLint sem erros ou avisos.
-- [x] 95 testes unitários/contratuais aprovados.
+- [x] 101 testes unitários/contratuais aprovados.
 - [x] Histórico D1 aplicado do zero e validado automaticamente.
-- [x] Varredura de 377 arquivos versionados ou pendentes sem segredo detectado.
+- [x] Varredura de 381 arquivos versionados ou pendentes sem segredo detectado.
 - [x] Auditoria das dependências de produção sem vulnerabilidade conhecida.
-- [x] Build local único concluído e artefato Sites validado.
-- [x] Renderização do artefato validada sem novo build.
+- [x] Build local consolidado Vercel/Next concluído após typecheck, lint, testes, auditoria e secret scan.
 - [ ] Inspeção visual no navegador remoto: bloqueada pelo ambiente antes de alcançar a aplicação; repetir em HMG.
 
 ## Auditoria externa somente leitura — 17/08/2026
@@ -92,6 +93,7 @@ Evidência detalhada em `docs/READINESS_AUDIT_2026-08-17.md`.
 - [ ] 🔒 Validar Meta/WhatsApp e OpenAI reais se forem anunciados.
 - [ ] 🔒 Definir CNPJ/entidade, conta bancária, Termos, Privacidade, DPA e canal LGPD.
 - [ ] 🔒 Contratar backup adequado, definir RPO/RTO e executar restore do ambiente de produção.
+- [x] Executar restore drill atualizado da release HMG até migration `0031`, preservando o parent e removendo a cópia temporária.
 - [ ] 🔒 Configurar monitoramento externo, alertas e responsáveis de suporte.
 - [ ] 🔒 Ativar MFA nas contas GitHub, Vercel, Neon, DNS, Meta, Mercado Pago, OpenAI e e-mail.
 

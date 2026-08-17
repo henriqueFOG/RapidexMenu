@@ -17,6 +17,8 @@ export type RapidexBindings = {
   RAPIDEX_STORAGE_VALIDATED?: string;
   RAPIDEX_SELLER_PAYMENTS_VALIDATED?: string;
   RAPIDEX_MONITORING_READY?: string;
+  RAPIDEX_ALERT_WEBHOOK_URL?: string;
+  RAPIDEX_ALERT_WEBHOOK_SECRET?: string;
   RAPIDEX_BACKUP_RESTORE_VERIFIED?: string;
   RAPIDEX_LEGAL_READY?: string;
   RAPIDEX_SUPPORT_READY?: string;
@@ -131,6 +133,7 @@ export function integrationReadiness() {
         bindings.RAPIDEX_INTEGRATION_SECRET.length >= 32,
     ),
     reconciliation: cronSecret.length >= 32,
+    alerts: validAlertWebhook(bindings.RAPIDEX_ALERT_WEBHOOK_URL),
     metaEmbeddedSignup,
     uploads: Boolean(
       bindings.BUCKET ||
@@ -142,4 +145,13 @@ export function integrationReadiness() {
     whatsappLegacy,
     pixLegacy: Boolean(bindings.MERCADO_PAGO_ACCESS_TOKEN),
   };
+}
+
+function validAlertWebhook(value: string | undefined) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
 }
