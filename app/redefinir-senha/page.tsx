@@ -8,6 +8,7 @@ import styles from "../commercial.module.css";
 function ResetForm() {
   const query = useSearchParams();
   const token = query.get("token") || "";
+  const returnTo = query.get("return_to") === "/central/entrar" ? "/central/entrar" : "/entrar";
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(token ? "" : "Este link não contém um token válido.");
@@ -30,7 +31,7 @@ function ResetForm() {
     <h1 className={styles.title}>Crie uma nova senha.</h1>
     <p className={styles.intro}>Use pelo menos 10 caracteres, incluindo letra e número. Ao trocar a senha, as sessões anteriores deixam de ser válidas.</p>
     {error && <p className={styles.error}>{error}</p>}
-    {done ? <><p className={styles.success}>Senha alterada com sucesso.</p><Link className={styles.button} style={{ display: "block", textAlign: "center", textDecoration: "none" }} href="/entrar?senha=alterada">Entrar na minha conta →</Link></> : <form onSubmit={submit} className={styles.grid}>
+    {done ? <><p className={styles.success}>Senha alterada com sucesso.</p><Link className={styles.button} style={{ display: "block", textAlign: "center", textDecoration: "none" }} href={`${returnTo}?senha=alterada`}>Entrar na minha conta →</Link></> : <form onSubmit={submit} className={styles.grid}>
       <label className={`${styles.field} ${styles.wide}`}>Nova senha<input name="password" type="password" minLength={10} maxLength={128} required autoComplete="new-password" /></label>
       <label className={`${styles.field} ${styles.wide}`}>Confirme a senha<input name="confirmation" type="password" minLength={10} maxLength={128} required autoComplete="new-password" /></label>
       <button className={`${styles.button} ${styles.wide}`} disabled={busy || !token}>{busy ? "Alterando…" : "Salvar nova senha →"}</button>

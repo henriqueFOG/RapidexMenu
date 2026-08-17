@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import styles from "../../commercial.module.css";
 
 function CentralLoginForm() {
   const query = useSearchParams();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const restricted = query.get("erro") === "acesso-restrito";
@@ -24,7 +25,8 @@ function CentralLoginForm() {
       });
       const payload = await response.json() as { error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message || "Não foi possível entrar na Central.");
-      window.location.assign("/central");
+      router.replace("/central");
+      router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível entrar na Central.");
       setBusy(false);
@@ -44,6 +46,7 @@ function CentralLoginForm() {
         <label className={`${styles.field} ${styles.wide}`}>Senha<input name="password" type="password" required autoComplete="current-password" /></label>
         <button className={`${styles.button} ${styles.wide}`} disabled={busy}>{busy ? "Entrando…" : "Entrar na Central →"}</button>
       </form>
+      <Link className={styles.secondary} href="/esqueci-senha?return_to=%2Fcentral%2Fentrar">Esqueci minha senha administrativa</Link>
       <Link className={styles.secondary} href="/entrar">Sou dono de estabelecimento · Ir para o painel do restaurante</Link>
     </section>
   </main>;

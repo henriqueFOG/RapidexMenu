@@ -9,6 +9,7 @@ type RestaurantRow = {
   id: string;
   name: string;
   slug: string;
+  owner_email: string;
   plan: "start" | "growth" | "scale";
   status: string;
   published_at: number | null;
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
       eventWindow,
     ] = await Promise.all([
       db.prepare(
-        `SELECT id, name, slug, plan, status, published_at, trial_ends_at, access_ends_at, created_at
+        `SELECT id, name, slug, owner_email, plan, status, published_at, trial_ends_at, access_ends_at, created_at
          FROM restaurants
          WHERE status != 'canceled'
          ORDER BY created_at DESC
@@ -203,6 +204,7 @@ export async function GET(request: Request) {
           id: restaurant.id,
           name: restaurant.name,
           slug: restaurant.slug,
+          ownerEmail: restaurant.owner_email,
           plan: restaurant.plan,
           status: restaurant.status,
           published: Boolean(restaurant.published_at),

@@ -1,6 +1,5 @@
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
-import { structuredLog } from "@/lib/observability";
-import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { auditPlatformAction, requirePlatformAdmin } from "@/lib/platform-admin";
 import { getDatabase } from "@/lib/runtime";
 import { requiredString } from "@/lib/validation";
 
@@ -45,9 +44,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const admin = await requirePlatformAdmin();
+    const admin = await requirePlatformAdmin("platform:operate");
     const body = await readJson<Record<string, unknown>>(request, 10_000);
     const id = requiredString(body.id, "Job", 8, 160);
+    const reason = requiredString(body.reason, "Motivo", 10, 500);
     if (body.action !== "requeue") {
       throw new HttpError(400, "Ação de job inválida.", "invalid_job_action");
     }
@@ -62,11 +62,13 @@ export async function POST(request: Request) {
     if (!row) {
       throw new HttpError(409, "Este job não pode ser reenfileirado no estado atual.", "job_not_requeueable");
     }
-    structuredLog("warn", "platform.job_requeued", {
-      actorEmail: admin.email,
-      jobId: row.id,
-      restaurantId: row.restaurant_id,
-      jobType: row.job_type,
+    await auditPlatformAction(admin, {
+      action: "platform.job_requeued",
+      targetType: "job",
+      targetId: row.id,
+      reason,
+      metadata: { restaurantId: row.restaurant_id, jobType: row.job_type },
+      requestId: request.headers.get("x-request-id"),
     });
     return json({ ok: true, id: row.id, status: "queued" });
   } catch (error) {
