@@ -1,7 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+const tracked = execFileSync(
+  "git",
+  ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+  { encoding: "utf8" },
+)
   .split("\0")
   .filter(Boolean)
   .filter((path) => !path.endsWith("package-lock.json"));
@@ -39,7 +43,7 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`Secret scan passed (${tracked.length} tracked files checked).`);
+console.log(`Secret scan passed (${tracked.length} versioned or pending files checked).`);
 
 function isAllowedExample(path) {
   return /(^|\/)\.env(?:\.[^/]+)?\.example$/.test(path);

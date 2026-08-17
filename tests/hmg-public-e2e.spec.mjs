@@ -20,8 +20,24 @@ mkdirSync(artifactsDir, { recursive: true });
 test.use({ baseURL, viewport: { width: 1440, height: 1000 } });
 test.setTimeout(180_000);
 
+let companyContext;
+let consumerContext;
+
+test.afterEach(async () => {
+  if (companyContext) {
+    const cleanup = await companyContext.request.post("/api/auth/test-cleanup", {
+      headers: { origin: new URL(baseURL).origin },
+    });
+    expect([200, 401]).toContain(cleanup.status());
+  }
+  await companyContext?.close();
+  await consumerContext?.close();
+  companyContext = undefined;
+  consumerContext = undefined;
+});
+
 test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha até Entregue", async ({ browser }) => {
-  const companyContext = await browser.newContext();
+  companyContext = await browser.newContext();
   const company = await companyContext.newPage();
   let storePath = "";
 
@@ -99,7 +115,7 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await company.screenshot({ path: `${artifactsDir}/02b-public-foto-produto.png`, fullPage: true });
   });
 
-  const consumerContext = await browser.newContext();
+  consumerContext = await browser.newContext();
   const consumer = await consumerContext.newPage();
   let trackingPath = "";
   let orderNumber = "";
@@ -194,7 +210,4 @@ test("HMG público: empresa entra, publica cardápio, cliente compra e acompanha
     await mobile.screenshot({ path: `${artifactsDir}/07-public-cardapio-mobile.png`, fullPage: true });
     await mobileContext.close();
   });
-
-  await companyContext.close();
-  await consumerContext.close();
 });

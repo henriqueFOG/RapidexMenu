@@ -3,9 +3,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { neon, neonConfig, Pool } from "@neondatabase/serverless";
 
-const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const connectionString = process.env.RAPIDEX_MIGRATION_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (!connectionString) {
-  throw new Error("Configure DATABASE_URL antes de executar as migracoes Postgres.");
+  throw new Error("Configure RAPIDEX_MIGRATION_DATABASE_URL (preferencial) ou DATABASE_URL antes de executar as migrações Postgres.");
 }
 
 const environment = parseEnvironment(process.env.RAPIDEX_ENV);

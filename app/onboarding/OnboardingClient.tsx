@@ -55,7 +55,10 @@ export default function OnboardingClient({ userName }: { userName: string }) {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const progress = useMemo(() => {
     if (!readiness) return 0;

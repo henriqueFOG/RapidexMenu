@@ -51,7 +51,10 @@ export default function PrivacyClient() {
       setError(reason instanceof Error ? reason.message : "Não foi possível carregar privacidade.");
     }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const filteredCustomers = useMemo(() => {
     const term = search.trim().toLowerCase();

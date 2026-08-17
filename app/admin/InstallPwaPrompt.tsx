@@ -21,17 +21,19 @@ export default function InstallPwaPrompt() {
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    const standalone = window.matchMedia("(display-mode: standalone)").matches
-      || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-    setInstalled(standalone);
+    const initialSync = window.setTimeout(() => {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches
+        || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+      setInstalled(standalone);
 
-    const ua = navigator.userAgent;
-    const isAppleMobile = /iPad|iPhone|iPod/.test(ua)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    setIos(isAppleMobile);
+      const ua = navigator.userAgent;
+      const isAppleMobile = /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      setIos(isAppleMobile);
 
-    const dismissedAt = Number(window.localStorage.getItem(dismissedKey) || 0);
-    setDismissed(Boolean(dismissedAt && Date.now() - dismissedAt < reminderAfterMs));
+      const dismissedAt = Number(window.localStorage.getItem(dismissedKey) || 0);
+      setDismissed(Boolean(dismissedAt && Date.now() - dismissedAt < reminderAfterMs));
+    }, 0);
 
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
@@ -48,6 +50,7 @@ export default function InstallPwaPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      window.clearTimeout(initialSync);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };

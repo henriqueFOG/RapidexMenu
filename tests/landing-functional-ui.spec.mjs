@@ -72,7 +72,7 @@ test("landing oficial é única e todos os CTAs navegam por clique real", async 
     await expect(loginPage.getByRole("heading", { name: /Bem-vindo de volta/i })).toBeVisible();
   });
 
-  await clickLandingRoute(page.context(), /Começar agora/i, "/cadastro", async (signupPage) => {
+  await clickLandingRoute(page.context(), /Solicitar acesso/i, "/cadastro", async (signupPage) => {
     await expect(signupPage.getByRole("heading", { name: /Crie sua loja/i })).toBeVisible();
   });
 });

@@ -33,7 +33,8 @@ jobs:
       RAPIDEX_AUTH_MODE: native
       RAPIDEX_SIGNUP_ENABLED: "true"
       RAPIDEX_SESSION_SECRET: hmg-platform-admin-session-secret-32-characters-minimum
-      RAPIDEX_OWNER_EMAIL: platform.admin@rapidex-hmg.test
+      RAPIDEX_OWNER_EMAIL: henry.francisco31@hotmail.com
+      RAPIDEX_PLATFORM_E2E_PASSWORD: RapidexCentralE2E123
       DATABASE_URL: postgresql://rapidex@127.0.0.1:5432/rapidex_hmg?sslmode=disable
       RAPIDEX_POSTGRES_WS_PROXY: 127.0.0.1:9876
       RAPIDEX_E2E_URL: http://localhost:3000
@@ -58,6 +59,8 @@ jobs:
           exit 1
       - name: Build and migrate
         run: npm run build:vercel
+      - name: Seed canonical platform owner
+        run: node --import tsx scripts/seed-platform-admin-e2e.ts
       - name: Start runtime
         run: |
           nohup npx --no-install next start -H 127.0.0.1 -p 3000 >/tmp/platform-admin-runtime.log 2>&1 &

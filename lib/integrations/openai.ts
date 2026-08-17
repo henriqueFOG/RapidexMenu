@@ -136,9 +136,14 @@ export async function generateSalesReply(context: SalesContext): Promise<SalesRe
 
   // Exact internal margins never leave the Rapidex server. The model only receives a coarse
   // commercial priority, enough for upsell decisions without exposing sensitive economics.
-  const { restaurantId: _restaurantId, ...safeContext } = context;
   const modelContext = {
-    ...safeContext,
+    restaurantName: context.restaurantName,
+    message: context.message,
+    customerName: context.customerName,
+    preferences: context.preferences,
+    recentOrders: context.recentOrders,
+    currentCart: context.currentCart,
+    currentCheckout: context.currentCheckout,
     products: safeAiProductContext(context.products),
   };
 

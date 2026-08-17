@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AdminOverviewV2 from "../../admin/AdminOverviewV2";
 import shellStyles from "../../admin/AdminShellV2.module.css";
 import topbarStyles from "../../admin/AdminTopbarV2.module.css";
@@ -61,8 +62,9 @@ const demoData = {
 };
 
 export default function DemoDashboardPage() {
+  const router = useRouter();
   const [mobileNav, setMobileNav] = useState(false);
-  const access = () => window.location.assign("/entrar?return_to=/admin");
+  const access = () => router.push("/entrar?return_to=/admin");
   const share = async () => {
     const url = `${window.location.origin}/loja/serra-burger`;
     if (navigator.share) {
@@ -86,8 +88,8 @@ export default function DemoDashboardPage() {
           <button onClick={access}><span>⚙</span><b>Configurações</b></button>
         </nav>
 
-        <a className="rm-sidebar-store" href="/loja/serra-burger"><span className="online"><i /></span><div><b>Loja online</b><small>Serra Burger</small></div><em>↗</em></a>
-        <div className="rm-sidebar-user"><span>MB</span><div><b>Marina Braga</b><small>Serra Burger · demonstração</small></div><a href="/entrar?return_to=/admin" title="Acessar painel">↗</a></div>
+        <Link className="rm-sidebar-store" href="/loja/serra-burger"><span className="online"><i /></span><div><b>Loja online</b><small>Serra Burger</small></div><em>↗</em></Link>
+        <div className="rm-sidebar-user"><span>MB</span><div><b>Marina Braga</b><small>Serra Burger · demonstração</small></div><Link href="/entrar?return_to=/admin" title="Acessar painel">↗</Link></div>
       </aside>
 
       <section className="rm-admin-main">
@@ -96,8 +98,8 @@ export default function DemoDashboardPage() {
           <div className={topbarStyles.actions}>
             <span className={topbarStyles.hmg}>DEMO</span>
             <button className={topbarStyles.share} onClick={() => void share()} aria-label="Compartilhar cardápio"><b aria-hidden="true">↗</b><span>Compartilhar cardápio</span></button>
-            <a className={topbarStyles.store} href="/loja/serra-burger"><b aria-hidden="true">▣</b><span>Experimentar pedido real</span></a>
-            <a className={topbarStyles.store} href="/entrar?return_to=/admin"><b aria-hidden="true">→</b><span>Acessar painel</span></a>
+            <Link className={topbarStyles.store} href="/loja/serra-burger"><b aria-hidden="true">▣</b><span>Experimentar pedido real</span></Link>
+            <Link className={topbarStyles.store} href="/entrar?return_to=/admin"><b aria-hidden="true">→</b><span>Acessar painel</span></Link>
           </div>
         </header>
 

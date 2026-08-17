@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 
 export default function ProductImageUpload({ product, onDone }: { product: Record<string, unknown>; onDone: () => Promise<void> }) {
@@ -43,7 +44,7 @@ export default function ProductImageUpload({ product, onDone }: { product: Recor
       style={buttonStyle}
     >
       {imageUrl
-        ? <img src={imageUrl} alt="" style={imageStyle} />
+        ? <Image src={imageUrl} width={96} height={96} sizes="48px" unoptimized alt="" style={imageStyle} />
         : <span aria-hidden="true" style={emojiStyle}>{String(product.emoji || "🍽️")}</span>}
       <span style={cameraStyle}>{busy ? "…" : "📷"}</span>
     </button>

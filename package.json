@@ -9,7 +9,8 @@
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "vite",
     "build": "bash scripts/build-verified.sh",
-    "build:vercel": "if [ -n \"$DATABASE_URL$POSTGRES_URL\" ]; then node scripts/migrate-postgres.mjs; fi && RAPIDEX_RUNTIME=vercel next build --webpack",
+    "build:vercel": "bash scripts/build-vercel.sh",
+    "readiness:production": "node --import tsx scripts/check-production-readiness.ts",
     "start": "vinext start",
     "test": "npm run build && node --experimental-loader ./scripts/cloudflare-validation-loader.mjs --test tests/rendered-html.test.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.8.0",
     "drizzle-orm": "0.45.2",
     "next": "16.3.0",
     "react": "19.2.6",

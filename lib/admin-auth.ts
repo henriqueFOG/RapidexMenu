@@ -27,6 +27,7 @@ type MembershipRow = {
   restaurant_status: string;
   trial_ends_at: number | null;
   access_ends_at: number | null;
+  platform_blocked_at: number | null;
 };
 
 export async function requireAdminContext(): Promise<AdminContext> {
@@ -42,7 +43,7 @@ export async function requireAdminContext(): Promise<AdminContext> {
     const ownedRestaurant = await db
       .prepare(
         `SELECT id AS restaurant_id, name AS restaurant_name, slug AS restaurant_slug, 'owner' AS role,
-                plan, status AS restaurant_status, trial_ends_at, access_ends_at
+                plan, status AS restaurant_status, trial_ends_at, access_ends_at, platform_blocked_at
          FROM restaurants WHERE lower(owner_email) = ? LIMIT 1`,
       )
       .bind(email)
@@ -71,6 +72,14 @@ export async function requireAdminContext(): Promise<AdminContext> {
       403,
       "Sua conta ainda não está vinculada a um restaurante.",
       "membership_required",
+    );
+  }
+
+  if (membership.platform_blocked_at) {
+    throw new HttpError(
+      403,
+      "Este estabelecimento está bloqueado pela administração da plataforma. Fale com o suporte.",
+      "restaurant_platform_blocked",
     );
   }
 
@@ -124,7 +133,7 @@ async function findMembership(db: D1Database, email: string) {
   return db
     .prepare(
       `SELECT m.restaurant_id, r.name AS restaurant_name, r.slug AS restaurant_slug, m.role,
-              r.plan, r.status AS restaurant_status, r.trial_ends_at, r.access_ends_at
+              r.plan, r.status AS restaurant_status, r.trial_ends_at, r.access_ends_at, r.platform_blocked_at
        FROM members m
        JOIN restaurants r ON r.id = m.restaurant_id
        WHERE lower(m.email) = ? AND m.active = 1 AND r.status != 'canceled'

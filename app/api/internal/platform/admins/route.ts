@@ -5,8 +5,10 @@ import {
   requirePlatformAdmin,
   type PlatformAdminRole,
 } from "@/lib/platform-admin";
-import { getBindings, getDatabase } from "@/lib/runtime";
+import { getBindings, getDatabase, getRapidexEnvironment } from "@/lib/runtime";
+import { isSyntheticEmail } from "@/lib/tenant-classification";
 import { requiredString } from "@/lib/validation";
+import { assertPlatformAdminEmailAllowed, assertPlatformOwnerRoleAllowed } from "@/lib/platform-identity-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -52,18 +54,27 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const actor = await requirePlatformAdmin("admins:manage");
     const body = await readJson<CreateAdminBody>(request, 20_000);
-    const email = normalizeEmail(body.email);
+    const email = assertPlatformAdminEmailAllowed(normalizeEmail(body.email));
     const fullName = requiredString(body.fullName, "Nome", 2, 120);
     const role = normalizeRole(body.role);
+    assertPlatformOwnerRoleAllowed(email, role);
     const reason = requiredString(body.reason, "Motivo", 10, 500);
+    if (getRapidexEnvironment() === "production" && isSyntheticEmail(email)) {
+      throw new HttpError(400, "E-mails de teste não podem receber acesso de superadmin em produção.", "synthetic_email_forbidden");
+    }
     const db = getDatabase();
     const existingUser = await db.prepare(
-      "SELECT id, email, full_name, status FROM app_users WHERE lower(email) = ? LIMIT 1",
-    ).bind(email).first<{ id: string; email: string; full_name: string; status: string }>();
+      `SELECT u.id, u.email, u.full_name, u.status,
+              EXISTS (SELECT 1 FROM members m WHERE lower(m.email) = lower(u.email) AND m.active = 1) AS has_membership
+       FROM app_users u WHERE lower(u.email) = ? LIMIT 1`,
+    ).bind(email).first<{ id: string; email: string; full_name: string; status: string; has_membership: number }>();
     if (existingUser?.status !== undefined && existingUser.status !== "active") {
       throw new HttpError(409, "A conta existe, mas está bloqueada ou removida.", "account_not_active");
     }
     if (existingUser) {
+      if (Number(existingUser.has_membership) === 1) {
+        throw new HttpError(409, "Este e-mail pertence a um usuário de estabelecimento. Use uma identidade separada para a Central.", "identity_already_assigned");
+      }
       const alreadyAdmin = await db.prepare(
         "SELECT id FROM platform_admins WHERE user_id = ? LIMIT 1",
       ).bind(existingUser.id).first();

@@ -12,7 +12,7 @@ export default function PwaLifecycle() {
       window.dispatchEvent(new CustomEvent(next ? "rapidex:online" : "rapidex:offline"));
     };
 
-    setOnline(navigator.onLine);
+    const initialSync = window.setTimeout(syncConnection, 0);
     window.addEventListener("online", syncConnection);
     window.addEventListener("offline", syncConnection);
 
@@ -23,6 +23,7 @@ export default function PwaLifecycle() {
     }
 
     return () => {
+      window.clearTimeout(initialSync);
       window.removeEventListener("online", syncConnection);
       window.removeEventListener("offline", syncConnection);
     };

@@ -1,4 +1,5 @@
 import { requireAdminContext, requireRole } from "@/lib/admin-auth";
+import { put } from "@vercel/blob";
 import { apiError, assertSameOrigin, HttpError, json } from "@/lib/http";
 import { validateImageBytes } from "@/lib/image-validation";
 import { getBindings, getDatabase, getRapidexEnvironment } from "@/lib/runtime";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
     const validated = validateImageBytes(bytes, file.type);
     const key = `public/restaurants/${context.restaurantId}/products/${crypto.randomUUID()}.${validated.extension}`;
 
+    let publicUrl = `/api/public/media/${key}`;
     if (bindings.BUCKET) {
       await bindings.BUCKET.put(key, bytes, {
         httpMetadata: { contentType: validated.mime, cacheControl: "public, max-age=86400" },
@@ -57,6 +59,16 @@ export async function POST(request: Request) {
           height: String(validated.height),
         },
       });
+    } else if (bindings.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(key, bytes, {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        cacheControlMaxAge: 86_400,
+        contentType: validated.mime,
+        token: bindings.BLOB_READ_WRITE_TOKEN,
+      });
+      publicUrl = blob.url;
     } else if (postgresFallback) {
       await getDatabase()
         .prepare(
@@ -85,7 +97,7 @@ export async function POST(request: Request) {
     return json({
       ok: true,
       key,
-      url: `/api/public/media/${key}`,
+      url: publicUrl,
       image: { width: validated.width, height: validated.height, type: validated.mime },
     }, { status: 201 });
   } catch (error) {

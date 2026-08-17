@@ -27,7 +27,10 @@ export default function PaymentsClient() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível consultar os pagamentos."); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function disconnect() {
     if (!window.confirm("Desconectar Mercado Pago? Novos pedidos deixarão de oferecer Pix até uma nova conexão.")) return;

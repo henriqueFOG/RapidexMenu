@@ -1,5 +1,5 @@
 import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/http";
-import { hashPassword, isNativeAuthMode, nativeAuthConfigured, setCommercialSession, signupEnabled } from "@/lib/commercial-auth";
+import { hashPassword, isNativeAuthMode, nativeAuthConfigured, setCommercialSession, signupEnabled, signupMode } from "@/lib/commercial-auth";
 import { RAPIDEX_PRIVACY_VERSION, RAPIDEX_TERMS_VERSION } from "@/lib/legal";
 import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getDatabase } from "@/lib/runtime";
@@ -24,8 +24,18 @@ type SignupBody = {
 
 export async function POST(request: Request) {
   try {
-    if (!isNativeAuthMode() || !nativeAuthConfigured() || !signupEnabled()) {
+    if (!isNativeAuthMode() || !nativeAuthConfigured()) {
       throw new HttpError(503, "O cadastro comercial ainda não está habilitado neste ambiente.", "signup_unavailable");
+    }
+    if (!signupEnabled()) {
+      const mode = signupMode();
+      throw new HttpError(
+        mode === "invite_only" ? 403 : 503,
+        mode === "invite_only"
+          ? "Novos estabelecimentos entram por convite da equipe RapidexMenu. Fale com nosso atendimento."
+          : "O cadastro comercial ainda não está habilitado neste ambiente.",
+        mode === "invite_only" ? "signup_invite_only" : "signup_unavailable",
+      );
     }
     assertSameOrigin(request);
     const db = getDatabase();

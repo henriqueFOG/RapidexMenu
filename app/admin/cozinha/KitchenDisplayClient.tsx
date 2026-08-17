@@ -76,8 +76,10 @@ export default function KitchenDisplayClient() {
       if (document.visibilityState === "visible" && navigator.onLine) void load();
     };
 
-    setOnline(navigator.onLine);
-    void load();
+    const initialLoad = window.setTimeout(() => {
+      setOnline(navigator.onLine);
+      void load();
+    }, 0);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible" && navigator.onLine) void load();
     }, 4_000);
@@ -87,6 +89,7 @@ export default function KitchenDisplayClient() {
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(timer);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

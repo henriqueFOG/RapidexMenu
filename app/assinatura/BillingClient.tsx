@@ -20,6 +20,7 @@ function Billing() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [referenceTime, setReferenceTime] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     setError("");
@@ -31,7 +32,11 @@ function Billing() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível consultar sua assinatura."); }
   }, [query]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const initial = window.setTimeout(() => { void load(); }, 0);
+    const clock = window.setInterval(() => setReferenceTime(Date.now()), 60_000);
+    return () => { window.clearTimeout(initial); window.clearInterval(clock); };
+  }, [load]);
 
   async function subscribe(plan: "start" | "growth" | "scale") {
     setBusy(plan); setError(""); setMessage("");
@@ -57,7 +62,7 @@ function Billing() {
   }
 
   const cancelled = data?.subscription?.status === "cancelled";
-  const hasPaidAccess = data?.restaurant.status === "active" && (!data.restaurant.accessEndsAt || data.restaurant.accessEndsAt > Date.now());
+  const hasPaidAccess = data?.restaurant.status === "active" && (!data.restaurant.accessEndsAt || data.restaurant.accessEndsAt > referenceTime);
   const active = hasPaidAccess || data?.subscription?.status === "authorized";
   const trialText = data?.restaurant.trialEndsAt ? formatDate(data.restaurant.trialEndsAt) : null;
   const accessText = data?.restaurant.accessEndsAt ? formatDate(data.restaurant.accessEndsAt) : null;
@@ -79,7 +84,7 @@ function Billing() {
     {active ? <section className={styles.panel}><h2>Plano {planName(data!.restaurant.plan)}</h2><p>Status: {cancelled ? "renovação cancelada" : "ativo"}{data?.subscription?.next_payment_at && !cancelled ? ` · próxima cobrança em ${formatDate(Number(data.subscription.next_payment_at))}` : accessText ? ` · acesso até ${accessText}` : ""}.</p><div style={{ display: "grid", gap: 10 }}><Link className={styles.button} style={{ display: "block", textAlign: "center", textDecoration: "none" }} href="/admin">Ir para o painel →</Link>{!cancelled && data?.subscription?.status === "authorized" && data.configured && <button className={styles.linkButton} disabled={busy === "cancel"} onClick={() => void cancelRenewal()}>{busy === "cancel" ? "Cancelando…" : "Cancelar renovação automática"}</button>}</div></section> : <>
       <div className={styles.steps}>
         <Plan name="Começo" priceCents={data?.prices.start || 9700} text="Cardápio, link, pedidos, Profit Engine e operação essencial." selected={data?.restaurant.plan === "start"} disabled={!data?.configured || Boolean(busy)} onClick={() => subscribe("start")} busy={busy === "start"} />
-        <Plan name="Crescimento" priceCents={data?.prices.growth || 29700} text="Tudo do Começo + WhatsApp, memória, recompra e automações de margem." selected={data?.restaurant.plan === "growth"} disabled={!data?.configured || Boolean(busy)} onClick={() => subscribe("growth")} busy={busy === "growth"} />
+        <Plan name="Crescimento" priceCents={data?.prices.growth || 29700} text="Tudo do Começo + WhatsApp e IA após ativação, memória, recompra e automações de margem." selected={data?.restaurant.plan === "growth"} disabled={!data?.configured || Boolean(busy)} onClick={() => subscribe("growth")} busy={busy === "growth"} />
         <Plan name="Escala" priceCents={data?.prices.scale || 59700} text="Mais unidades, permissões, fila inteligente e prioridade." selected={data?.restaurant.plan === "scale"} disabled={!data?.configured || Boolean(busy)} onClick={() => subscribe("scale")} busy={busy === "scale"} />
       </div>
       <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin">Continuar meu teste →</Link></div>

@@ -43,6 +43,10 @@ export default function ScheduleClient({ slug }: { slug: string }) {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [clientOrderId] = useState(() => crypto.randomUUID());
+  const [scheduleWindow] = useState(() => {
+    const now = Date.now();
+    return { min: localDateTime(now + 30 * 60_000), max: localDateTime(now + 14 * 24 * 60 * 60_000) };
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,16 +71,16 @@ export default function ScheduleClient({ slug }: { slug: string }) {
   }, [slug]);
 
   useEffect(() => {
-    if (mode !== "delivery") {
+    const resetTimer = window.setTimeout(() => {
       setQuote(null);
       setQuoteError("");
-      return;
+    }, 0);
+    if (mode !== "delivery") {
+      return () => window.clearTimeout(resetTimer);
     }
     const cep = postalCode.replace(/\D/g, "");
     if (cep.length !== 8 || neighborhood.trim().length < 2) {
-      setQuote(null);
-      setQuoteError("");
-      return;
+      return () => window.clearTimeout(resetTimer);
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -98,7 +102,7 @@ export default function ScheduleClient({ slug }: { slug: string }) {
           setQuoteError(reason instanceof Error ? reason.message : "Área de entrega não confirmada.");
         });
     }, 300);
-    return () => { window.clearTimeout(timer); controller.abort(); };
+    return () => { window.clearTimeout(resetTimer); window.clearTimeout(timer); controller.abort(); };
   }, [mode, neighborhood, postalCode, slug]);
 
   const products = useMemo(() => menu ? [...menu.categories.flatMap((category) => category.products), ...menu.uncategorized] : [], [menu]);
@@ -195,7 +199,7 @@ export default function ScheduleClient({ slug }: { slug: string }) {
       {!menu.restaurant.isOpen && <div style={warningStyle}><b>Agendamento temporariamente indisponível.</b><br/><small>A loja está pausada ou fora do horário de recebimento neste momento. Tente novamente quando o atendimento online estiver ativo.</small></div>}
 
       <form onSubmit={submit} style={{ display: "grid", gap: 18 }}>
-        <section style={cardStyle}><h2>1. Escolha o horário</h2><label style={labelStyle}>Data e hora<input type="datetime-local" value={schedule} onChange={(event) => setSchedule(event.target.value)} min={localDateTime(Date.now() + 30 * 60_000)} max={localDateTime(Date.now() + 14 * 24 * 60 * 60_000)} required style={inputStyle} /></label><small>Antecedência mínima de 30 minutos e máxima de 14 dias. A disponibilidade do horário é validada no servidor.</small></section>
+        <section style={cardStyle}><h2>1. Escolha o horário</h2><label style={labelStyle}>Data e hora<input type="datetime-local" value={schedule} onChange={(event) => setSchedule(event.target.value)} min={scheduleWindow.min} max={scheduleWindow.max} required style={inputStyle} /></label><small>Antecedência mínima de 30 minutos e máxima de 14 dias. A disponibilidade do horário é validada no servidor.</small></section>
 
         <section style={cardStyle}><h2>2. Como receber</h2><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{f.deliveryEnabled && <ModeButton active={mode === "delivery"} onClick={() => setMode("delivery")}>🛵 Entrega</ModeButton>}{f.pickupEnabled && <ModeButton active={mode === "pickup"} onClick={() => setMode("pickup")}>🛍️ Retirada</ModeButton>}{f.dineInEnabled && <ModeButton active={mode === "dine_in"} onClick={() => setMode("dine_in")}>🍽️ Mesa</ModeButton>}</div></section>
 

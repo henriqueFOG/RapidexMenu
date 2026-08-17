@@ -1,7 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type OrderRow = {
   id: string;
@@ -16,6 +17,7 @@ const preferenceKey = "rapidex-order-alerts";
 
 export default function OrderAlerts() {
   const pathname = usePathname();
+  const router = useRouter();
   const [enabled, setEnabled] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [latest, setLatest] = useState<OrderRow | null>(null);
@@ -23,13 +25,69 @@ export default function OrderAlerts() {
   const audio = useRef<AudioContext | null>(null);
   const dismissTimer = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (typeof Notification === "undefined") {
-      setPermission("unsupported");
-      return;
+  const beep = useCallback(() => {
+    const context = audio.current;
+    if (!context || context.state !== "running") return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.23);
+  }, []);
+
+  const announce = useCallback(async (order: OrderRow) => {
+    beep();
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    const total = Number(order.total_cents || 0) / 100;
+    const options: NotificationOptions = {
+      body: total > 0
+        ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.`
+        : "Abra o painel para conferir.",
+      tag: `rapidex-order-${order.id}`,
+      icon: "/api/pwa/icon/192",
+      badge: "/api/pwa/icon/192",
+      data: { url: "/admin" },
+    };
+    const title = `Novo pedido #${order.order_number || ""}`.trim();
+
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(title, options);
+        return;
+      } catch {
+        // Alguns navegadores desktop ainda aceitam a notificação direta; tentamos abaixo.
+      }
     }
-    setPermission(Notification.permission);
-    setEnabled(Notification.permission === "granted" && window.localStorage.getItem(preferenceKey) === "1");
+
+    try {
+      const notification = new Notification(title, options);
+      notification.onclick = () => {
+        window.focus();
+        router.push("/admin");
+        notification.close();
+      };
+    } catch {
+      // O toast visual permanece como fallback obrigatório.
+    }
+  }, [beep, router]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (typeof Notification === "undefined") {
+        setPermission("unsupported");
+        return;
+      }
+      setPermission(Notification.permission);
+      setEnabled(Notification.permission === "granted" && window.localStorage.getItem(preferenceKey) === "1");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -70,7 +128,7 @@ export default function OrderAlerts() {
       document.removeEventListener("visibilitychange", resume);
       if (dismissTimer.current) window.clearTimeout(dismissTimer.current);
     };
-  }, [enabled, pathname]);
+  }, [announce, enabled, pathname]);
 
   async function enableAlerts() {
     if (typeof Notification === "undefined") {
@@ -91,59 +149,6 @@ export default function OrderAlerts() {
     }
   }
 
-  async function announce(order: OrderRow) {
-    beep();
-    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-
-    const total = Number(order.total_cents || 0) / 100;
-    const options: NotificationOptions = {
-      body: total > 0
-        ? `Valor: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Abra o painel para conferir.`
-        : "Abra o painel para conferir.",
-      tag: `rapidex-order-${order.id}`,
-      icon: "/api/pwa/icon/192",
-      badge: "/api/pwa/icon/192",
-      data: { url: "/admin" },
-    };
-    const title = `Novo pedido #${order.order_number || ""}`.trim();
-
-    if ("serviceWorker" in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(title, options);
-        return;
-      } catch {
-        // Alguns navegadores desktop ainda aceitam a notificação direta; tentamos abaixo.
-      }
-    }
-
-    try {
-      const notification = new Notification(title, options);
-      notification.onclick = () => {
-        window.focus();
-        window.location.assign("/admin");
-        notification.close();
-      };
-    } catch {
-      // O toast visual permanece como fallback obrigatório.
-    }
-  }
-
-  function beep() {
-    const context = audio.current;
-    if (!context || context.state !== "running") return;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.23);
-  }
-
   if (pathname === "/admin/login") return null;
   const canEnable = permission !== "denied" && permission !== "unsupported";
 
@@ -151,7 +156,7 @@ export default function OrderAlerts() {
     {latest && <div role="alert" aria-live="assertive" style={toastStyle}>
       <span style={toastIconStyle}>✓</span>
       <div><b>{`Novo pedido #${latest.order_number || ""}`.trim()}</b><small>{Number(latest.total_cents || 0) > 0 ? `${(Number(latest.total_cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · recebido agora` : "Recebido agora"}</small></div>
-      <a href="/admin" style={toastLinkStyle}>Ver pedido →</a>
+      <Link href="/admin" style={toastLinkStyle}>Ver pedido →</Link>
     </div>}
     {canEnable && (enabled
       ? <div style={badgeStyle} role="status">🔔 Alertas ativos</div>

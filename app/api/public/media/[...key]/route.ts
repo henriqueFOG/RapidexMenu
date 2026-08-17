@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { BlobNotFoundError, head } from "@vercel/blob";
 import { apiError, HttpError } from "@/lib/http";
 import { getBindings, getDatabase } from "@/lib/runtime";
 
@@ -25,6 +26,25 @@ export async function GET(
       headers.set("cache-control", "public, max-age=86400, immutable");
       headers.set("x-content-type-options", "nosniff");
       return new Response(object.body, { headers });
+    }
+
+    if (bindings.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const object = await head(key, { token: bindings.BLOB_READ_WRITE_TOKEN });
+        return new Response(null, {
+          status: 307,
+          headers: {
+            location: object.url,
+            "cache-control": "public, max-age=86400, immutable",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      } catch (error) {
+        if (error instanceof BlobNotFoundError) {
+          throw new HttpError(404, "Imagem não encontrada.", "media_not_found");
+        }
+        throw error;
+      }
     }
 
     if (bindings.DATABASE_URL || bindings.POSTGRES_URL) {

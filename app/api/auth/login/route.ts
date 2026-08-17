@@ -2,6 +2,7 @@ import { apiError, assertSameOrigin, HttpError, json, readJson } from "@/lib/htt
 import { isNativeAuthMode, nativeAuthConfigured, setCommercialSession, verifyPassword } from "@/lib/commercial-auth";
 import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getDatabase } from "@/lib/runtime";
+import { platformMfaRequired } from "@/lib/platform-mfa";
 import { requiredString } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,12 @@ export async function POST(request: Request) {
       .bind(Date.now(), Date.now(), user.id).run();
     await setCommercialSession({ id: user.id, email: user.email, authVersion: Number(user.auth_version) });
 
-    return json({ ok: true, next: "/admin", user: { name: user.full_name, email: user.email } });
+    const platformAdmin = await db.prepare(
+      "SELECT id FROM platform_admins WHERE user_id = ? AND status = 'active' LIMIT 1",
+    ).bind(user.id).first<{ id: string }>();
+    const next = platformAdmin ? (platformMfaRequired() ? "/central/mfa" : "/central") : "/admin";
+
+    return json({ ok: true, next, user: { name: user.full_name, email: user.email } });
   } catch (error) {
     return apiError(error);
   }

@@ -2,6 +2,7 @@ import { apiError, json } from "@/lib/http";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getDatabase } from "@/lib/runtime";
 import { addMrrMovements, classifyMrrMovement, EMPTY_MRR_MOVEMENT } from "@/lib/subscription-events";
+import { classifyTenant } from "@/lib/tenant-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ type RestaurantRow = {
   published_at: number | null;
   trial_ends_at: number | null;
   access_ends_at: number | null;
+  platform_blocked_at: number | null;
+  platform_block_reason: string | null;
   created_at: number;
 };
 type FirstOrderRow = { restaurant_id: string; first_order_at: number };
@@ -28,6 +31,7 @@ type SubscriptionRow = {
 type IntegrationRow = { restaurant_id: string; provider: string; status: string };
 type CountRow = { status: string; total: number };
 type SubscriptionEventRow = {
+  restaurant_id: string;
   source: string;
   status_before: string | null;
   status_after: string;
@@ -37,6 +41,7 @@ type SubscriptionEventRow = {
   amount_after_cents: number;
   occurred_at: number;
 };
+type SubscriptionEventWindowRow = { restaurant_id: string; oldest_event_at: number | null };
 
 export async function GET(request: Request) {
   try {
@@ -61,7 +66,8 @@ export async function GET(request: Request) {
       eventWindow,
     ] = await Promise.all([
       db.prepare(
-        `SELECT id, name, slug, owner_email, plan, status, published_at, trial_ends_at, access_ends_at, created_at
+        `SELECT id, name, slug, owner_email, plan, status, published_at, trial_ends_at, access_ends_at,
+                platform_blocked_at, platform_block_reason, created_at
          FROM restaurants
          WHERE status != 'canceled'
          ORDER BY created_at DESC
@@ -106,18 +112,25 @@ export async function GET(request: Request) {
          WHERE status = 'pending' AND created_at <= ?`,
       ).bind(stalePaymentCutoff).first<{ total: number }>(),
       db.prepare(
-        `SELECT source, status_before, status_after, plan_before, plan_after,
+        `SELECT restaurant_id, source, status_before, status_after, plan_before, plan_after,
                 amount_before_cents, amount_after_cents, occurred_at
          FROM platform_subscription_events
          WHERE occurred_at >= ? AND source != 'migration_snapshot'
          ORDER BY occurred_at ASC`,
       ).bind(cutoff30d).all<SubscriptionEventRow>(),
       db.prepare(
-        `SELECT MIN(occurred_at) AS oldest_event_at FROM platform_subscription_events`,
-      ).first<{ oldest_event_at: number | null }>(),
+        `SELECT restaurant_id, MIN(occurred_at) AS oldest_event_at
+         FROM platform_subscription_events GROUP BY restaurant_id`,
+      ).all<SubscriptionEventWindowRow>(),
     ]);
 
     const restaurants = restaurantsResult.results;
+    const tenantKinds = new Map(restaurants.map((restaurant) => [
+      restaurant.id,
+      classifyTenant({ id: restaurant.id, name: restaurant.name, ownerEmail: restaurant.owner_email }),
+    ]));
+    const liveRestaurants = restaurants.filter((restaurant) => tenantKinds.get(restaurant.id) === "live");
+    const liveRestaurantIds = new Set(liveRestaurants.map((restaurant) => restaurant.id));
     const firstOrders = new Map(firstOrdersResult.results.map((row) => [row.restaurant_id, Number(row.first_order_at)]));
     const latestSubscriptions = new Map<string, SubscriptionRow>();
     for (const subscription of subscriptionsResult.results) {
@@ -132,13 +145,23 @@ export async function GET(request: Request) {
 
     const jobCounts = Object.fromEntries(jobsResult.results.map((row) => [row.status, Number(row.total)]));
     const dunningCounts = Object.fromEntries(dunningResult.results.map((row) => [row.status, Number(row.total)]));
-    const paying = Array.from(latestSubscriptions.values()).filter((subscription) => subscription.status === "authorized");
+    const paying = Array.from(latestSubscriptions.values()).filter((subscription) =>
+      liveRestaurantIds.has(subscription.restaurant_id) && subscription.status === "authorized",
+    );
     const mrrCents = paying.reduce((sum, subscription) => sum + Number(subscription.amount_cents), 0);
-    const movements30d = subscriptionEvents.results.reduce((total, event) => addMrrMovements(total, classifyMrrMovement(
+    const movements30d = subscriptionEvents.results
+      .filter((event) => liveRestaurantIds.has(event.restaurant_id))
+      .reduce((total, event) => addMrrMovements(total, classifyMrrMovement(
       { status: event.status_before, plan: event.plan_before, amountCents: event.amount_before_cents },
       { status: event.status_after, plan: event.plan_after, amountCents: event.amount_after_cents },
     )), EMPTY_MRR_MOVEMENT);
-    const oldestEventAt = Number(eventWindow?.oldest_event_at || 0) || null;
+    const oldestEventAt = eventWindow.results
+      .filter((event) => liveRestaurantIds.has(event.restaurant_id))
+      .reduce<number | null>((oldest, event) => {
+        const occurredAt = Number(event.oldest_event_at || 0) || null;
+        if (!occurredAt) return oldest;
+        return oldest === null || occurredAt < oldest ? occurredAt : oldest;
+      }, null);
     const has30dSubscriptionHistory = Boolean(oldestEventAt && oldestEventAt <= cutoff30d);
     const startingMrr30dCents = Math.max(0,
       mrrCents - movements30d.newMrrCents - movements30d.expansionMrrCents +
@@ -152,22 +175,22 @@ export async function GET(request: Request) {
       ? round1((movements30d.churnedLogos / startingLogos30d) * 100)
       : null;
 
-    const published = restaurants.filter((restaurant) => Boolean(restaurant.published_at));
-    const activated = restaurants.filter((restaurant) => firstOrders.has(restaurant.id));
+    const published = liveRestaurants.filter((restaurant) => Boolean(restaurant.published_at));
+    const activated = liveRestaurants.filter((restaurant) => firstOrders.has(restaurant.id));
     const activated48h = activated.filter((restaurant) => {
       const first = firstOrders.get(restaurant.id)!;
       return first - Number(restaurant.created_at) <= 48 * 60 * 60 * 1000;
     });
-    const trials = restaurants.filter((restaurant) => restaurant.status === "trial");
+    const trials = liveRestaurants.filter((restaurant) => restaurant.status === "trial");
     const expiringTrials = trials.filter((restaurant) => restaurant.trial_ends_at && Number(restaurant.trial_ends_at) > now && Number(restaurant.trial_ends_at) <= now + 3 * 24 * 60 * 60_000);
 
     return json({
       ok: true,
       metrics: {
-        restaurants: restaurants.length,
+        restaurants: liveRestaurants.length,
         published: published.length,
         activated: activated.length,
-        activationRate: restaurants.length ? round1((activated.length / restaurants.length) * 100) : 0,
+        activationRate: liveRestaurants.length ? round1((activated.length / liveRestaurants.length) * 100) : 0,
         activation48hRate: activated.length ? round1((activated48h.length / activated.length) * 100) : 0,
         trials: trials.length,
         trialsExpiring72h: expiringTrials.length,
@@ -196,6 +219,12 @@ export async function GET(request: Request) {
         aiInputTokensToday: Number(aiUsage?.input_tokens || 0),
         aiOutputTokensToday: Number(aiUsage?.output_tokens || 0),
       },
+      dataQuality: {
+        live: liveRestaurants.length,
+        demo: restaurants.filter((restaurant) => tenantKinds.get(restaurant.id) === "demo").length,
+        test: restaurants.filter((restaurant) => tenantKinds.get(restaurant.id) === "test").length,
+        excludedFromCommercial: restaurants.length - liveRestaurants.length,
+      },
       restaurants: restaurants.slice(0, 200).map((restaurant) => {
         const subscription = latestSubscriptions.get(restaurant.id);
         const restaurantIntegrations = integrations.get(restaurant.id) || [];
@@ -205,6 +234,7 @@ export async function GET(request: Request) {
           name: restaurant.name,
           slug: restaurant.slug,
           ownerEmail: restaurant.owner_email,
+          tenantKind: tenantKinds.get(restaurant.id) || "live",
           plan: restaurant.plan,
           status: restaurant.status,
           published: Boolean(restaurant.published_at),
@@ -213,6 +243,8 @@ export async function GET(request: Request) {
           activatedWithin48h: firstOrderAt ? firstOrderAt - Number(restaurant.created_at) <= 48 * 60 * 60_000 : false,
           trialEndsAt: restaurant.trial_ends_at,
           accessEndsAt: restaurant.access_ends_at,
+          blockedAt: restaurant.platform_blocked_at,
+          blockReason: restaurant.platform_block_reason,
           subscription: subscription ? {
             plan: subscription.plan,
             amountCents: Number(subscription.amount_cents),

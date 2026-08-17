@@ -1,11 +1,13 @@
 import { getChatGPTUser, type ChatGPTUser } from "@/app/chatgpt-auth";
 import { HttpError } from "./http";
+import { hasValidPlatformMfaSession, platformMfaRequired } from "./platform-mfa";
 import {
   hasPlatformPermission,
   type PlatformAdminRole,
   type PlatformPermission,
 } from "./platform-permissions";
 import { getBindings, getDatabase } from "./runtime";
+import { configuredPlatformOwnerIsCanonical } from "./platform-identity-policy";
 
 export type { PlatformAdminRole, PlatformPermission } from "./platform-permissions";
 
@@ -51,6 +53,9 @@ export async function requirePlatformAdmin(permission: PlatformPermission = "pla
   if (!admin) {
     throw new HttpError(403, "Acesso restrito à administração da plataforma.", "platform_admin_required");
   }
+  if (platformMfaRequired() && !(await hasValidPlatformMfaSession(admin))) {
+    throw new HttpError(401, "Confirme o segundo fator para acessar a Central.", "platform_mfa_required");
+  }
   if (!hasPlatformPermission(admin.role, permission)) {
     throw new HttpError(403, "Seu perfil administrativo não pode realizar esta ação.", "platform_permission_required");
   }
@@ -90,7 +95,7 @@ export async function auditPlatformAction(
 
 async function bootstrapConfiguredOwner(db: D1Database, user: ChatGPTUser, email: string) {
   const configuredOwner = getBindings().RAPIDEX_OWNER_EMAIL?.trim().toLowerCase();
-  if (!configuredOwner || configuredOwner !== email) return null;
+  if (!configuredOwner || !configuredPlatformOwnerIsCanonical(configuredOwner) || configuredOwner !== email) return null;
 
   const existing = await db.prepare(
     "SELECT COUNT(*) AS total FROM platform_admins WHERE status = 'active'",
@@ -104,23 +109,29 @@ async function bootstrapConfiguredOwner(db: D1Database, user: ChatGPTUser, email
 
   const adminId = crypto.randomUUID();
   const now = Date.now();
-  await db.batch([
-    db.prepare(
-      `INSERT OR IGNORE INTO platform_admins
-       (id, user_id, role, status, created_by_user_id, created_at, updated_at)
-       VALUES (?, ?, 'owner', 'active', ?, ?, ?)`,
-    ).bind(adminId, account.id, account.id, now, now),
-    db.prepare(
+  const created = await db.prepare(
+    `INSERT OR IGNORE INTO platform_admins
+     (id, user_id, role, status, created_by_user_id, created_at, updated_at)
+     VALUES (?, ?, 'owner', 'active', ?, ?, ?)`,
+  ).bind(adminId, account.id, account.id, now, now).run();
+  const actual = await db.prepare(
+    `SELECT id AS admin_id, user_id, role FROM platform_admins
+     WHERE user_id = ? AND status = 'active' LIMIT 1`,
+  ).bind(account.id).first<PlatformAdminRow>();
+  if (!actual) return null;
+
+  if (Number(created.meta.changes || 0) === 1) {
+    await db.prepare(
       `INSERT INTO platform_audit_logs
        (id, actor_user_id, actor_email, actor_role, action, target_type, target_id,
         reason, metadata_json, created_at)
        VALUES (?, ?, ?, 'owner', 'platform_admin.bootstrap', 'platform_admin', ?,
         'Bootstrap seguro do primeiro proprietário configurado', ?, ?)`,
     ).bind(
-      crypto.randomUUID(), account.id, user.email, account.id,
+      crypto.randomUUID(), account.id, user.email, actual.admin_id,
       JSON.stringify({ source: "RAPIDEX_OWNER_EMAIL" }), now,
-    ),
-  ]);
+    ).run();
+  }
 
-  return { admin_id: adminId, user_id: account.id, role: "owner" as const };
+  return actual;
 }

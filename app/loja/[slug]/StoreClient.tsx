@@ -189,16 +189,19 @@ export default function StoreClient({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (!menu) return;
-    const params = new URLSearchParams(window.location.search);
-    const requestedTable = (params.get("mesa") || "").trim().slice(0, 30);
-    if (requestedTable && menu.restaurant.fulfillment.dineInEnabled) {
-      setTableCode(requestedTable);
-      setFulfillmentType("dine_in");
-      return;
-    }
-    if (menu.restaurant.fulfillment.deliveryEnabled) setFulfillmentType("delivery");
-    else if (menu.restaurant.fulfillment.pickupEnabled) setFulfillmentType("pickup");
-    else if (menu.restaurant.fulfillment.dineInEnabled) setFulfillmentType("dine_in");
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const requestedTable = (params.get("mesa") || "").trim().slice(0, 30);
+      if (requestedTable && menu.restaurant.fulfillment.dineInEnabled) {
+        setTableCode(requestedTable);
+        setFulfillmentType("dine_in");
+        return;
+      }
+      if (menu.restaurant.fulfillment.deliveryEnabled) setFulfillmentType("delivery");
+      else if (menu.restaurant.fulfillment.pickupEnabled) setFulfillmentType("pickup");
+      else if (menu.restaurant.fulfillment.dineInEnabled) setFulfillmentType("dine_in");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [menu]);
 
   const allProducts = useMemo(
@@ -225,8 +228,8 @@ export default function StoreClient({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (!menu || !selectedProductIds.length) {
-      setRecommendations([]);
-      return;
+      const resetTimer = window.setTimeout(() => setRecommendations([]), 0);
+      return () => window.clearTimeout(resetTimer);
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -368,22 +371,19 @@ function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableC
   const subtotal = entries.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0);
 
   useEffect(() => {
-    if (fulfillmentType !== "delivery") {
+    const resetTimer = window.setTimeout(() => {
       setDeliveryQuote(null);
       setQuoteError("");
       setQuoteBusy(false);
-      return;
+    }, 0);
+    if (fulfillmentType !== "delivery") {
+      return () => window.clearTimeout(resetTimer);
     }
     const normalizedPostalCode = postalCode.replace(/\D/g, "");
     if (normalizedPostalCode.length !== 8 || neighborhood.trim().length < 2) {
-      setDeliveryQuote(null);
-      setQuoteError("");
-      setQuoteBusy(false);
-      return;
+      return () => window.clearTimeout(resetTimer);
     }
 
-    setDeliveryQuote(null);
-    setQuoteError("");
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setQuoteBusy(true);
@@ -422,6 +422,7 @@ function Checkout({ menu, entries, total, clientOrderId, fulfillmentType, tableC
     }, 350);
 
     return () => {
+      window.clearTimeout(resetTimer);
       window.clearTimeout(timer);
       controller.abort();
     };

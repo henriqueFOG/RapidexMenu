@@ -74,7 +74,12 @@ export default function WhatsAppConnectClient({ config }: { config: PublicConfig
     }
   }, [loadStatus]);
 
-  useEffect(() => { void loadStatus().catch((reason) => setError(reason instanceof Error ? reason.message : "Falha ao carregar.")); }, [loadStatus]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStatus().catch((reason) => setError(reason instanceof Error ? reason.message : "Falha ao carregar."));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStatus]);
 
   useEffect(() => {
     if (!config.configured || !config.appId) return;

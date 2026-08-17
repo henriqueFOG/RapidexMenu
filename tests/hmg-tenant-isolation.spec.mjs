@@ -195,6 +195,12 @@ test("HMG segurança: restaurante A não acessa dados do B e vice-versa", async 
       expect(JSON.stringify(overviewB)).not.toContain(customerAName);
     });
   } finally {
+    for (const tenant of [tenantA, tenantB]) {
+      const cleanup = await tenant.context.request.post(`${baseURL}/api/auth/test-cleanup`, {
+        headers: { origin: new URL(baseURL).origin },
+      });
+      expect([200, 401]).toContain(cleanup.status());
+    }
     await tenantA.context.close();
     await tenantB.context.close();
   }

@@ -21,7 +21,10 @@ export default function CategoriesClient() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível carregar as categorias."); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy("create"); setError(""); setMessage("");

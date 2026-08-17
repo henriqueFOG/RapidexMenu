@@ -5,15 +5,34 @@ import { getPostgresDatabase } from "./postgres-d1";
 export type RapidexBindings = {
   DB?: D1Database;
   BUCKET?: R2Bucket;
+  BLOB_READ_WRITE_TOKEN?: string;
   DATABASE_URL?: string;
   POSTGRES_URL?: string;
+  RAPIDEX_MIGRATION_DATABASE_URL?: string;
+  RAPIDEX_RUN_MIGRATIONS_DURING_BUILD?: string;
+  RAPIDEX_SCHEDULER_READY?: string;
+  RAPIDEX_DATABASE_ISOLATED?: string;
+  RAPIDEX_DATABASE_APP_ROLE_VERIFIED?: string;
+  RAPIDEX_DOMAIN_VERIFIED?: string;
+  RAPIDEX_STORAGE_VALIDATED?: string;
+  RAPIDEX_SELLER_PAYMENTS_VALIDATED?: string;
+  RAPIDEX_MONITORING_READY?: string;
+  RAPIDEX_BACKUP_RESTORE_VERIFIED?: string;
+  RAPIDEX_LEGAL_READY?: string;
+  RAPIDEX_SUPPORT_READY?: string;
+  RAPIDEX_BILLING_VALIDATED?: string;
+  RAPIDEX_EMAIL_DELIVERY_VERIFIED?: string;
+  RAPIDEX_CRITICAL_ACCOUNTS_MFA_VERIFIED?: string;
   RAPIDEX_ENV?: string;
   RAPIDEX_AUTH_MODE?: string;
   RAPIDEX_SESSION_SECRET?: string;
+  RAPIDEX_ADMIN_MFA_SECRET?: string;
+  RAPIDEX_ADMIN_MFA_REQUIRED?: string;
   RAPIDEX_INTEGRATION_SECRET?: string;
   CRON_SECRET?: string;
   RAPIDEX_CRON_SECRET?: string;
   RAPIDEX_SIGNUP_ENABLED?: string;
+  RAPIDEX_SIGNUP_MODE?: string;
   RAPIDEX_HMG_OWNER_EMAIL?: string;
   RAPIDEX_HMG_OWNER_NAME?: string;
   RAPIDEX_HMG_ACCESS_CODE?: string;
@@ -113,7 +132,11 @@ export function integrationReadiness() {
     ),
     reconciliation: cronSecret.length >= 32,
     metaEmbeddedSignup,
-    uploads: Boolean(bindings.BUCKET || postgresConfigured),
+    uploads: Boolean(
+      bindings.BUCKET ||
+        bindings.BLOB_READ_WRITE_TOKEN ||
+        (environmentCheck.environment !== "production" && postgresConfigured),
+    ),
     openai: Boolean(bindings.OPENAI_API_KEY),
     whatsapp: whatsappLegacy || metaEmbeddedSignup,
     whatsappLegacy,

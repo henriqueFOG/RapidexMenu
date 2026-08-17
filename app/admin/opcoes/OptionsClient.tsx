@@ -38,22 +38,25 @@ export default function OptionsClient() {
   }, []);
 
   useEffect(() => {
-    if (!productId) { setGroups([]); return; }
-    setMessage(""); setError("");
-    api<{ groups: Array<GroupDraft & { id: string }> }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
-      .then((result) => setGroups((result.groups || []).map((group) => ({
-        name: group.name,
-        minSelect: group.minSelect,
-        maxSelect: group.maxSelect,
-        pricingStrategy: group.pricingStrategy,
-        options: group.options.map((option) => ({
-          name: option.name,
-          priceDeltaCents: option.priceDeltaCents,
-          costDeltaCents: option.costDeltaCents,
-          available: option.available,
-        })),
-      }))))
-      .catch((reason) => setError(errorMessage(reason)));
+    const timer = window.setTimeout(() => {
+      if (!productId) { setGroups([]); return; }
+      setMessage(""); setError("");
+      api<{ groups: Array<GroupDraft & { id: string }> }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
+        .then((result) => setGroups((result.groups || []).map((group) => ({
+          name: group.name,
+          minSelect: group.minSelect,
+          maxSelect: group.maxSelect,
+          pricingStrategy: group.pricingStrategy,
+          options: group.options.map((option) => ({
+            name: option.name,
+            priceDeltaCents: option.priceDeltaCents,
+            costDeltaCents: option.costDeltaCents,
+            available: option.available,
+          })),
+        }))))
+        .catch((reason) => setError(errorMessage(reason)));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [productId]);
 
   const selectedProduct = products.find((product) => product.id === productId);
