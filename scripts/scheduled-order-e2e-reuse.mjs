@@ -112,7 +112,7 @@ console.log("[Scheduled E2E] cancelamento devolve estoque e capacidade");
 const before = await call("/api/admin/products", { headers: { cookie } }, [200]);
 assert.equal(before.payload.products.find((item) => item.id === productId).stockQuantity, 8);
 await call(`/api/admin/orders/${encodeURIComponent(first.payload.order.id)}`, {
-  method: "PATCH", headers: headers(cookie), body: JSON.stringify({ status: "canceled" }),
+  method: "PATCH", headers: headers(cookie), body: JSON.stringify({ status: "canceled", expectedStatus: "received" }),
 }, [200]);
 const after = await call("/api/admin/products", { headers: { cookie } }, [200]);
 assert.equal(after.payload.products.find((item) => item.id === productId).stockQuantity, 9);

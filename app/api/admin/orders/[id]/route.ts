@@ -27,15 +27,24 @@ export async function PATCH(
     const id = requiredString((await params).id, "Pedido", 2, 100);
     const body = await readJson<Record<string, unknown>>(request, 10_000);
     const nextStatus = requiredString(body.status, "Status", 2, 40);
+    const expectedStatus = requiredString(body.expectedStatus, "Status esperado", 2, 40);
     const db = getDatabase();
     const current = await db
       .prepare("SELECT status FROM orders WHERE id = ? AND restaurant_id = ?")
       .bind(id, context.restaurantId)
       .first<{ status: string }>();
     if (!current) throw new HttpError(404, "Pedido não encontrado.", "order_not_found");
-    if (!(transitions[current.status] || []).includes(nextStatus)) {
+    if (current.status !== expectedStatus) {
+      throw new HttpError(
+        409,
+        "O pedido mudou enquanto você processava esta ação. Atualize a fila e tente novamente.",
+        "order_state_conflict",
+        { expected: expectedStatus, actual: current.status, requested: nextStatus },
+      );
+    }
+    if (!(transitions[expectedStatus] || []).includes(nextStatus)) {
       throw new HttpError(409, "Mudança de status inválida.", "invalid_status_transition", {
-        from: current.status,
+        from: expectedStatus,
         to: nextStatus,
       });
     }
@@ -60,7 +69,7 @@ export async function PATCH(
         timestamp,
         id,
         context.restaurantId,
-        current.status,
+        expectedStatus,
       )
       .run();
 
@@ -74,11 +83,11 @@ export async function PATCH(
         409,
         "O pedido mudou enquanto você processava esta ação. Atualize a fila e tente novamente.",
         "order_state_conflict",
-        { expected: current.status, actual: latest.status, requested: nextStatus },
+        { expected: expectedStatus, actual: latest.status, requested: nextStatus },
       );
     }
 
-    await audit(context, "order.status_changed", "order", id, { from: current.status, to: nextStatus });
+    await audit(context, "order.status_changed", "order", id, { from: expectedStatus, to: nextStatus });
     const notification = await notifyWhatsAppOrderStatus(db, context.restaurantId, id, nextStatus);
     return json({ ok: true, status: nextStatus, notification });
   } catch (error) {

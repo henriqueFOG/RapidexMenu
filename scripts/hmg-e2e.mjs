@@ -85,13 +85,13 @@ async function patchProduct(cookie, productId, body) {
   );
 }
 
-async function changeStatus(cookie, orderId, status, expectedStatuses = [200]) {
+async function changeStatus(cookie, orderId, status, expectedStatus, expectedStatuses = [200]) {
   return call(
     `/api/admin/orders/${encodeURIComponent(orderId)}`,
     {
       method: "PATCH",
       headers: jsonHeaders(cookie),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, expectedStatus }),
     },
     expectedStatuses,
   );
@@ -483,12 +483,12 @@ assert.ok(profit.payload.profitEngine.accepted >= 1);
 assert.ok(profit.payload.profitEngine.addedRevenueCents >= 1200);
 
 console.log("[HMG E2E] status + transição inválida");
-await changeStatus(tenantA.cookie, orderId, "confirmed", [200]);
-const invalidTransition = await changeStatus(tenantA.cookie, orderId, "delivered", [409]);
+await changeStatus(tenantA.cookie, orderId, "confirmed", "received", [200]);
+const invalidTransition = await changeStatus(tenantA.cookie, orderId, "delivered", "confirmed", [409]);
 assert.equal(invalidTransition.payload.error?.code, "invalid_status_transition");
-await changeStatus(tenantA.cookie, orderId, "preparing", [200]);
-await changeStatus(tenantA.cookie, orderId, "ready", [200]);
-await changeStatus(tenantA.cookie, orderId, "delivered", [200]);
+await changeStatus(tenantA.cookie, orderId, "preparing", "confirmed", [200]);
+await changeStatus(tenantA.cookie, orderId, "ready", "preparing", [200]);
+await changeStatus(tenantA.cookie, orderId, "delivered", "ready", [200]);
 const deliveredTracking = await call(`/api/public/orders/${trackingToken}`, {}, [200]);
 assert.equal(deliveredTracking.payload.order.status, "delivered");
 
@@ -510,8 +510,8 @@ const statusRaceCreated = await call(
 );
 const statusRaceId = statusRaceCreated.payload.order.id;
 const statusRace = await Promise.all([
-  changeStatus(tenantA.cookie, statusRaceId, "confirmed", [200, 409]),
-  changeStatus(tenantA.cookie, statusRaceId, "canceled", [200, 409]),
+  changeStatus(tenantA.cookie, statusRaceId, "confirmed", "received", [200, 409]),
+  changeStatus(tenantA.cookie, statusRaceId, "canceled", "received", [200, 409]),
 ]);
 assert.equal(statusRace.filter((result) => result.response.status === 200).length, 1, "somente uma transição concorrente pode vencer");
 const conflict = statusRace.find((result) => result.response.status === 409);
@@ -521,7 +521,7 @@ console.log("[HMG E2E] tenant B isolation");
 const tenantB = await signup({ suffix: "b", slug: "hmg-burger-b", restaurantName: "HMG Burger B" });
 const tenantBOrders = await call("/api/admin/orders", { headers: { cookie: tenantB.cookie } }, [200]);
 assert.equal(tenantBOrders.payload.orders.length, 0, "tenant B não pode enxergar pedidos do tenant A");
-const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", [404]);
+const crossTenantMutation = await changeStatus(tenantB.cookie, orderId, "canceled", "delivered", [404]);
 assert.equal(crossTenantMutation.payload.error?.code, "order_not_found");
 
 console.log("[HMG E2E] PASS: signup, legal versionado, importação, modalidades, modificadores, zonas, pedido, idempotência, concorrência de estoque, tracking, ROI, status concorrente e isolamento multiempresa");

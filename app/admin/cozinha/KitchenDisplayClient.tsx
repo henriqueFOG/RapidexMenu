@@ -112,7 +112,7 @@ export default function KitchenDisplayClient() {
       const response = await fetch(`/api/admin/orders/${encodeURIComponent(order.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify({ status: next, expectedStatus: order.status }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: { message?: string; code?: string } };
       if (!response.ok) {

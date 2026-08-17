@@ -118,7 +118,7 @@ function OrdersView({ orders, refresh }: { orders: Order[]; refresh: () => Promi
 function OrderAction({ order, refresh }: { order: Order; refresh: () => Promise<void> }) {
   const [busy, setBusy] = useState(false); const next = nextStatus[order.status];
   if (!next) return <span className="rm-done">✓</span>;
-  return <button className="rm-row-action" disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/admin/orders/${order.id}`, { method: "PATCH", body: JSON.stringify({ status: next.status }) }); await refresh(); } finally { setBusy(false); } }}>{busy ? "…" : next.label}</button>;
+  return <button className="rm-row-action" disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/admin/orders/${order.id}`, { method: "PATCH", body: JSON.stringify({ status: next.status, expectedStatus: order.status }) }); await refresh(); } finally { setBusy(false); } }}>{busy ? "…" : next.label}</button>;
 }
 
 function ProductManager() {

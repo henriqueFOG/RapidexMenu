@@ -46,6 +46,17 @@ test("mutações por identificador continuam vinculadas ao restaurant_id autenti
   }
 });
 
+test("mudança de pedido exige estado esperado para impedir avanço concorrente", async () => {
+  const route = await readFile(path.join(root, "app/api/admin/orders/[id]/route.ts"), "utf8");
+  const admin = await readFile(path.join(root, "app/admin/AdminClient.tsx"), "utf8");
+  const kitchen = await readFile(path.join(root, "app/admin/cozinha/KitchenDisplayClient.tsx"), "utf8");
+  assert.match(route, /requiredString\(body\.expectedStatus/);
+  assert.match(route, /current\.status\s*!==\s*expectedStatus/);
+  assert.match(route, /AND status = \?/);
+  assert.match(admin, /expectedStatus:\s*order\.status/);
+  assert.match(kitchen, /expectedStatus:\s*order\.status/);
+});
+
 test("identidade proibida é revogada apenas na Central, sem apagar loja ou conta", async () => {
   const migration = await readFile(path.join(root, "db/postgres/0030_platform_identity_invariant.sql"), "utf8");
   assert.match(migration, /UPDATE platform_admins/);

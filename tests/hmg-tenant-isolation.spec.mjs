@@ -170,13 +170,13 @@ test("HMG segurança: restaurante A não acessa dados do B e vice-versa", async 
 
     await test.step("B não consegue alterar pedido de A mesmo conhecendo o ID", async () => {
       const attack = await tenantB.context.request.patch(`${baseURL}/api/admin/orders/${orderAId}`, {
-        data: { status: "confirmed" },
+        data: { status: "confirmed", expectedStatus: "received" },
       });
       expect(attack.status()).toBe(404);
       expect((await attack.json()).error?.code).toBe("order_not_found");
 
       const ownerAStillControls = await tenantA.context.request.patch(`${baseURL}/api/admin/orders/${orderAId}`, {
-        data: { status: "confirmed" },
+        data: { status: "confirmed", expectedStatus: "received" },
       });
       expect(ownerAStillControls.status(), await ownerAStillControls.text()).toBe(200);
     });
