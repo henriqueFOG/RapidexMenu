@@ -81,3 +81,11 @@ Cada ferramenta da Central deve responder a quatro perguntas:
 4. Deixa evidência suficiente para explicar e desfazer a ação?
 
 Se a resposta não for positiva para as quatro, a ferramenta ainda não está pronta para produção.
+
+## Política de build e publicação
+
+- Alterações devem ser acumuladas e verificadas primeiro com testes e build local.
+- Nenhuma alteração deve ser publicada automaticamente na Vercel.
+- O deploy só acontece após aprovação explícita do Henrique para o pacote validado.
+- Pedidos sucessivos devem ser agrupados em uma única publicação sempre que possível, preservando o limite de builds.
+- A versão publicada precisa corresponder exatamente ao commit aprovado e validado localmente.

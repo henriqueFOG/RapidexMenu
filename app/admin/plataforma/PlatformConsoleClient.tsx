@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import styles from "../../commercial.module.css";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import styles from "./PlatformConsole.module.css";
 
 type Integration = { provider: string; status: string };
 type Restaurant = {
@@ -57,11 +57,19 @@ type Overview = {
   };
   restaurants: Restaurant[];
 };
+type ServiceState = "operational" | "attention" | "incident";
+type HealthService = { status: ServiceState; label: string; detail: string };
 type Health = {
-  build?: { sha?: string | null; ref?: string | null };
+  ok?: boolean;
+  status?: ServiceState;
+  checkedAt?: number;
+  responseTimeMs?: number;
+  build?: { sha?: string | null; ref?: string | null; url?: string | null };
+  coreServices?: Record<string, HealthService>;
   integrations?: Record<string, unknown> & {
     environment?: string;
     environmentSafe?: boolean;
+    environmentIssues?: string[];
     database?: boolean;
     databaseEngine?: string | null;
     nativeAuth?: boolean;
@@ -88,6 +96,7 @@ type PlatformAdmin = {
 };
 type CurrentAdmin = Pick<PlatformAdmin, "email" | "role"> & { name: string };
 type Tab = "resumo" | "restaurantes" | "administradores" | "suporte" | "receita" | "operacao" | "infra";
+type IconName = Tab | "refresh" | "external" | "shield" | "store" | "money" | "alert" | "check" | "clock" | "database" | "server" | "key" | "upload" | "search";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const dateTime = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -97,6 +106,18 @@ const roleNames: Record<PlatformAdmin["role"], string> = {
   admin: "Administrador",
   support: "Suporte",
   viewer: "Somente leitura",
+};
+const tabs: Array<{ id: Tab; label: string }> = [
+  { id: "resumo", label: "Visão geral" },
+  { id: "restaurantes", label: "Estabelecimentos" },
+  { id: "administradores", label: "Superadmins" },
+  { id: "suporte", label: "Suporte" },
+  { id: "receita", label: "Receita" },
+  { id: "operacao", label: "Operação" },
+  { id: "infra", label: "Infraestrutura" },
+];
+const iconPaths: Record<IconName, ReactNode> = {
+  resumo: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>, restaurantes: <><path d="M4 10h16l-2-6H6l-2 6Z"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></>, administradores: <><circle cx="9" cy="8" r="3"/><path d="M3.5 20v-2a5.5 5.5 0 0 1 11 0v2M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 4 4.9V20"/></>, suporte: <><circle cx="12" cy="12" r="9"/><path d="M8.5 9a3.6 3.6 0 1 1 5.7 2.9c-1.4 1-2.2 1.5-2.2 3.1M12 18h.01"/></>, receita: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M8 15h3"/></>, operacao: <><path d="M4 18V9M10 18V5M16 18v-7M22 18V3"/><path d="M2 18h22"/></>, infra: <><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></>, refresh: <><path d="M20 11a8 8 0 1 0 1 5"/><path d="M20 4v7h-7"/></>, external: <><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></>, shield: <><path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></>, store: <><path d="M4 10h16l-2-6H6l-2 6ZM5 10v10h14V10"/><path d="M9 20v-6h6v6"/></>, money: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.6-1.7-1-3-1-1.7 0-3 .8-3 2s1.1 1.8 3 2.2 3 1 3 2.3-1.3 2.3-3 2.3c-1.3 0-2.5-.4-3.3-1.1M12 5.5v13"/></>, alert: <><path d="M12 4 3 20h18L12 4Z"/><path d="M12 9v5M12 17h.01"/></>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></>, server: <><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></>, key: <><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l2 2M14 9l2 2"/></>, upload: <><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/></>, search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
 };
 
 export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: CurrentAdmin }) {
@@ -110,10 +131,11 @@ export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: 
   const [actionMessage, setActionMessage] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [supportEmail, setSupportEmail] = useState("");
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError("");
     try {
       const [overviewResponse, healthResponse, adminsResponse] = await Promise.all([
@@ -122,24 +144,36 @@ export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: 
         fetch("/api/internal/platform/admins", { cache: "no-store" }),
       ]);
       const overview = await overviewResponse.json() as Overview & { error?: { message?: string } };
-      const healthPayload = await healthResponse.json() as Health;
+      const healthPayload = await healthResponse.json() as Health & { error?: { message?: string } };
       const adminsPayload = await adminsResponse.json() as { admins?: PlatformAdmin[]; error?: { message?: string } };
       if (!overviewResponse.ok) throw new Error(overview.error?.message || "Não foi possível carregar a Central.");
       if (!adminsResponse.ok) throw new Error(adminsPayload.error?.message || "Não foi possível carregar os administradores.");
       setData(overview);
-      setHealth(healthPayload);
       setAdmins(adminsPayload.admins || []);
+      setHealth(healthResponse.ok ? healthPayload : {
+        ok: false,
+        status: "incident",
+        checkedAt: Date.now(),
+        coreServices: {
+          application: { status: "incident", label: "Aplicação", detail: healthPayload.error?.message || "Health check indisponível" },
+        },
+      });
+      setLastUpdated(Date.now());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Falha ao carregar a Central.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
+    const initialTimer = window.setTimeout(() => { void load(); }, 0);
+    const refreshTimer = window.setInterval(() => { void load(true); }, 60_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(refreshTimer);
+    };
+  }, [load]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -149,6 +183,12 @@ export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: 
       (!term || `${restaurant.name} ${restaurant.slug} ${restaurant.ownerEmail} ${restaurant.plan}`.toLowerCase().includes(term)),
     );
   }, [data, query, status]);
+
+  function changeTab(next: Tab) {
+    setTab(next);
+    setError("");
+    setActionMessage("");
+  }
 
   function openPasswordSupport(email: string) {
     setSupportEmail(email);
@@ -187,7 +227,7 @@ export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: 
       } else {
         setActionMessage("Perfil administrativo concedido à conta existente.");
       }
-      await load();
+      await load(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível cadastrar o administrador.");
     } finally {
@@ -223,158 +263,177 @@ export default function PlatformConsoleClient({ currentAdmin }: { currentAdmin: 
     }
   }
 
-  if (loading && !data) return <main className={styles.shell}><section className={styles.card}>Carregando central administrativa…</section></main>;
-  if (!data) return <main className={styles.shell}><section className={styles.card}><p className={styles.error}>{error || "Dados indisponíveis."}</p></section></main>;
+  if (loading && !data) return <LoadingState />;
+  if (!data) return <main className={styles.statePage}><section className={styles.stateCard}><Icon name="alert" /><h1>Central indisponível</h1><p>{error || "Os dados não puderam ser carregados."}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></section></main>;
 
   const metrics = data.metrics;
   const operations = data.operations;
-  const readiness = health?.integrations;
-  const risks = operations.jobsDead + operations.failedWebhooks24h + operations.stalePendingPayments + operations.dunningFailed;
+  const operationalRisks = operations.jobsDead + operations.failedWebhooks24h + operations.stalePendingPayments + operations.dunningFailed;
+  const coreAttention = Object.values(health?.coreServices || {}).filter((service) => service.status !== "operational").length;
+  const totalRisks = operationalRisks + coreAttention;
+  const healthStatus = health?.status || (health?.ok === false ? "incident" : "attention");
 
-  return <main className={styles.shell}><section className={styles.card} style={{ maxWidth: 1280 }}>
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-      <div>
-        <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
-        <small className={styles.kicker}>ADMINISTRAÇÃO DA PLATAFORMA</small>
-        <h1 className={styles.title}>Central de gerenciamento</h1>
-        <p className={styles.intro}>Controle executivo, comercial, operacional e técnico do SaaS. Senhas e segredos nunca são exibidos.</p>
-        <small>Conectado como <b>{currentAdmin.name}</b> · {roleNames[currentAdmin.role]} · {currentAdmin.email}</small>
-      </div>
-      <button onClick={() => void load()} disabled={loading} style={button}>{loading ? "Atualizando…" : "↻ Atualizar"}</button>
-    </div>
+  return <main className={styles.shell}>
+    <div className={styles.layout}>
+      <aside className={styles.sidebar}>
+        <Link className={styles.brand} href="/" aria-label="RapidexMenu — início"><span className={styles.brandMark}>R</span><span>Rapidex<b>Menu</b></span></Link>
+        <div className={styles.productLabel}>Central administrativa</div>
+        <nav className={styles.navigation} aria-label="Seções da Central">
+          {tabs.map((item) => <button key={item.id} type="button" className={tab === item.id ? styles.navActive : ""} onClick={() => changeTab(item.id)}><Icon name={item.id} /><span>{item.label}</span>{item.id === "operacao" && operationalRisks > 0 ? <em>{operationalRisks}</em> : null}</button>)}
+        </nav>
+        <div className={styles.sidebarFooter}>
+          <div className={styles.securityNote}><Icon name="shield" /><div><b>Ambiente protegido</b><span>Ações sensíveis são auditadas</span></div></div>
+          <div className={styles.profile}>
+            <span className={styles.avatar}>{initials(currentAdmin.name)}</span>
+            <div><b>{currentAdmin.name}</b><span>{roleNames[currentAdmin.role]}</span></div>
+          </div>
+        </div>
+      </aside>
 
-    <nav aria-label="Seções da Central" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "22px 0", paddingBottom: 12, borderBottom: "1px solid #e5e5e5" }}>
-      <TabButton active={tab === "resumo"} click={() => setTab("resumo")}>Visão geral</TabButton>
-      <TabButton active={tab === "restaurantes"} click={() => setTab("restaurantes")}>Estabelecimentos</TabButton>
-      <TabButton active={tab === "administradores"} click={() => setTab("administradores")}>Superadmins</TabButton>
-      <TabButton active={tab === "suporte"} click={() => setTab("suporte")}>Suporte</TabButton>
-      <TabButton active={tab === "receita"} click={() => setTab("receita")}>Receita</TabButton>
-      <TabButton active={tab === "operacao"} click={() => setTab("operacao")}>Operação</TabButton>
-      <TabButton active={tab === "infra"} click={() => setTab("infra")}>Infraestrutura</TabButton>
-    </nav>
+      <section className={styles.workspace}>
+        <header className={styles.topbar}>
+          <div><span>RapidexMenu</span><b>/</b><strong>{tabs.find((item) => item.id === tab)?.label}</strong></div>
+          <div className={styles.topbarActions}>
+            <span className={`${styles.liveStatus} ${styles[healthStatus]}`}><i />{healthStatus === "operational" ? "Sistemas operacionais" : healthStatus === "incident" ? "Incidente detectado" : "Atenção necessária"}</span>
+            <button type="button" className={styles.iconButton} onClick={() => void load()} disabled={loading} aria-label="Atualizar dados"><Icon name="refresh" /></button>
+            <Link className={styles.iconButton} href="/" target="_blank" aria-label="Abrir aplicação"><Icon name="external" /></Link>
+          </div>
+        </header>
 
-    {tab === "resumo" && <>
-      <div style={grid}>
-        <Metric label="Estabelecimentos" value={String(metrics.restaurants)} note={`${metrics.published} publicados`} />
-        <Metric label="Ativação" value={`${metrics.activationRate}%`} note={`${metrics.activated} com primeiro pedido`} />
-        <Metric label="Pagantes" value={String(metrics.payingRestaurants)} note={`${metrics.trials} em trial`} />
-        <Metric label="MRR" value={money.format(metrics.mrrCents / 100)} note={`ARR ${money.format(metrics.arrRunRateCents / 100)}`} />
-        <Metric label="Riscos" value={String(risks)} note={risks ? "exigem atenção" : "operação saudável"} />
-        <Metric label="Ambiente" value={String(readiness?.environment || "—")} note={readiness?.environmentSafe ? "configuração segura" : "revisar configuração"} />
-      </div>
-      <section className={styles.panel}><h2>Acesso rápido</h2><div style={actions}>
-        <Link className={styles.linkButton} href="/central/jobs">Fila e DLQ</Link>
-        <button style={button} onClick={() => setTab("suporte")}>Redefinir acesso</button>
-        <button style={button} onClick={() => setTab("administradores")}>Gerenciar superadmins</button>
-      </div></section>
-    </>}
+        <div className={styles.content}>
+          {actionMessage ? <div className={styles.successBanner}><Icon name="check" /><span>{actionMessage}</span></div> : null}
+          {error ? <div className={styles.errorBanner}><Icon name="alert" /><span>{error}</span></div> : null}
 
-    {tab === "restaurantes" && <section className={styles.panel}>
-      <h2>Estabelecimentos</h2>
-      <p>Acompanhe onboarding, publicação, trial, ativação, plano e integrações sem misturar o acesso do estabelecimento com a Central.</p>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,1fr) 180px", gap: 10, margin: "14px 0" }}>
-        <input aria-label="Buscar estabelecimento" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nome, endereço ou proprietário…" style={input} />
-        <select aria-label="Filtrar status" value={status} onChange={(event) => setStatus(event.target.value)} style={input}>
-          <option value="all">Todos</option><option value="trial">Trial</option><option value="active">Ativo</option><option value="paused">Pausado</option><option value="canceled">Cancelado</option>
-        </select>
-      </div>
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
-        <thead><tr><Th>Loja</Th><Th>Proprietário</Th><Th>Plano/status</Th><Th>Ativação</Th><Th>Assinatura</Th><Th>Integrações</Th><Th>Trial/acesso</Th><Th>Ações</Th></tr></thead>
-        <tbody>{filtered.map((restaurant) => <tr key={restaurant.id} style={{ borderTop: "1px solid #e8e8e8" }}>
-          <Td><b>{restaurant.name}</b><small style={sub}>/{restaurant.slug} · {restaurant.published ? "publicada" : "não publicada"}</small></Td>
-          <Td>{restaurant.ownerEmail}</Td>
-          <Td><b>{restaurant.plan}</b><small style={sub}>{restaurant.status}</small></Td>
-          <Td>{restaurant.firstOrderAt ? <><b>{restaurant.activatedWithin48h ? "≤48h" : ">48h"}</b><small style={sub}>{dateTime.format(new Date(restaurant.firstOrderAt))}</small></> : <b>Sem pedido</b>}</Td>
-          <Td>{restaurant.subscription ? <><b>{money.format(restaurant.subscription.amountCents / 100)}/mês</b><small style={sub}>{restaurant.subscription.status}</small></> : "Sem assinatura"}</Td>
-          <Td>{restaurant.integrations.length ? restaurant.integrations.map((integration) => <small key={integration.provider} style={{ display: "block" }}>{integration.provider}: <b>{integration.status}</b></small>) : "—"}</Td>
-          <Td><small style={{ display: "block" }}>Trial: {restaurant.trialEndsAt ? dateTime.format(new Date(restaurant.trialEndsAt)) : "—"}</small><small style={{ display: "block" }}>Acesso: {restaurant.accessEndsAt ? dateTime.format(new Date(restaurant.accessEndsAt)) : "—"}</small></Td>
-          <Td><div style={{ ...actions, alignItems: "flex-start" }}><Link href={`/loja/${restaurant.slug}`} target="_blank">Abrir ↗</Link><button style={textButton} onClick={() => openPasswordSupport(restaurant.ownerEmail)}>Redefinir acesso</button></div></Td>
-        </tr>)}</tbody>
-      </table></div>
-      <small>{filtered.length} resultado(s)</small>
-    </section>}
+          {tab === "resumo" ? <OverviewPanel currentAdmin={currentAdmin} metrics={metrics} operations={operations} totalRisks={totalRisks} healthStatus={healthStatus} lastUpdated={lastUpdated} onTab={changeTab} /> : null}
 
-    {tab === "administradores" && <>
-      <section className={styles.panel}><h2>Superadmins da plataforma</h2><p>Perfis internos independentes dos estabelecimentos. Toda concessão de acesso fica registrada na auditoria.</p>
-        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-          <thead><tr><Th>Nome</Th><Th>E-mail</Th><Th>Perfil</Th><Th>Status</Th><Th>Último acesso</Th></tr></thead>
-          <tbody>{admins.map((admin) => <tr key={admin.id} style={{ borderTop: "1px solid #e8e8e8" }}><Td><b>{admin.fullName}</b></Td><Td>{admin.email}</Td><Td>{roleNames[admin.role]}</Td><Td>{admin.status}</Td><Td>{admin.lastAccessAt ? dateTime.format(new Date(admin.lastAccessAt)) : "Nunca"}</Td></tr>)}</tbody>
-        </table></div>
+          {tab === "restaurantes" ? <section>
+            <PageHeading eyebrow="GESTÃO DE TENANTS" title="Estabelecimentos" description="Acompanhe ativação, acesso, assinatura e integrações sem misturar contas de lojas com superadmins." aside={<span className={styles.countBadge}>{filtered.length} de {data.restaurants.length}</span>} />
+            <article className={styles.panel}>
+              <div className={styles.filters}>
+                <label className={styles.searchBox}><Icon name="search" /><input aria-label="Buscar estabelecimento" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nome, slug, e-mail ou plano" /></label>
+                <select aria-label="Filtrar status" value={status} onChange={(event) => setStatus(event.target.value)}>
+                  <option value="all">Todos os status</option><option value="trial">Em teste</option><option value="active">Ativo</option><option value="paused">Pausado</option><option value="canceled">Cancelado</option>
+                </select>
+              </div>
+              <div className={styles.tableWrap}><table>
+                <thead><tr><th>Estabelecimento</th><th>Proprietário</th><th>Plano</th><th>Ativação</th><th>Assinatura</th><th>Integrações</th><th>Janela de acesso</th><th><span className={styles.srOnly}>Ações</span></th></tr></thead>
+                <tbody>{filtered.map((restaurant) => <tr key={restaurant.id}>
+                  <td><div className={styles.entityCell}><span className={styles.entityIcon}>{restaurant.name.slice(0, 1).toUpperCase()}</span><div><b>{restaurant.name}</b><span>/{restaurant.slug} · {restaurant.published ? "Publicada" : "Não publicada"}</span></div></div></td>
+                  <td><span className={styles.primaryText}>{restaurant.ownerEmail}</span></td>
+                  <td><b className={styles.planName}>{planLabel(restaurant.plan)}</b><StatusPill status={restaurant.status} /></td>
+                  <td>{restaurant.firstOrderAt ? <><b className={styles.primaryText}>{restaurant.activatedWithin48h ? "Em até 48h" : "Após 48h"}</b><span className={styles.cellNote}>{dateTime.format(new Date(restaurant.firstOrderAt))}</span></> : <span className={styles.muted}>Sem pedido</span>}</td>
+                  <td>{restaurant.subscription ? <><b className={styles.primaryText}>{money.format(restaurant.subscription.amountCents / 100)}/mês</b><StatusPill status={restaurant.subscription.status} /></> : <span className={styles.muted}>Sem assinatura</span>}</td>
+                  <td><div className={styles.integrationPills}>{restaurant.integrations.length ? restaurant.integrations.map((integration) => <span key={integration.provider}>{providerLabel(integration.provider)} · {statusLabel(integration.status)}</span>) : <span className={styles.muted}>Nenhuma</span>}</div></td>
+                  <td><span className={styles.cellNote}>Trial: {formatDateOrDash(restaurant.trialEndsAt)}</span><span className={styles.cellNote}>Acesso: {formatDateOrDash(restaurant.accessEndsAt)}</span></td>
+                  <td><div className={styles.rowActions}><Link href={`/loja/${restaurant.slug}`} target="_blank" title="Abrir loja"><Icon name="external" /></Link><button type="button" onClick={() => openPasswordSupport(restaurant.ownerEmail)}>Redefinir acesso</button></div></td>
+                </tr>)}</tbody>
+              </table></div>
+              {!filtered.length ? <EmptyState title="Nenhum estabelecimento encontrado" text="Ajuste a busca ou o filtro de status." /> : null}
+            </article>
+          </section> : null}
+
+          {tab === "administradores" ? <section>
+            <PageHeading eyebrow="ACESSO INTERNO" title="Superadmins" description="Perfis da equipe RapidexMenu, totalmente independentes das contas de estabelecimentos." aside={<span className={styles.countBadge}>{admins.filter((admin) => admin.status === "active").length} ativos</span>} />
+            <div className={styles.twoColumns}>
+              <article className={styles.panel}>
+                <div className={styles.panelHeader}><div><h2>Equipe administrativa</h2><p>Concessões e acessos ficam registrados na auditoria.</p></div><Icon name="shield" /></div>
+                <div className={styles.adminList}>{admins.map((admin) => <div className={styles.adminRow} key={admin.id}>
+                  <span className={styles.avatar}>{initials(admin.fullName)}</span><div className={styles.adminIdentity}><b>{admin.fullName}</b><span>{admin.email}</span></div><div><span className={styles.roleBadge}>{roleNames[admin.role]}</span><span className={styles.lastAccess}>{admin.lastAccessAt ? `Último acesso ${dateTime.format(new Date(admin.lastAccessAt))}` : "Ainda não acessou"}</span></div><StatusPill status={admin.status} />
+                </div>)}</div>
+              </article>
+              {currentAdmin.role === "owner" ? <article className={`${styles.panel} ${styles.formPanel}`}>
+                <div className={styles.panelHeader}><div><h2>Novo superadmin</h2><p>A pessoa cria a própria senha por um link temporário.</p></div><Icon name="key" /></div>
+                <form onSubmit={createAdmin} className={styles.formGrid}>
+                  <label>Nome completo<input name="fullName" required minLength={2} maxLength={120} placeholder="Nome da pessoa" /></label><label>E-mail<input name="email" type="email" required placeholder="email@empresa.com" /></label><label>Perfil<select name="role" defaultValue="support"><option value="owner">Proprietário</option><option value="admin">Administrador</option><option value="support">Suporte</option><option value="viewer">Somente leitura</option></select></label><label>Motivo da concessão<textarea name="reason" required minLength={10} maxLength={500} rows={3} placeholder="Explique por que esse acesso é necessário" /></label><button className={styles.primaryButton} disabled={actionBusy}>{actionBusy ? "Cadastrando…" : "Cadastrar acesso administrativo"}</button>
+                </form>
+              </article> : null}
+            </div>
+          </section> : null}
+
+          {tab === "suporte" ? <section>
+            <PageHeading eyebrow="ATENDIMENTO SEGURO" title="Recuperação de acesso" description="Resolva o acesso sem visualizar, escolher ou compartilhar a senha atual do usuário." />
+            <div className={styles.supportGrid}>
+              <article className={`${styles.panel} ${styles.formPanel}`}><div className={styles.panelHeader}><div><h2>Gerar redefinição segura</h2><p>O link é individual, temporário e de uso único.</p></div><Icon name="key" /></div><form onSubmit={issueReset} className={styles.formGrid}><label>E-mail da conta<input name="email" type="email" required value={supportEmail} onChange={(event) => setSupportEmail(event.target.value)} placeholder="titular@empresa.com" /></label><label>Motivo do atendimento<textarea name="reason" required minLength={10} maxLength={500} rows={4} placeholder="Ex.: titular confirmou perda de acesso no chamado #123" /></label><button className={styles.primaryButton} disabled={actionBusy}>{actionBusy ? "Gerando…" : "Gerar link de redefinição"}</button></form></article>
+              <article className={`${styles.panel} ${styles.safetyPanel}`}><span className={styles.largeIcon}><Icon name="shield" /></span><h2>Proteções deste fluxo</h2><ul><li><Icon name="check" /><span>A senha existente nunca é exibida</span></li><li><Icon name="check" /><span>Links anteriores são invalidados</span></li><li><Icon name="check" /><span>O titular escolhe a nova senha</span></li><li><Icon name="check" /><span>Motivo e operador ficam auditados</span></li></ul></article>
+            </div>
+          </section> : null}
+
+          {tab === "receita" ? <section>
+            <PageHeading eyebrow="SAÚDE FINANCEIRA" title="Receita recorrente" description="Indicadores de crescimento e retenção da RapidexMenu." />
+            <div className={styles.kpiGrid}><KpiCard icon="money" label="MRR atual" value={money.format(metrics.mrrCents / 100)} note={`${metrics.payingRestaurants} estabelecimentos pagantes`} tone="orange" /><KpiCard icon="money" label="ARR projetado" value={money.format(metrics.arrRunRateCents / 100)} note="MRR atual multiplicado por 12" tone="blue" /><KpiCard icon="store" label="NRR · 30 dias" value={metrics.nrr30d === null ? "Formando base" : `${metrics.nrr30d}%`} note="Retenção líquida de receita" tone="green" /><KpiCard icon="alert" label="Logo churn · 30 dias" value={metrics.logoChurn30d === null ? "Formando base" : `${metrics.logoChurn30d}%`} note="Estabelecimentos perdidos" tone={metrics.logoChurn30d ? "red" : "neutral"} /></div>
+            <div className={styles.twoColumnsWide}><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Movimentação do MRR</h2><p>Últimos 30 dias</p></div></div><div className={styles.movementList}><Movement label="Nova receita" value={metrics.newMrr30dCents} tone="positive" /><Movement label="Expansão" value={metrics.expansionMrr30dCents} tone="positive" /><Movement label="Contração" value={metrics.contractionMrr30dCents} tone="negative" /><Movement label="Churn" value={metrics.churnMrr30dCents} tone="negative" /></div></article><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Conversão e ativação</h2><p>Da criação da conta até o primeiro valor percebido</p></div></div><Funnel metrics={metrics} /></article></div>
+          </section> : null}
+
+          {tab === "operacao" ? <section>
+            <PageHeading eyebrow="OPERAÇÃO EM TEMPO REAL" title="Fila e incidentes" description="Sinais que podem afetar pedidos, pagamentos, cobrança e automações." aside={<Link className={styles.secondaryButton} href="/central/jobs">Abrir fila detalhada →</Link>} />
+            <div className={styles.kpiGrid}><KpiCard icon="clock" label="Jobs ativos" value={num.format(operations.jobsQueued + operations.jobsRunning)} note={`${operations.jobsQueued} aguardando · ${operations.jobsRunning} executando`} tone="blue" /><KpiCard icon="alert" label="Retry e DLQ" value={num.format(operations.jobsRetry + operations.jobsDead)} note={`${operations.jobsRetry} em retry · ${operations.jobsDead} mortos`} tone={operations.jobsRetry + operations.jobsDead ? "red" : "green"} /><KpiCard icon="money" label="Pagamentos parados" value={String(operations.stalePendingPayments)} note="Pendentes há mais de 30 minutos" tone={operations.stalePendingPayments ? "red" : "green"} /><KpiCard icon="server" label="Webhooks falhos" value={String(operations.failedWebhooks24h)} note="Ocorrências nas últimas 24 horas" tone={operations.failedWebhooks24h ? "red" : "green"} /></div>
+            <div className={styles.twoColumnsWide}><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Automação e cobrança</h2><p>Processamentos que exigem acompanhamento</p></div></div><div className={styles.signalList}><Signal label="Cobranças em envio" value={operations.dunningSending} healthyNote="Nenhuma cobrança em processamento" /><Signal label="Cobranças com falha" value={operations.dunningFailed} healthyNote="Nenhuma falha de cobrança" danger /><Signal label="Jobs em retry" value={operations.jobsRetry} healthyNote="Nenhum job aguardando nova tentativa" danger /><Signal label="Jobs na DLQ" value={operations.jobsDead} healthyNote="Fila de erros vazia" danger /></div></article><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Uso de inteligência artificial</h2><p>Consumo registrado hoje</p></div><Icon name="operacao" /></div><div className={styles.aiNumbers}><div><b>{num.format(operations.aiResponsesToday)}</b><span>respostas</span></div><div><b>{num.format(operations.aiTranscriptionsToday)}</b><span>transcrições</span></div><div><b>{num.format(operations.aiInputTokensToday + operations.aiOutputTokensToday)}</b><span>tokens</span></div></div></article></div>
+          </section> : null}
+
+          {tab === "infra" ? <InfrastructurePanel health={health} operations={operations} /> : null}
+        </div>
       </section>
-      {currentAdmin.role === "owner" && <section className={styles.panel}><h2>Cadastrar novo superadmin</h2><p>O novo usuário receberá um link de primeiro acesso para criar a própria senha.</p>
-        <form onSubmit={createAdmin} className={styles.grid}>
-          <label className={styles.field}>Nome<input name="fullName" required minLength={2} maxLength={120} /></label>
-          <label className={styles.field}>E-mail<input name="email" type="email" required /></label>
-          <label className={styles.field}>Perfil<select name="role" defaultValue="support"><option value="owner">Proprietário</option><option value="admin">Administrador</option><option value="support">Suporte</option><option value="viewer">Somente leitura</option></select></label>
-          <label className={`${styles.field} ${styles.wide}`}>Motivo da concessão<textarea name="reason" required minLength={10} maxLength={500} rows={3} /></label>
-          <button className={`${styles.button} ${styles.wide}`} disabled={actionBusy}>{actionBusy ? "Cadastrando…" : "Cadastrar acesso administrativo"}</button>
-        </form>
-      </section>}
-    </>}
-
-    {tab === "suporte" && <section className={styles.panel}><h2>Recuperação segura de acesso</h2><p>A Central nunca mostra nem escolhe a senha do usuário. Ela emite um link individual, temporário e de uso único, invalida links anteriores e registra o motivo.</p>
-      <form onSubmit={issueReset} className={styles.grid}>
-        <label className={`${styles.field} ${styles.wide}`}>E-mail da conta<input name="email" type="email" required value={supportEmail} onChange={(event) => setSupportEmail(event.target.value)} /></label>
-        <label className={`${styles.field} ${styles.wide}`}>Motivo do atendimento<textarea name="reason" required minLength={10} maxLength={500} rows={3} placeholder="Ex.: titular confirmou perda de acesso no chamado #123" /></label>
-        <button className={`${styles.button} ${styles.wide}`} disabled={actionBusy}>{actionBusy ? "Gerando…" : "Gerar redefinição segura"}</button>
-      </form>
-    </section>}
-
-    {tab === "receita" && <>
-      <section className={styles.panel}><h2>Receita recorrente</h2><div style={grid}>
-        <Metric label="MRR" value={money.format(metrics.mrrCents / 100)} note={`${metrics.payingRestaurants} clientes`} />
-        <Metric label="ARR run-rate" value={money.format(metrics.arrRunRateCents / 100)} note="MRR × 12" />
-        <Metric label="New MRR · 30d" value={money.format(metrics.newMrr30dCents / 100)} note="nova receita" />
-        <Metric label="Expansion · 30d" value={money.format(metrics.expansionMrr30dCents / 100)} note="expansão" />
-        <Metric label="Contraction · 30d" value={money.format(metrics.contractionMrr30dCents / 100)} note="redução" />
-        <Metric label="Churned · 30d" value={money.format(metrics.churnMrr30dCents / 100)} note="receita perdida" />
-      </div></section>
-      <section className={styles.panel}><h2>Retenção</h2><div style={grid}>
-        <Metric label="NRR" value={metrics.nrr30d === null ? "Formando janela" : `${metrics.nrr30d}%`} note="retenção líquida" />
-        <Metric label="Logo churn" value={metrics.logoChurn30d === null ? "Formando janela" : `${metrics.logoChurn30d}%`} note="clientes perdidos" />
-        <Metric label="Ativação ≤48h" value={`${metrics.activation48hRate}%`} note="time-to-value" />
-        <Metric label="Trials vencendo" value={String(metrics.trialsExpiring72h)} note="próximas 72h" />
-      </div></section>
-    </>}
-
-    {tab === "operacao" && <section className={styles.panel}><h2>Operação e incidentes</h2><div style={grid}>
-      <Metric label="Jobs ativos" value={num.format(operations.jobsQueued + operations.jobsRunning)} note={`${operations.jobsRetry} retry · ${operations.jobsDead} DLQ`} />
-      <Metric label="Webhooks falhos" value={String(operations.failedWebhooks24h)} note="24 horas" />
-      <Metric label="Pagamentos pendentes" value={String(operations.stalePendingPayments)} note="> 30 min" />
-      <Metric label="Dunning" value={String(operations.dunningSending)} note={`${operations.dunningFailed} falho(s)`} />
-      <Metric label="IA hoje" value={num.format(operations.aiResponsesToday)} note={`${num.format(operations.aiTranscriptionsToday)} transcrições`} />
-      <Metric label="Tokens IA" value={num.format(operations.aiInputTokensToday + operations.aiOutputTokensToday)} note="consumo de hoje" />
-    </div><div className={styles.footerActions}><Link className={styles.linkButton} href="/central/jobs">Abrir fila e DLQ →</Link></div></section>}
-
-    {tab === "infra" && <>
-      <section className={styles.panel}><h2>Infraestrutura</h2><div style={grid}>
-        <Metric label="Banco" value={readiness?.database ? String(readiness.databaseEngine || "conectado") : "Indisponível"} note="conexão da aplicação" />
-        <Metric label="Build" value={health?.build?.sha ? health.build.sha.slice(0, 8) : "—"} note={health?.build?.ref || "ref indisponível"} />
-        <Metric label="Autenticação" value={readiness?.nativeAuth ? "Pronta" : "Pendente"} note="sessões comerciais" />
-        <Metric label="Uploads" value={readiness?.uploads ? "Prontos" : "Pendentes"} note="mídia" />
-      </div></section>
-      <section className={styles.panel}><h2>Integrações</h2><div style={grid}>
-        <Flag label="Billing" value={readiness?.billing} /><Flag label="E-mail" value={readiness?.email} /><Flag label="Pix vendedor" value={readiness?.sellerPayments} /><Flag label="Reconciliação" value={readiness?.reconciliation} /><Flag label="Meta" value={readiness?.metaEmbeddedSignup} /><Flag label="OpenAI" value={readiness?.openai} /><Flag label="WhatsApp" value={readiness?.whatsapp} />
-      </div></section>
-    </>}
-
-    {actionMessage && <p className={styles.success} style={{ overflowWrap: "anywhere" }}>{actionMessage}</p>}
-    {error && <p className={styles.error}>{error}</p>}
-  </section></main>;
+    </div>
+  </main>;
 }
 
-function Metric({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div style={card}><small style={{ fontWeight: 900 }}>{label}</small><strong style={{ display: "block", fontSize: 24, margin: "5px 0" }}>{value}</strong><span style={{ fontSize: 12, color: "#6d716a" }}>{note}</span></div>;
+function OverviewPanel({ currentAdmin, metrics, operations, totalRisks, healthStatus, lastUpdated, onTab }: { currentAdmin: CurrentAdmin; metrics: Overview["metrics"]; operations: Overview["operations"]; totalRisks: number; healthStatus: ServiceState; lastUpdated: number | null; onTab: (tab: Tab) => void }) {
+  const firstName = currentAdmin.name.trim().split(/\s+/)[0] || "Henrique";
+  return <section><div className={styles.hero}><div><span className={styles.eyebrow}>CENTRO DE COMANDO</span><h1>Olá, {firstName}. <span>Visão completa da operação.</span></h1><p>Dados comerciais, suporte e infraestrutura organizados para você decidir rápido e agir com segurança.</p></div><div className={styles.heroMeta}><span>Atualização automática · 60s</span><b>{lastUpdated ? `Atualizado ${dateTime.format(new Date(lastUpdated))}` : "Sincronizando dados"}</b></div></div>
+    <div className={styles.kpiGrid}><KpiCard icon="store" label="Estabelecimentos" value={String(metrics.restaurants)} note={`${metrics.published} publicados`} tone="orange" /><KpiCard icon="check" label="Taxa de ativação" value={`${metrics.activationRate}%`} note={`${metrics.activated} fizeram o primeiro pedido`} tone="green" /><KpiCard icon="money" label="Receita mensal" value={money.format(metrics.mrrCents / 100)} note={`${metrics.payingRestaurants} pagantes · ${metrics.trials} em teste`} tone="blue" /><KpiCard icon="alert" label="Pontos de atenção" value={String(totalRisks)} note={totalRisks ? "Itens aguardando análise" : "Nenhum risco imediato"} tone={totalRisks ? "red" : "green"} /></div>
+    <div className={`${styles.healthStrip} ${styles[healthStatus]}`}><span className={styles.healthIcon}><Icon name={healthStatus === "operational" ? "check" : "alert"} /></span><div><b>{healthStatus === "operational" ? "Núcleo da plataforma operacional" : healthStatus === "incident" ? "Incidente técnico detectado" : "Configuração exige atenção"}</b><span>{healthStatus === "operational" ? "Aplicação, banco, autenticação e armazenamento responderam normalmente." : "Abra Infraestrutura para identificar exatamente o componente afetado."}</span></div><button type="button" onClick={() => onTab("infra")}>Ver infraestrutura →</button></div>
+    <div className={styles.dashboardGrid}><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Funil de ativação</h2><p>Jornada dos estabelecimentos até o primeiro pedido</p></div><button type="button" className={styles.textButton} onClick={() => onTab("restaurantes")}>Ver estabelecimentos →</button></div><Funnel metrics={metrics} /></article><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Radar operacional</h2><p>O que precisa da sua atenção agora</p></div><Icon name="alert" /></div><div className={styles.signalList}><Signal label="Jobs na fila de erro" value={operations.jobsDead} healthyNote="Nenhum job morto" danger /><Signal label="Webhooks falhos · 24h" value={operations.failedWebhooks24h} healthyNote="Webhooks saudáveis" danger /><Signal label="Pagamentos parados" value={operations.stalePendingPayments} healthyNote="Pagamentos processando normalmente" danger /><Signal label="Trials vencendo · 72h" value={metrics.trialsExpiring72h} healthyNote="Nenhum trial vencendo em breve" /></div></article></div>
+    <article className={styles.quickPanel}><div><span className={styles.eyebrow}>ATALHOS OPERACIONAIS</span><h2>Resolva sem procurar em vários lugares</h2></div><div className={styles.quickActions}><button type="button" onClick={() => onTab("suporte")}><Icon name="key" /><span><b>Redefinir acesso</b><small>Gerar link seguro</small></span></button><button type="button" onClick={() => onTab("administradores")}><Icon name="shield" /><span><b>Superadmins</b><small>Gerenciar equipe</small></span></button><Link href="/central/jobs"><Icon name="operacao" /><span><b>Fila e DLQ</b><small>Reprocessar jobs</small></span></Link><button type="button" onClick={() => onTab("infra")}><Icon name="server" /><span><b>Infraestrutura</b><small>Ver saúde técnica</small></span></button></div></article>
+  </section>;
 }
-function Flag({ label, value }: { label: string; value: unknown }) { return <Metric label={label} value={value ? "✓ Configurado" : "○ Pendente"} note="status do ambiente" />; }
-function TabButton({ active, click, children }: { active: boolean; click: () => void; children: React.ReactNode }) { return <button onClick={click} aria-current={active ? "page" : undefined} style={{ ...button, background: active ? "#191b18" : "#fff", color: active ? "#fff" : "#191b18" }}>{children}</button>; }
-function Th({ children }: { children: React.ReactNode }) { return <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12 }}>{children}</th>; }
-function Td({ children }: { children: React.ReactNode }) { return <td style={{ padding: "12px 8px", verticalAlign: "top", fontSize: 13 }}>{children}</td>; }
 
-const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, margin: "18px 0" } as const;
-const card = { border: "1px solid #e5e5e5", borderRadius: 14, padding: 16, background: "#fff" } as const;
-const button = { border: "1px solid #d8d8d8", borderRadius: 999, padding: "10px 14px", background: "#fff", fontWeight: 900, cursor: "pointer" } as const;
-const textButton = { border: 0, padding: 0, background: "transparent", color: "#1f5cc1", cursor: "pointer", textDecoration: "underline", font: "inherit" } as const;
-const input = { border: "1px solid #d8d8d8", borderRadius: 12, padding: "11px 12px", background: "#fff", font: "inherit" } as const;
-const sub = { display: "block", color: "#6d716a", marginTop: 3 } as const;
-const actions = { display: "flex", gap: 10, flexWrap: "wrap" } as const;
+function InfrastructurePanel({ health, operations }: { health: Health | null; operations: Overview["operations"] }) {
+  const readiness = health?.integrations;
+  const overall = health?.status || (health?.ok === false ? "incident" : "attention");
+  const serviceEntries = Object.entries(health?.coreServices || {});
+  const fallbackServices: Array<[string, HealthService]> = [["application", { status: health?.ok === false ? "incident" : "attention", label: "Aplicação", detail: health?.ok === false ? "Health check indisponível" : "Aguardando verificação" }]];
+  const services = serviceEntries.length ? serviceEntries : fallbackServices;
+  const integrations = [
+    integrationConfig("Cobrança da plataforma", "Mercado Pago da RapidexMenu", Boolean(readiness?.billing), readiness?.environment !== "production" ? "standby" : "optional"),
+    integrationConfig("E-mail transacional", "Convites e recuperação de senha", Boolean(readiness?.email), "optional"),
+    integrationConfig("Pix dos estabelecimentos", "OAuth do Mercado Pago por loja", Boolean(readiness?.sellerPayments), "optional"),
+    integrationConfig("Reconciliação automática", "Conferência periódica de pagamentos", Boolean(readiness?.reconciliation), readiness?.billing ? "required" : "standby"),
+    integrationConfig("WhatsApp Embedded Signup", "Conexão oficial por estabelecimento", Boolean(readiness?.metaEmbeddedSignup), "optional"),
+    integrationConfig("OpenAI", "Atendimento e transcrição assistidos", Boolean(readiness?.openai), "optional"),
+    integrationConfig("WhatsApp", "Canal de pedidos e atendimento", Boolean(readiness?.whatsapp), "optional"),
+  ];
+  return <section><PageHeading eyebrow="STATUS TÉCNICO" title="Infraestrutura" description="Leitura correta do núcleo da aplicação e das integrações opcionais, sem confundir ausência de configuração com indisponibilidade." aside={<span className={`${styles.overallBadge} ${styles[overall]}`}><i />{stateLabel(overall)}</span>} />
+    <div className={`${styles.infrastructureHero} ${styles[overall]}`}><div className={styles.infrastructurePulse}><span><Icon name={overall === "operational" ? "check" : "alert"} /></span></div><div><span className={styles.eyebrow}>SAÚDE DO NÚCLEO</span><h2>{overall === "operational" ? "Tudo funcionando normalmente" : overall === "incident" ? "Existe um incidente ativo" : "Há configurações para revisar"}</h2><p>{overall === "operational" ? "A aplicação realizou verificações reais de banco, ambiente, autenticação e armazenamento." : "Os detalhes abaixo mostram exatamente o que está afetado."}</p></div><dl><div><dt>Ambiente</dt><dd>{String(readiness?.environment || "local").toUpperCase()}</dd></div><div><dt>Verificação</dt><dd>{health?.responseTimeMs !== undefined ? `${health.responseTimeMs} ms` : "—"}</dd></div><div><dt>Última leitura</dt><dd>{health?.checkedAt ? dateTime.format(new Date(health.checkedAt)) : "—"}</dd></div></dl></div>
+    <article className={styles.panel}><div className={styles.panelHeader}><div><h2>Serviços essenciais</h2><p>Testes e configurações necessários para a aplicação funcionar.</p></div><span className={styles.legend}><i className={styles.legendGreen} />Operacional <i className={styles.legendAmber} />Atenção <i className={styles.legendRed} />Incidente</span></div><div className={styles.serviceGrid}>{services.map(([key, service]) => <ServiceCard key={key} serviceKey={key} service={service} />)}<ServiceCard serviceKey="build" service={{ status: health?.build?.sha ? "operational" : "attention", label: "Versão publicada", detail: health?.build?.sha ? `${health.build.ref || "branch"} · ${health.build.sha.slice(0, 8)}` : "Build local ou versão não identificada" }} /></div></article>
+    <article className={styles.panel}><div className={styles.panelHeader}><div><h2>Integrações e recursos</h2><p>“Não configurado” significa recurso opcional ainda não ativado — não uma queda da plataforma.</p></div><span className={styles.countBadge}>{integrations.filter((item) => item.state === "configured").length} configuradas</span></div><div className={styles.integrationGrid}>{integrations.map((item) => <div className={styles.integrationCard} key={item.name}><span className={`${styles.configDot} ${styles[item.state]}`}><Icon name={item.state === "configured" ? "check" : item.state === "required" ? "alert" : "clock"} /></span><div><b>{item.name}</b><p>{item.description}</p></div><span className={`${styles.configBadge} ${styles[item.state]}`}>{configLabel(item.state)}</span></div>)}</div></article>
+    <div className={styles.twoColumnsWide}><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Identificação da versão</h2><p>Rastreabilidade do código em execução.</p></div><Icon name="server" /></div><dl className={styles.buildDetails}><div><dt>Commit</dt><dd>{health?.build?.sha?.slice(0, 12) || "Build local"}</dd></div><div><dt>Branch</dt><dd>{health?.build?.ref || "Não informada"}</dd></div><div><dt>Banco</dt><dd>{readiness?.databaseEngine === "postgres" ? "PostgreSQL" : readiness?.databaseEngine || "Não identificado"}</dd></div><div><dt>Ambiente seguro</dt><dd>{readiness?.environmentSafe ? "Sim" : "Requer revisão"}</dd></div></dl></article><article className={styles.panel}><div className={styles.panelHeader}><div><h2>Sinais operacionais</h2><p>Problemas de processamento não são escondidos pelo status geral.</p></div><Icon name="alert" /></div><div className={styles.signalList}><Signal label="Jobs em retry" value={operations.jobsRetry} healthyNote="Nenhum retry pendente" danger /><Signal label="Jobs na DLQ" value={operations.jobsDead} healthyNote="Fila de erro vazia" danger /><Signal label="Webhooks falhos · 24h" value={operations.failedWebhooks24h} healthyNote="Nenhuma falha recente" danger /></div></article></div>
+  </section>;
+}
+
+function PageHeading({ eyebrow, title, description, aside }: { eyebrow: string; title: string; description: string; aside?: ReactNode }) { return <header className={styles.pageHeading}><div><span className={styles.eyebrow}>{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{aside}</header>; }
+function KpiCard({ icon, label, value, note, tone }: { icon: IconName; label: string; value: string; note: string; tone: "orange" | "green" | "blue" | "red" | "neutral" }) { return <article className={styles.kpiCard}><div className={`${styles.kpiIcon} ${styles[tone]}`}><Icon name={icon} /></div><span>{label}</span><b>{value}</b><p>{note}</p></article>; }
+
+function Funnel({ metrics }: { metrics: Overview["metrics"] }) {
+  const rows = [{ label: "Cadastrados", value: metrics.restaurants, percent: metrics.restaurants ? 100 : 0 }, { label: "Publicados", value: metrics.published, percent: metrics.restaurants ? (metrics.published / metrics.restaurants) * 100 : 0 }, { label: "Primeiro pedido", value: metrics.activated, percent: metrics.restaurants ? (metrics.activated / metrics.restaurants) * 100 : 0 }, { label: "Pagantes", value: metrics.payingRestaurants, percent: metrics.restaurants ? (metrics.payingRestaurants / metrics.restaurants) * 100 : 0 }];
+  return <div className={styles.funnel}>{rows.map((row) => <div key={row.label}><div><span>{row.label}</span><b>{row.value}</b></div><div className={styles.progressTrack}><span style={{ width: `${Math.max(0, Math.min(100, row.percent))}%` }} /></div><small>{Math.round(row.percent)}%</small></div>)}</div>;
+}
+
+function Signal({ label, value, healthyNote, danger = false }: { label: string; value: number; healthyNote: string; danger?: boolean }) { const active = value > 0; return <div className={styles.signal}><span className={`${styles.signalIcon} ${active && danger ? styles.signalDanger : active ? styles.signalAttention : styles.signalHealthy}`}><Icon name={active ? "alert" : "check"} /></span><div><b>{label}</b><span>{active ? `${value} ocorrência${value === 1 ? "" : "s"}` : healthyNote}</span></div><strong>{value}</strong></div>; }
+function Movement({ label, value, tone }: { label: string; value: number; tone: "positive" | "negative" }) { return <div className={styles.movement}><span className={styles[tone]}>{tone === "positive" ? "↗" : "↘"}</span><b>{label}</b><strong className={styles[tone]}>{tone === "negative" && value ? "−" : "+"}{money.format(value / 100)}</strong></div>; }
+function ServiceCard({ serviceKey, service }: { serviceKey: string; service: HealthService }) { const icon: IconName = serviceKey === "database" ? "database" : serviceKey === "authentication" ? "key" : serviceKey === "uploads" ? "upload" : serviceKey === "environment" ? "shield" : "server"; return <div className={styles.serviceCard}><span className={`${styles.serviceIcon} ${styles[service.status]}`}><Icon name={icon} /></span><div><b>{service.label}</b><p>{service.detail}</p></div><span className={`${styles.serviceBadge} ${styles[service.status]}`}><i />{stateLabel(service.status)}</span></div>; }
+function StatusPill({ status }: { status: string }) { return <span className={`${styles.statusPill} ${styles[`status_${status}`] || styles.status_neutral}`}><i />{statusLabel(status)}</span>; }
+function EmptyState({ title, text }: { title: string; text: string }) { return <div className={styles.emptyState}><Icon name="search" /><b>{title}</b><span>{text}</span></div>; }
+function LoadingState() { return <main className={styles.loadingPage}><div className={styles.loadingBrand}><span>R</span>Rapidex<b>Menu</b></div><div className={styles.loadingBar}><i /></div><p>Preparando o centro de comando…</p></main>; }
+
+function Icon({ name }: { name: IconName }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{iconPaths[name]}</svg>;
+}
+
+function integrationConfig(name: string, description: string, enabled: boolean, mode: "required" | "optional" | "standby") { return { name, description, state: enabled ? "configured" : mode } as const; }
+function configLabel(state: "configured" | "required" | "optional" | "standby") { if (state === "configured") return "Configurado"; if (state === "required") return "Ação necessária"; if (state === "standby") return "Inativo neste ambiente"; return "Não configurado"; }
+function stateLabel(state: ServiceState) { if (state === "operational") return "Operacional"; if (state === "incident") return "Incidente"; return "Atenção"; }
+function statusLabel(status: string) { return ({ active: "Ativo", trial: "Em teste", paused: "Pausado", canceled: "Cancelado", blocked: "Bloqueado", revoked: "Revogado", authorized: "Autorizada", pending: "Pendente", connected: "Conectado", disabled: "Desativado", error: "Com erro" } as Record<string, string>)[status] || status; }
+function planLabel(plan: string) { return ({ start: "Start", growth: "Growth", scale: "Scale" } as Record<string, string>)[plan] || plan; }
+function providerLabel(provider: string) { return ({ whatsapp: "WhatsApp", mercado_pago: "Mercado Pago", openai: "OpenAI" } as Record<string, string>)[provider] || provider; }
+function formatDateOrDash(value: number | null) { return value ? dateTime.format(new Date(value)) : "—"; }
+function initials(name: string) { const parts = name.trim().split(/\s+/).filter(Boolean); return `${parts[0]?.[0] || "R"}${parts.length > 1 ? parts.at(-1)?.[0] || "" : ""}`.toUpperCase(); }

@@ -4,17 +4,53 @@ import { integrationReadiness, getDatabase } from "@/lib/runtime";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const startedAt = Date.now();
   try {
     await getDatabase().prepare("SELECT 1 AS ok").first();
+    const integrations = integrationReadiness();
+    const coreServices = {
+      application: {
+        status: "operational",
+        label: "Aplicação",
+        detail: "API respondendo normalmente",
+      },
+      database: {
+        status: "operational",
+        label: integrations.databaseEngine === "postgres" ? "PostgreSQL" : "Banco de dados",
+        detail: "Consulta de conexão concluída",
+      },
+      environment: {
+        status: integrations.environmentSafe ? "operational" : "attention",
+        label: "Ambiente",
+        detail: integrations.environmentSafe
+          ? `${String(integrations.environment).toUpperCase()} configurado com segurança`
+          : "Configuração do ambiente exige revisão",
+      },
+      authentication: {
+        status: integrations.nativeAuth ? "operational" : "attention",
+        label: "Autenticação",
+        detail: integrations.nativeAuth ? "Sessões protegidas e configuradas" : "Segredo de sessão ausente ou inválido",
+      },
+      uploads: {
+        status: integrations.uploads ? "operational" : "attention",
+        label: "Arquivos e imagens",
+        detail: integrations.uploads ? "Armazenamento disponível" : "Armazenamento não configurado",
+      },
+    } as const;
+    const requiresAttention = Object.values(coreServices).some((service) => service.status === "attention");
     return json({
       ok: true,
       service: "rapidexmenu",
+      status: requiresAttention ? "attention" : "operational",
+      checkedAt: Date.now(),
+      responseTimeMs: Date.now() - startedAt,
       build: {
         sha: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || null,
         ref: process.env.VERCEL_GIT_COMMIT_REF || null,
         url: process.env.VERCEL_URL || null,
       },
-      integrations: integrationReadiness(),
+      coreServices,
+      integrations,
     });
   } catch (error) {
     return apiError(error);
