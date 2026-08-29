@@ -36,7 +36,7 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
   await expect(page.getByText("Central administrativa", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Olá, Henry/i })).toBeVisible({ timeout: 30_000 });
 
-  await page.getByRole("button", { name: "Estabelecimentos" }).click();
+  await page.getByRole("button", { name: "Estabelecimentos", exact: true }).click();
   await page.getByRole("button", { name: /Novo estabelecimento/i }).click();
   const create = page.getByRole("heading", { name: "Criar estabelecimento por convite" }).locator("xpath=ancestor::article");
   await create.getByLabel("Estabelecimento").fill(restaurantName);
@@ -75,7 +75,7 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
   await support.getByRole("button", { name: "Registrar nota" }).click();
   await expect(support.getByText(/Fluxo administrativo validado/i)).toBeVisible();
 
-  await page.getByRole("button", { name: "Superadmins" }).click();
+  await page.getByRole("button", { name: "Superadmins", exact: true }).click();
   const adminForm = page.getByRole("heading", { name: "Novo superadmin" }).locator("xpath=ancestor::article");
   await adminForm.getByLabel("Nome completo").fill("Identidade proibida E2E");
   await adminForm.getByLabel("E-mail").fill("heloisa.gall@gmail.com");
@@ -83,11 +83,11 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
   await adminForm.getByRole("button", { name: "Cadastrar acesso administrativo" }).click();
   await expect(page.getByText(/não pode ser usado na administração geral/i)).toBeVisible();
 
-  await page.getByRole("button", { name: "Auditoria" }).click();
+  await page.getByRole("button", { name: "Auditoria", exact: true }).click();
   await expect(page.getByText("Estabelecimento criado", { exact: true })).toBeVisible();
   await expect(page.getByText("Nota de suporte registrada", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Infraestrutura" }).click();
+  await page.getByRole("button", { name: "Infraestrutura", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Infraestrutura" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Gate para produção" })).toBeVisible();
   await expect(page.getByText("Object storage", { exact: true })).toBeVisible();
