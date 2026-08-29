@@ -7,6 +7,7 @@ import { structuredLog } from "@/lib/observability";
 import { notifyOperationalAlert } from "@/lib/operational-alerts";
 import { reconcilePlatformSubscriptions } from "@/lib/platform-billing";
 import { reconcilePendingPayments } from "@/lib/reconcile-pending-payments";
+import { getRapidexEnvironment, reconciliationSecret } from "@/lib/runtime";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,6 +16,29 @@ export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const startedAt = Date.now();
   try {
+    const environment = getRapidexEnvironment();
+    const internalJobsConfigured = reconciliationSecret().length >= 32;
+
+    // HMG/desenvolvimento podem manter rotinas externas desligadas sem gerar um
+    // falso incidente crítico diário. Produção continua fail-closed: sem segredo,
+    // authorizeInternalJob abaixo retorna 503 e aciona o alerta operacional.
+    if (!internalJobsConfigured && environment !== "production") {
+      structuredLog("info", "maintenance.skipped", {
+        requestId,
+        environment,
+        reason: "internal_jobs_not_configured",
+      });
+      return json({
+        ok: true,
+        skipped: true,
+        reason: "internal_jobs_not_configured",
+        environment,
+        durationMs: Date.now() - startedAt,
+      }, {
+        headers: { "x-request-id": requestId },
+      });
+    }
+
     authorizeInternalJob(request);
     structuredLog("info", "maintenance.started", { requestId });
     const [jobs, payments, subscriptions, mediaCleanup] = await Promise.all([
