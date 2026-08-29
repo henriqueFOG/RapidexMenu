@@ -21,7 +21,7 @@ export function productionReadinessChecks(bindings: RapidexBindings): ReadinessC
     check("signup", "Cadastro somente por convite", bindings.RAPIDEX_SIGNUP_MODE === "invite_only", "Novos estabelecimentos entram pelo fluxo comercial controlado"),
     check("integration_secret", "Criptografia de integrações", String(bindings.RAPIDEX_INTEGRATION_SECRET || "").length >= 32, "Credenciais de integrações protegidas com chave forte"),
     check("cron", "Processamento agendado", String(bindings.CRON_SECRET || bindings.RAPIDEX_CRON_SECRET || "").length >= 32, "Autenticação forte configurada para rotinas internas"),
-    check("scheduler_capacity", "Agendador compatível", bindings.RAPIDEX_SCHEDULER_READY === "true", "Capacidade de executar as rotinas operacionais na frequência necessária"),
+    check("scheduler_capacity", "Agendador compatível", bindings.RAPIDEX_SCHEDULER_READY === "true", "Capacidade comprovada para executar o ciclo de 5 minutos exigido em produção"),
     check("email", "E-mail transacional", Boolean(bindings.RESEND_API_KEY && bindings.RAPIDEX_EMAIL_FROM), "Provedor e remetente transacional verificados"),
     check("email_delivery", "Entrega de e-mail validada", bindings.RAPIDEX_EMAIL_DELIVERY_VERIFIED === "true", "Recuperação/convite, autenticação de domínio e rejeições testados"),
     check("storage", "Object storage", Boolean(bindings.BUCKET || bindings.BLOB_READ_WRITE_TOKEN), "Armazenamento de mídia dedicado com CDN; banco não guarda imagens em produção"),
