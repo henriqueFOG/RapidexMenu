@@ -4,7 +4,7 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("relatório de resultados usa visual próprio com contraste explícito", async () => {
+test("relatório de resultados usa visual próprio com contraste WCAG nos indicadores", async () => {
   const [source, css] = await Promise.all([
     readFile(new URL("app/admin/lucro/ProfitClient.tsx", root), "utf8"),
     readFile(new URL("app/admin/lucro/ProfitClient.module.css", root), "utf8"),
@@ -17,9 +17,12 @@ test("relatório de resultados usa visual próprio com contraste explícito", as
   assert.match(source, /O que fazer agora/);
   assert.match(source, /Guardião de margem/);
 
-  assert.match(css, /\.metric\{[^}]*background:#fff/);
-  assert.match(css, /\.metricValue\{[^}]*color:#161916/);
-  assert.match(css, /\.metricDetail\{[^}]*color:#73786f/);
+  const background = css.match(/\.metric\{[^}]*background:(#[0-9a-f]+)/i)?.[1];
+  const valueColor = css.match(/\.metricValue\{[^}]*color:(#[0-9a-f]+)/i)?.[1];
+  const detailColor = css.match(/\.metricDetail\{[^}]*color:(#[0-9a-f]+)/i)?.[1];
+  assert.ok(background && valueColor && detailColor, "cores dos cards principais precisam ser explícitas");
+  assert.ok(contrast(valueColor, background) >= 4.5, `valor principal sem contraste WCAG: ${valueColor} em ${background}`);
+  assert.ok(contrast(detailColor, background) >= 4.5, `detalhe sem contraste WCAG: ${detailColor} em ${background}`);
 });
 
 test("API entrega contexto mensal para relatório não parecer vazio antes da primeira venda do dia", async () => {
@@ -31,3 +34,20 @@ test("API entrega contexto mensal para relatório não parecer vazio antes da pr
   assert.match(route, /revenueCents: monthRevenue/);
   assert.match(route, /contributionMarginPercent: monthRevenue > 0/);
 });
+
+function contrast(foreground: string, background: string) {
+  const a = luminance(foreground);
+  const b = luminance(background);
+  const light = Math.max(a, b);
+  const dark = Math.min(a, b);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+function luminance(hex: string) {
+  const normalized = hex.slice(1).length === 3
+    ? hex.slice(1).split("").map((part) => part + part).join("")
+    : hex.slice(1);
+  const channels = [0, 2, 4].map((index) => Number.parseInt(normalized.slice(index, index + 2), 16) / 255);
+  const [red, green, blue] = channels.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
