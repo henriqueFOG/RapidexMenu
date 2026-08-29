@@ -24,13 +24,9 @@ export async function GET() {
   ).bind(DEMO_EMAIL).first<{ id: string }>();
   const userId = existingUser?.id || DEMO_USER_ID;
 
-  if (existingUser) {
-    await db.prepare(
-      `UPDATE app_users
-       SET password_hash = ?, full_name = ?, phone = ?, status = 'active', auth_version = auth_version + 1, updated_at = ?
-       WHERE id = ?`,
-    ).bind(DEMO_PASSWORD_HASH, "Gestor Demo Rapidex", "24999990000", now, userId).run();
-  } else {
+  // A senha inicial só é gravada no primeiro provisionamento. Chamadas futuras
+  // nunca redefinem credenciais nem invalidam a sessão do usuário de demonstração.
+  if (!existingUser) {
     await db.prepare(
       `INSERT INTO app_users
        (id, email, password_hash, full_name, phone, status, auth_version, created_at, updated_at)
@@ -41,8 +37,9 @@ export async function GET() {
   await db.batch([
     db.prepare(
       `UPDATE restaurants
-       SET owner_email = ?, plan = 'growth', status = 'trial', trial_ends_at = ?, access_ends_at = NULL,
-           onboarding_completed = 1, published_at = COALESCE(published_at, ?), is_open = 1, updated_at = ?
+       SET owner_email = ?, plan = 'growth', status = 'trial', trial_ends_at = COALESCE(trial_ends_at, ?),
+           access_ends_at = NULL, onboarding_completed = 1, published_at = COALESCE(published_at, ?),
+           is_open = 1, updated_at = ?
        WHERE id = ?`,
     ).bind(DEMO_EMAIL, trialEndsAt, now, now, DEMO_RESTAURANT_ID),
     db.prepare(
@@ -67,6 +64,7 @@ export async function GET() {
     ok: true,
     demo: {
       email: DEMO_EMAIL,
+      provisionedNow: !existingUser,
       restaurant,
       products: Number(catalog?.total || 0),
       orders: Number(orders?.total || 0),
