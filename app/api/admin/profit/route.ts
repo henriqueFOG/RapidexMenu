@@ -10,6 +10,13 @@ const PLAN_PRICE_CENTS: Record<string, number> = {
   scale: 59700,
 };
 
+type SalesAggregate = {
+  orders: number;
+  revenue: number;
+  cost: number;
+  contribution: number;
+};
+
 export async function GET() {
   try {
     const context = await requireAdminContext();
@@ -18,7 +25,7 @@ export async function GET() {
     const dayStart = startOfSaoPauloDay(now);
     const monthStart = startOfSaoPauloMonth(now);
 
-    const [restaurant, day, growth, monthGrowth, automation, promise, returning, products] = await Promise.all([
+    const [restaurant, day, month, growth, monthGrowth, automation, promise, returning, products] = await Promise.all([
       db.prepare(
         "SELECT plan, status FROM restaurants WHERE id = ? LIMIT 1",
       ).bind(context.restaurantId).first<{ plan: string; status: string }>(),
@@ -29,7 +36,15 @@ export async function GET() {
                 COALESCE(SUM(contribution_margin_cents), 0) AS contribution
          FROM orders
          WHERE restaurant_id = ? AND created_at >= ? AND status <> 'canceled'`,
-      ).bind(context.restaurantId, dayStart).first<{ orders: number; revenue: number; cost: number; contribution: number }>(),
+      ).bind(context.restaurantId, dayStart).first<SalesAggregate>(),
+      db.prepare(
+        `SELECT COUNT(*) AS orders,
+                COALESCE(SUM(total_cents), 0) AS revenue,
+                COALESCE(SUM(cost_cents), 0) AS cost,
+                COALESCE(SUM(contribution_margin_cents), 0) AS contribution
+         FROM orders
+         WHERE restaurant_id = ? AND created_at >= ? AND status <> 'canceled'`,
+      ).bind(context.restaurantId, monthStart).first<SalesAggregate>(),
       db.prepare(
         `SELECT
            SUM(CASE WHEN event_type = 'upsell_shown' THEN 1 ELSE 0 END) AS shown,
@@ -66,14 +81,16 @@ export async function GET() {
         `SELECT id, name, price_cents, cost_cents,
                 CASE WHEN price_cents > 0 THEN ROUND(((price_cents - cost_cents) * 100.0) / price_cents) ELSE 0 END AS margin_percent
          FROM products WHERE restaurant_id = ? AND active = 1
-         ORDER BY margin_percent ASC, name LIMIT 8`,
+         ORDER BY margin_percent ASC, name LIMIT 12`,
       ).bind(context.restaurantId).all<{ id: string; name: string; price_cents: number; cost_cents: number; margin_percent: number }>(),
     ]);
 
     const shown = Number(growth?.shown || 0);
     const accepted = Number(growth?.accepted || 0);
-    const revenue = Number(day?.revenue || 0);
-    const contribution = Number(day?.contribution || 0);
+    const dayRevenue = Number(day?.revenue || 0);
+    const dayContribution = Number(day?.contribution || 0);
+    const monthRevenue = Number(month?.revenue || 0);
+    const monthContribution = Number(month?.contribution || 0);
     const planPrice = PLAN_PRICE_CENTS[restaurant?.plan || "start"] || PLAN_PRICE_CENTS.start;
     const recoveredMonth = Number(monthGrowth?.value || 0) + Number(automation?.recovered || 0);
     const delivered = Number(promise?.delivered || 0);
@@ -85,10 +102,17 @@ export async function GET() {
       restaurant: { plan: restaurant?.plan || "start", status: restaurant?.status || "trial", planPriceCents: planPrice },
       today: {
         orders: Number(day?.orders || 0),
-        revenueCents: revenue,
+        revenueCents: dayRevenue,
         costCents: Number(day?.cost || 0),
-        contributionCents: contribution,
-        contributionMarginPercent: revenue > 0 ? Math.round((contribution / revenue) * 100) : 0,
+        contributionCents: dayContribution,
+        contributionMarginPercent: dayRevenue > 0 ? Math.round((dayContribution / dayRevenue) * 100) : 0,
+      },
+      month: {
+        orders: Number(month?.orders || 0),
+        revenueCents: monthRevenue,
+        costCents: Number(month?.cost || 0),
+        contributionCents: monthContribution,
+        contributionMarginPercent: monthRevenue > 0 ? Math.round((monthContribution / monthRevenue) * 100) : 0,
       },
       profitEngine: {
         shown,
