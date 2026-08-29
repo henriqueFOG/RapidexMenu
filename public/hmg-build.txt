@@ -1,5 +1,6 @@
-RapidexMenu HMG - relatórios do estabelecimento v2
+RapidexMenu HMG - fronteira estabelecimento x plataforma
 Release: 2026-08-29
-Objetivo: publicar o painel de resultados redesenhado para leitura rápida, vendas e rentabilidade.
-Inclui: contraste WCAG nos KPIs, visão diária e mensal, margem de contribuição, receita atribuída ao Rapidex, leitura executiva, prioridades acionáveis, Guardião de Margem e estabelecimento demo Serra Burger.
-Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados no SHA 7c84d2d219a2b996f5b9572758239782e1c8fc10.
+Objetivo: remover informações técnicas da plataforma do painel do estabelecimento.
+Inclui: remoção do bloco Status técnico das Configurações, remoção de integrationReadiness da API /api/admin/overview e teste contratual de fronteira.
+Regra: infraestrutura, banco, storage, OpenAI e saúde técnica pertencem exclusivamente à Central RapidexMenu.
+Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados no SHA fdf112e508b80036917818c4185246a3f74ad6fb.
