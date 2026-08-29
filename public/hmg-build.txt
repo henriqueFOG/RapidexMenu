@@ -1,5 +1,5 @@
-RapidexMenu HMG - estabelecimento demo acessível
+RapidexMenu HMG - relatórios do estabelecimento v2
 Release: 2026-08-29
-Objetivo: disponibilizar a Serra Burger como tenant real de demonstração do painel do estabelecimento.
-Inclui: Central Administrativa, variações com estoque seguro, consistência de catálogo, pedidos/agendamento, filas e DLQ, PWA, isolamento multi-tenant, hardening operacional e bootstrap HMG-only do estabelecimento demo.
-Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados.
+Objetivo: publicar o painel de resultados redesenhado para leitura rápida, vendas e rentabilidade.
+Inclui: contraste WCAG nos KPIs, visão diária e mensal, margem de contribuição, receita atribuída ao Rapidex, leitura executiva, prioridades acionáveis, Guardião de Margem e estabelecimento demo Serra Burger.
+Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados no SHA 7c84d2d219a2b996f5b9572758239782e1c8fc10.
