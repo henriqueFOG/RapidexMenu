@@ -83,6 +83,10 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
   await adminForm.getByRole("button", { name: "Cadastrar acesso administrativo" }).click();
   await expect(page.getByText(/não pode ser usado na administração geral/i)).toBeVisible();
 
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/api/internal/platform/audit") && response.ok()),
+    page.getByRole("button", { name: "Atualizar dados" }).click(),
+  ]);
   await page.getByRole("button", { name: "Auditoria", exact: true }).click();
   await expect(page.getByText("Estabelecimento criado", { exact: true })).toBeVisible();
   await expect(page.getByText("Nota de suporte registrada", { exact: true })).toBeVisible();
