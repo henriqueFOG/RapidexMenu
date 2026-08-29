@@ -35,14 +35,19 @@ export async function POST(request: Request) {
     ).bind(context.restaurantId).first<{ position: number }>();
     const id = crypto.randomUUID();
     const now = Date.now();
-    await db.prepare(
-      `INSERT INTO categories (id, restaurant_id, name, position, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 1, ?, ?)`,
-    ).bind(id, context.restaurantId, name, Number(maxPosition?.position ?? -1) + 1, now, now).run();
-    await audit(context, "category.created", "category", id, { name });
+    await db.batch([
+      db.prepare(
+        `INSERT INTO categories (id, restaurant_id, name, position, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?)`,
+      ).bind(id, context.restaurantId, name, Number(maxPosition?.position ?? -1) + 1, now, now),
+      db.prepare(
+        "UPDATE restaurants SET catalog_version = catalog_version + 1, updated_at = ? WHERE id = ?",
+      ).bind(now, context.restaurantId),
+    ]);
+    await audit(context, "category.created", "category", id, { name, catalogInvalidated: true });
     return json({ ok: true, category: { id, name, active: true } }, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -60,11 +65,17 @@ export async function PATCH(request: Request) {
     if (!current) throw new HttpError(404, "Categoria não encontrada.", "category_not_found");
     const name = body.name === undefined ? current.name : requiredString(body.name, "Nome da categoria", 2, 80);
     const active = body.active === undefined ? Number(current.active) : booleanValue(body.active) ? 1 : 0;
-    await db.prepare("UPDATE categories SET name = ?, active = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?")
-      .bind(name, active, Date.now(), id, context.restaurantId).run();
-    await audit(context, "category.updated", "category", id, { name, active: Boolean(active) });
+    const now = Date.now();
+    await db.batch([
+      db.prepare("UPDATE categories SET name = ?, active = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?")
+        .bind(name, active, now, id, context.restaurantId),
+      db.prepare(
+        "UPDATE restaurants SET catalog_version = catalog_version + 1, updated_at = ? WHERE id = ?",
+      ).bind(now, context.restaurantId),
+    ]);
+    await audit(context, "category.updated", "category", id, { name, active: Boolean(active), catalogInvalidated: true });
     return json({ ok: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }

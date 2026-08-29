@@ -14,6 +14,22 @@ type GroupDraft = {
   pricingStrategy: PricingStrategy;
   options: OptionDraft[];
 };
+type RawOption = OptionDraft & {
+  id?: string;
+  finalPriceCents?: number | null;
+  finalCostCents?: number | null;
+  stockControlEnabled?: boolean;
+  stockQuantity?: number | null;
+};
+type RawGroup = {
+  id?: string;
+  kind?: "modifier" | "variant";
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  pricingStrategy: PricingStrategy;
+  options: RawOption[];
+};
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -21,6 +37,7 @@ export default function OptionsClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productId, setProductId] = useState("");
   const [groups, setGroups] = useState<GroupDraft[]>([]);
+  const [variantGroup, setVariantGroup] = useState<RawGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -39,21 +56,25 @@ export default function OptionsClient() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (!productId) { setGroups([]); return; }
+      if (!productId) { setGroups([]); setVariantGroup(null); return; }
       setMessage(""); setError("");
-      api<{ groups: Array<GroupDraft & { id: string }> }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
-        .then((result) => setGroups((result.groups || []).map((group) => ({
-          name: group.name,
-          minSelect: group.minSelect,
-          maxSelect: group.maxSelect,
-          pricingStrategy: group.pricingStrategy,
-          options: group.options.map((option) => ({
-            name: option.name,
-            priceDeltaCents: option.priceDeltaCents,
-            costDeltaCents: option.costDeltaCents,
-            available: option.available,
-          })),
-        }))))
+      api<{ groups: RawGroup[] }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
+        .then((result) => {
+          const all = result.groups || [];
+          setVariantGroup(all.find((group) => group.kind === "variant") || null);
+          setGroups(all.filter((group) => group.kind !== "variant").map((group) => ({
+            name: group.name,
+            minSelect: group.minSelect,
+            maxSelect: group.maxSelect,
+            pricingStrategy: group.pricingStrategy,
+            options: group.options.map((option) => ({
+              name: option.name,
+              priceDeltaCents: option.priceDeltaCents,
+              costDeltaCents: option.costDeltaCents,
+              available: option.available,
+            })),
+          })));
+        })
         .catch((reason) => setError(errorMessage(reason)));
     }, 0);
     return () => window.clearTimeout(timer);
@@ -96,11 +117,16 @@ export default function OptionsClient() {
     if (!productId) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      await api(`/api/admin/products/${encodeURIComponent(productId)}/options`, {
+      const payloadGroups = [
+        ...(variantGroup ? [variantGroup] : []),
+        ...groups.map((group) => ({ ...group, kind: "modifier" as const })),
+      ];
+      const result = await api<{ groups: RawGroup[] }>(`/api/admin/products/${encodeURIComponent(productId)}/options`, {
         method: "PUT",
-        body: JSON.stringify({ groups }),
+        body: JSON.stringify({ groups: payloadGroups }),
       });
-      setMessage("Opções publicadas. O cardápio e o checkout já usam essas regras no servidor.");
+      setVariantGroup((result.groups || []).find((group) => group.kind === "variant") || null);
+      setMessage("Regras publicadas sem alterar as variações do produto. O servidor valida tudo novamente no checkout.");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally { setBusy(false); }
@@ -111,8 +137,8 @@ export default function OptionsClient() {
   return <main className={styles.shell}><section className={styles.card} style={{ maxWidth: 1050 }}>
     <Link className={styles.brand} href="/"><span>⚡</span><b>Rapidex<i>Menu</i></b></Link>
     <small className={styles.kicker}>CARDÁPIO AVANÇADO</small>
-    <h1 className={styles.title}>Tamanhos, sabores e adicionais</h1>
-    <p className={styles.intro}>Configure regras que o servidor valida no checkout. O histórico do pedido guarda um snapshot, então editar o cardápio depois não altera vendas antigas.</p>
+    <h1 className={styles.title}>Sabores, adicionais e regras</h1>
+    <p className={styles.intro}>Configure modificadores que o servidor valida no checkout. Tamanhos, volumes e porções com preço ou estoque próprios ficam no módulo de variações, sem misturar as duas regras.</p>
 
     {error && <p className={styles.error}>{error}</p>}
     {message && <p className={styles.success}>{message}</p>}
@@ -124,6 +150,7 @@ export default function OptionsClient() {
         </select>
       </label>
       {!products.length && <p>Cadastre pelo menos um produto antes de criar opções.</p>}
+      {selectedProduct && <p style={{ marginBottom: 0 }}>{variantGroup ? <>Este produto já possui <b>{variantGroup.name}</b> como variação estrutural. Editar os modificadores aqui não remove nem recria essas variações.</> : <>Precisa de tamanho/volume com preço ou estoque próprios? <Link href="/admin/variantes">Abrir variações →</Link></>}</p>}
     </section>
 
     {selectedProduct && <>
@@ -133,7 +160,7 @@ export default function OptionsClient() {
           <button type="button" onClick={() => removeGroup(groupIndex)}>Remover grupo</button>
         </div>
         <div className={styles.grid}>
-          <label className={styles.field}>Nome do grupo<input value={group.name} onChange={(event) => patchGroup(groupIndex, { name: event.target.value })} placeholder="Ex.: Tamanho" /></label>
+          <label className={styles.field}>Nome do grupo<input value={group.name} onChange={(event) => patchGroup(groupIndex, { name: event.target.value })} placeholder="Ex.: Adicionais" /></label>
           <label className={styles.field}>Mínimo<input type="number" min="0" max="20" value={group.minSelect} onChange={(event) => patchGroup(groupIndex, { minSelect: Number(event.target.value) })} /></label>
           <label className={styles.field}>Máximo<input type="number" min="1" max="20" value={group.maxSelect} onChange={(event) => patchGroup(groupIndex, { maxSelect: Number(event.target.value) })} /></label>
           <label className={styles.field}>Como cobrar
@@ -160,13 +187,13 @@ export default function OptionsClient() {
 
       <section className={styles.panel}>
         <h2>Modelos rápidos</h2>
-        <p>Exemplos: <b>Tamanho</b> (1 de 1, somar), <b>Sabores da pizza</b> (1 a 2, maior preço), <b>Adicionais</b> (0 a 5, somar), <b>Remover ingredientes</b> (0 a vários, incluído).</p>
-        <button type="button" onClick={addGroup}>+ Novo grupo de opções</button>
+        <p>Exemplos: <b>Sabores da pizza</b> (1 a 2, maior preço), <b>Adicionais</b> (0 a 5, somar) e <b>Remover ingredientes</b> (0 a vários, incluído). Para tamanho/volume com preço final próprio, use Variações.</p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" onClick={addGroup}>+ Novo grupo de opções</button><Link className={styles.linkButton} href="/admin/variantes">Gerenciar variações →</Link></div>
       </section>
 
       <button className={styles.button} disabled={busy} onClick={() => void save()}>{busy ? "Publicando regras…" : "Salvar opções do produto"}</button>
     </>}
-    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin/categorias">← Categorias</Link><Link className={styles.linkButton} href="/admin">Voltar ao painel</Link></div>
+    <div className={styles.footerActions}><Link className={styles.linkButton} href="/admin/variantes">Variações</Link><Link className={styles.linkButton} href="/admin/categorias">← Categorias</Link><Link className={styles.linkButton} href="/admin">Voltar ao painel</Link></div>
   </section></main>;
 }
 

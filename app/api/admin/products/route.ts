@@ -53,33 +53,37 @@ export async function POST(request: Request) {
     if (categoryId) await assertCategory(db, context.restaurantId, categoryId);
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    await db
-      .prepare(
-        `INSERT INTO products
-         (id, restaurant_id, category_id, name, description, price_cents, cost_cents, emoji, tag,
-          active, available, prep_minutes, position, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        context.restaurantId,
-        categoryId,
-        name,
-        description,
-        priceCents,
-        costCents,
-        optionalString(body.emoji, "Emoji", 8) || "🍽️",
-        optionalString(body.tag, "Selo", 60),
-        positiveInteger(body.prepMinutes ?? 10, "Tempo de preparo", 180),
-        Number.isInteger(body.position) ? Number(body.position) : 0,
-        timestamp,
-        timestamp,
-      )
-      .run();
-    await audit(context, "product.created", "product", id, { name });
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO products
+           (id, restaurant_id, category_id, name, description, price_cents, cost_cents, emoji, tag,
+            active, available, prep_minutes, position, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
+        )
+        .bind(
+          id,
+          context.restaurantId,
+          categoryId,
+          name,
+          description,
+          priceCents,
+          costCents,
+          optionalString(body.emoji, "Emoji", 8) || "🍽️",
+          optionalString(body.tag, "Selo", 60),
+          positiveInteger(body.prepMinutes ?? 10, "Tempo de preparo", 180),
+          Number.isInteger(body.position) ? Number(body.position) : 0,
+          timestamp,
+          timestamp,
+        ),
+      db.prepare(
+        "UPDATE restaurants SET catalog_version = catalog_version + 1, updated_at = ? WHERE id = ?",
+      ).bind(timestamp, context.restaurantId),
+    ]);
+    await audit(context, "product.created", "product", id, { name, catalogInvalidated: true });
     return json({ ok: true, id }, { status: 201 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 

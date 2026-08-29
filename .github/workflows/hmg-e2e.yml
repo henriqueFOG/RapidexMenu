@@ -2,7 +2,7 @@ name: RapidexMenu HMG E2E
 
 on:
   push:
-    branches: [hmg, agent/commercial-ready, agent/commercial-hardening-p1, agent/checklist-p0-wave-1]
+    branches: [hmg, agent/commercial-ready, agent/commercial-hardening-p1, agent/checklist-p0-wave-1, agent/commercial-p0-variants-hmg]
   pull_request:
     branches: [hmg]
   workflow_dispatch:
@@ -108,6 +108,9 @@ jobs:
 
       - name: Run API commercial HMG E2E
         run: node scripts/hmg-e2e.mjs
+
+      - name: Validate stock-safe product variants on the real public catalog
+        run: node scripts/variant-e2e.mjs
 
       - name: Validate scheduled orders, slot capacity and stock restoration
         run: |

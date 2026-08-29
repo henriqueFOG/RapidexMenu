@@ -15,20 +15,32 @@ if (password.length < 10 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) 
 
 const db = getPostgresDatabase(connectionString);
 const now = Date.now();
-const userId = crypto.randomUUID();
-await db.prepare(
-  `INSERT INTO app_users
-   (id, email, password_hash, full_name, phone, status, auth_version, created_at, updated_at)
-   VALUES (?, ?, ?, 'Henry Francisco', NULL, 'active', 1, ?, ?)
-   ON CONFLICT (email) DO UPDATE SET password_hash = excluded.password_hash,
-     full_name = excluded.full_name, status = 'active', auth_version = app_users.auth_version + 1,
-     updated_at = excluded.updated_at`,
-).bind(userId, CANONICAL_PLATFORM_OWNER_EMAIL, await hashPassword(password), now, now).run();
+const passwordHash = await hashPassword(password);
+const existingUser = await db.prepare(
+  "SELECT id FROM app_users WHERE lower(email) = lower(?) LIMIT 1",
+).bind(CANONICAL_PLATFORM_OWNER_EMAIL).first<{ id: string }>();
+
+let userId = existingUser?.id || null;
+if (userId) {
+  await db.prepare(
+    `UPDATE app_users
+     SET email = ?, password_hash = ?, full_name = 'Henry Francisco', status = 'active',
+         auth_version = auth_version + 1, updated_at = ?
+     WHERE id = ?`,
+  ).bind(CANONICAL_PLATFORM_OWNER_EMAIL, passwordHash, now, userId).run();
+} else {
+  userId = crypto.randomUUID();
+  await db.prepare(
+    `INSERT INTO app_users
+     (id, email, password_hash, full_name, phone, status, auth_version, created_at, updated_at)
+     VALUES (?, ?, ?, 'Henry Francisco', NULL, 'active', 1, ?, ?)`,
+  ).bind(userId, CANONICAL_PLATFORM_OWNER_EMAIL, passwordHash, now, now).run();
+}
 
 const user = await db.prepare(
-  "SELECT id FROM app_users WHERE lower(email) = ? LIMIT 1",
+  "SELECT id FROM app_users WHERE lower(email) = lower(?) LIMIT 1",
 ).bind(CANONICAL_PLATFORM_OWNER_EMAIL).first<{ id: string }>();
-if (!user) throw new Error("Não foi possível preparar a identidade E2E.");
+if (!user || user.id !== userId) throw new Error("Não foi possível preparar a identidade E2E.");
 
 await db.prepare(
   `INSERT INTO platform_admins

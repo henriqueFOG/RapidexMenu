@@ -43,49 +43,53 @@ export async function PATCH(
       throw new HttpError(400, "Imagem inválida para este restaurante.", "invalid_media_owner");
     }
     const timestamp = Date.now();
-    await db
-      .prepare(
-        `UPDATE products SET category_id = ?, name = ?, description = ?, price_cents = ?,
-         cost_cents = ?, emoji = ?, tag = ?, image_key = ?, available = ?,
-         stock_control_enabled = ?, stock_quantity = ?, minimum_stock = ?, prep_minutes = ?,
-         position = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?`,
-      )
-      .bind(
-        categoryId,
-        requiredString(body.name ?? current.name, "Nome", 2, 100),
-        optionalString(body.description ?? current.description, "Descrição", 500) || "",
-        price,
-        cost,
-        optionalString(body.emoji ?? current.emoji, "Emoji", 8) || "🍽️",
-        optionalString(body.tag ?? current.tag, "Selo", 60),
-        imageKey,
-        body.available === undefined ? Number(current.available) : booleanValue(body.available) ? 1 : 0,
-        body.stockControlEnabled === undefined
-          ? Number(current.stock_control_enabled)
-          : booleanValue(body.stockControlEnabled)
-            ? 1
-            : 0,
-        body.stockQuantity === null
-          ? null
-          : body.stockQuantity === undefined
-            ? current.stock_quantity
-            : cents(body.stockQuantity, "Estoque", 0, 1_000_000),
-        body.minimumStock === null
-          ? null
-          : body.minimumStock === undefined
-            ? current.minimum_stock
-            : cents(body.minimumStock, "Estoque mínimo", 0, 1_000_000),
-        positiveInteger(body.prepMinutes ?? current.prep_minutes, "Tempo de preparo", 180),
-        Number.isInteger(body.position) ? Number(body.position) : Number(current.position),
-        timestamp,
-        id,
-        context.restaurantId,
-      )
-      .run();
-    await audit(context, "product.updated", "product", id, { fields: Object.keys(body) });
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE products SET category_id = ?, name = ?, description = ?, price_cents = ?,
+           cost_cents = ?, emoji = ?, tag = ?, image_key = ?, available = ?,
+           stock_control_enabled = ?, stock_quantity = ?, minimum_stock = ?, prep_minutes = ?,
+           position = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?`,
+        )
+        .bind(
+          categoryId,
+          requiredString(body.name ?? current.name, "Nome", 2, 100),
+          optionalString(body.description ?? current.description, "Descrição", 500) || "",
+          price,
+          cost,
+          optionalString(body.emoji ?? current.emoji, "Emoji", 8) || "🍽️",
+          optionalString(body.tag ?? current.tag, "Selo", 60),
+          imageKey,
+          body.available === undefined ? Number(current.available) : booleanValue(body.available) ? 1 : 0,
+          body.stockControlEnabled === undefined
+            ? Number(current.stock_control_enabled)
+            : booleanValue(body.stockControlEnabled)
+              ? 1
+              : 0,
+          body.stockQuantity === null
+            ? null
+            : body.stockQuantity === undefined
+              ? current.stock_quantity
+              : cents(body.stockQuantity, "Estoque", 0, 1_000_000),
+          body.minimumStock === null
+            ? null
+            : body.minimumStock === undefined
+              ? current.minimum_stock
+              : cents(body.minimumStock, "Estoque mínimo", 0, 1_000_000),
+          positiveInteger(body.prepMinutes ?? current.prep_minutes, "Tempo de preparo", 180),
+          Number.isInteger(body.position) ? Number(body.position) : Number(current.position),
+          timestamp,
+          id,
+          context.restaurantId,
+        ),
+      db.prepare(
+        "UPDATE restaurants SET catalog_version = catalog_version + 1, updated_at = ? WHERE id = ?",
+      ).bind(timestamp, context.restaurantId),
+    ]);
+    await audit(context, "product.updated", "product", id, { fields: Object.keys(body), catalogInvalidated: true });
     return json({ ok: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
 
@@ -98,14 +102,23 @@ export async function DELETE(
     const context = await requireAdminContext();
     requireRole(context, ["owner", "manager"]);
     const id = requiredString((await params).id, "Produto", 2, 100);
-    const result = await getDatabase()
-      .prepare("UPDATE products SET active = 0, available = 0, updated_at = ? WHERE id = ? AND restaurant_id = ?")
-      .bind(Date.now(), id, context.restaurantId)
-      .run();
-    if (!(result.meta.changes ?? 0)) throw new HttpError(404, "Produto não encontrado.", "product_not_found");
-    await audit(context, "product.archived", "product", id);
+    const db = getDatabase();
+    const exists = await db.prepare(
+      "SELECT id FROM products WHERE id = ? AND restaurant_id = ? AND active = 1 LIMIT 1",
+    ).bind(id, context.restaurantId).first<{ id: string }>();
+    if (!exists) throw new HttpError(404, "Produto não encontrado.", "product_not_found");
+    const timestamp = Date.now();
+    await db.batch([
+      db.prepare(
+        "UPDATE products SET active = 0, available = 0, updated_at = ? WHERE id = ? AND restaurant_id = ?",
+      ).bind(timestamp, id, context.restaurantId),
+      db.prepare(
+        "UPDATE restaurants SET catalog_version = catalog_version + 1, updated_at = ? WHERE id = ?",
+      ).bind(timestamp, context.restaurantId),
+    ]);
+    await audit(context, "product.archived", "product", id, { catalogInvalidated: true });
     return json({ ok: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, request);
   }
 }
