@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./ProfitClient.module.css";
 
 type SalesPeriod = {
@@ -84,7 +84,7 @@ export default function ProfitClient() {
 
 function Report({ data }: { data: ProfitData }) {
   const lowMargin = data.products.filter((product) => product.marginPercent < 25);
-  const actions = useMemo(() => buildActions(data, lowMargin), [data, lowMargin]);
+  const actions = buildActions(data, lowMargin);
   const executive = buildExecutive(data, lowMargin);
   const planGap = Math.max(0, data.restaurant.planPriceCents - data.profitEngine.recoveredMonthCents);
   const period = capitalize(monthName.format(new Date(data.period.now)));
@@ -139,7 +139,7 @@ function Report({ data }: { data: ProfitData }) {
           <p className={styles.financeHint}>Margem de contribuição não é lucro líquido: aluguel, impostos, folha, taxas e outras despesas ainda precisam ser considerados.</p>
         </section>
 
-        <section className={styles.panel}>
+        <section className={styles.panel} id="crescimento">
           <div className={styles.panelHead}>
             <div><h2>Crescimento gerado</h2><p>Somente receita que conseguimos atribuir a ações do Rapidex.</p></div>
             <span className={styles.badge}>Profit Engine</span>
