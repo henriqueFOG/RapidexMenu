@@ -35,6 +35,7 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
 
   await expect(page.getByText("Central administrativa", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Olá, Henry/i })).toBeVisible({ timeout: 30_000 });
+  await page.screenshot({ path: `${artifactsDir}/platform-admin-overview.png`, fullPage: true });
 
   await page.getByRole("button", { name: "Estabelecimentos", exact: true }).click();
   await page.getByRole("button", { name: /Novo estabelecimento/i }).click();
@@ -97,9 +98,10 @@ test("Central gerencia estabelecimento, suporte, segurança e auditoria sem mist
   await expect(page.getByText("Object storage", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("DATABASE_URL");
   await expect(page.locator("body")).not.toContainText("RAPIDEX_SESSION_SECRET");
+  await page.screenshot({ path: `${artifactsDir}/platform-admin-infrastructure.png`, fullPage: true });
 
   await page.goto("/admin/plataforma", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/central$/);
-  await page.screenshot({ path: `${artifactsDir}/platform-admin-console.png`, fullPage: true });
+  await expect(page.getByText("Central administrativa", { exact: true })).toBeVisible({ timeout: 30_000 });
   await context.close();
 });
