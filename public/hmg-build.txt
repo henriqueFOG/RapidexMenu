@@ -1,5 +1,5 @@
-RapidexMenu HMG - candidato final de piloto
+RapidexMenu HMG - estabelecimento demo acessível
 Release: 2026-08-29
-Objetivo: validar publicamente o lote comercial aprovado.
-Inclui: Central Administrativa, variações com estoque seguro, consistência de catálogo, pedidos/agendamento, filas e DLQ, PWA, isolamento multi-tenant e hardening operacional.
+Objetivo: disponibilizar a Serra Burger como tenant real de demonstração do painel do estabelecimento.
+Inclui: Central Administrativa, variações com estoque seguro, consistência de catálogo, pedidos/agendamento, filas e DLQ, PWA, isolamento multi-tenant, hardening operacional e bootstrap HMG-only do estabelecimento demo.
 Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados.
