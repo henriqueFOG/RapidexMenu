@@ -1,6 +1,6 @@
 import { requireAdminContext } from "@/lib/admin-auth";
 import { apiError, json } from "@/lib/http";
-import { integrationReadiness, getDatabase } from "@/lib/runtime";
+import { getDatabase } from "@/lib/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -256,7 +256,6 @@ export async function GET() {
         lifetimeValueCents: customer.lifetime_value_cents,
         lastOrderAt: customer.last_order_at,
       })),
-      integrations: integrationReadiness(),
     });
   } catch (error) {
     return apiError(error);

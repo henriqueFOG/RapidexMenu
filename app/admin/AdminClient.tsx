@@ -17,7 +17,6 @@ type Overview = {
   orders: Order[];
   channels: Array<{ name: string; revenueCents: number; orders: number; share: number }>;
   opportunity: Automation | null;
-  integrations: Record<string, boolean>;
 };
 type Order = { id: string; number: number; customerName: string; status: string; source: string; totalCents: number; createdAt: number; promisedFromMinutes: number; promisedToMinutes: number; items: Array<{ name: string; quantity: number }> };
 type Automation = { id: string; kind: string; status: string; reason: string; expectedRevenueCents: number; recoveredRevenueCents: number; marginPercent: number; metadata?: Record<string, unknown> };
@@ -156,7 +155,7 @@ function OpportunityCard({ opportunity, refresh }: { opportunity: Automation | n
 function SettingsView({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
   const [busy, setBusy] = useState(false); const toggle = async () => { setBusy(true); try { await api("/api/admin/settings", { method: "PATCH", body: JSON.stringify({ isOpen: !data.restaurant.isOpen }) }); await refresh(); } finally { setBusy(false); } };
   const links = [["/admin/horarios","Horários"],["/admin/pagamentos","Pagamentos"],["/admin/whatsapp","WhatsApp"],["/admin/categorias","Categorias"],["/admin/importar","Importar cardápio"],["/assinatura","Assinatura"]];
-  return <div><PageHead kicker="CONFIGURAÇÕES" title="Operação e integrações" text="Tudo que é menos frequente fica organizado aqui, sem poluir o dashboard." /><div className="rm-settings-links">{links.map(([href,label]) => <a href={href} key={href}><span>{label}</span><b>→</b></a>)}</div><div className="rm-settings-grid"><section className="rm-panel rm-store-config"><h2>Loja</h2><div><p><b>{data.restaurant.name}</b><small>{data.restaurant.city}, {data.restaurant.state} · /{data.restaurant.slug}</small></p><button className={`rm-store-toggle ${data.restaurant.isOpen ? "open" : ""}`} disabled={busy} onClick={() => void toggle()}>{data.restaurant.isOpen ? "Fechar loja" : "Abrir loja"}</button></div><a href={`/loja/${data.restaurant.slug}`}>Abrir cardápio público ↗</a></section><section className="rm-panel rm-integrations"><h2>Status técnico</h2>{Object.entries(data.integrations).map(([name, ready]) => <div key={name}><span className={ready ? "ready" : "pending"}>{ready ? "✓" : "!"}</span><p><b>{integrationName(name)}</b><small>{ready ? "Ativo e disponível" : "Aguardando configuração"}</small></p><em>{ready ? "Conectado" : "Pendente"}</em></div>)}</section></div></div>;
+  return <div><PageHead kicker="CONFIGURAÇÕES" title="Operação e integrações" text="Configure somente o que faz parte da rotina do seu estabelecimento." /><div className="rm-settings-links">{links.map(([href,label]) => <a href={href} key={href}><span>{label}</span><b>→</b></a>)}</div><div className="rm-settings-grid"><section className="rm-panel rm-store-config"><h2>Loja</h2><div><p><b>{data.restaurant.name}</b><small>{data.restaurant.city}, {data.restaurant.state} · /{data.restaurant.slug}</small></p><button className={`rm-store-toggle ${data.restaurant.isOpen ? "open" : ""}`} disabled={busy} onClick={() => void toggle()}>{data.restaurant.isOpen ? "Fechar loja" : "Abrir loja"}</button></div><a href={`/loja/${data.restaurant.slug}`}>Abrir cardápio público ↗</a></section></div></div>;
 }
 
 function PageHead({ kicker, title, text, action }: { kicker: string; title: string; text: string; action?: ReactNode }) { return <div className="rm-section-head"><div><small>{kicker}</small><h1>{title}</h1><p>{text}</p></div>{action}</div>; }
@@ -172,4 +171,3 @@ async function api<T = Record<string, unknown>>(url: string, init?: RequestInit)
 }
 function initials(name: string) { return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "RM"; }
 function channelName(value: string) { return ({ menu: "Cardápio", whatsapp: "WhatsApp", link: "Link próprio", counter: "Balcão", admin: "Gestão" } as Record<string, string>)[value] || value; }
-function integrationName(value: string) { return ({ database: "Banco de dados", uploads: "Fotos e arquivos", openai: "IA", whatsapp: "WhatsApp oficial", sellerPayments: "Pagamentos", billing: "Assinatura" } as Record<string, string>)[value] || value; }
