@@ -61,26 +61,31 @@ export default function VariantsClient() {
 
   useEffect(() => {
     if (!productId) return;
-    setError("");
-    setMessage("");
-    request<{ groups: Group[] }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
-      .then((data) => {
-        const next = data.groups || [];
-        setGroups(next);
-        const variant = next.find((group) => group.kind === "variant");
-        setVariantGroupId(variant?.id);
-        setGroupName(variant?.name || "Tamanho");
-        setVariants((variant?.options || []).map((option) => ({
-          id: option.id,
-          name: option.name,
-          price: Number(option.finalPriceCents || 0),
-          cost: Number(option.finalCostCents || 0),
-          available: option.available !== false,
-          controlStock: Boolean(option.stockControlEnabled),
-          stock: Number(option.stockQuantity || 0),
-        })));
-      })
-      .catch((reason) => setError(toMessage(reason)));
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setError("");
+      setMessage("");
+      request<{ groups: Group[] }>(`/api/admin/products/${encodeURIComponent(productId)}/options`)
+        .then((data) => {
+          if (!active) return;
+          const next = data.groups || [];
+          setGroups(next);
+          const variant = next.find((group) => group.kind === "variant");
+          setVariantGroupId(variant?.id);
+          setGroupName(variant?.name || "Tamanho");
+          setVariants((variant?.options || []).map((option) => ({
+            id: option.id,
+            name: option.name,
+            price: Number(option.finalPriceCents || 0),
+            cost: Number(option.finalCostCents || 0),
+            available: option.available !== false,
+            controlStock: Boolean(option.stockControlEnabled),
+            stock: Number(option.stockQuantity || 0),
+          })));
+        })
+        .catch((reason) => { if (active) setError(toMessage(reason)); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [productId]);
 
   const product = products.find((item) => item.id === productId);
