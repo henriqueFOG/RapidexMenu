@@ -1,3 +1,5 @@
-RapidexMenu HMG build verification
-Requested: 2026-08-07 22:39 America/Sao_Paulo
-Purpose: dashboard redesign deployment verification.
+RapidexMenu HMG - candidato final de piloto
+Release: 2026-08-29
+Objetivo: validar publicamente o lote comercial aprovado.
+Inclui: Central Administrativa, variações com estoque seguro, consistência de catálogo, pedidos/agendamento, filas e DLQ, PWA, isolamento multi-tenant e hardening operacional.
+Gate pré-deploy: CI, Security audit, Secret scan, HMG E2E e Platform Admin Console E2E aprovados.
